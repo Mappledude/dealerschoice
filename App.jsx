@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { io } from "socket.io-client";
 import { 
   RotateCcw, Play, Coins, Trophy, Landmark, LogOut, 
   Trash2, RefreshCcw, Info, TrendingUp, FastForward, 
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
   Zap, Target, DollarSign
 } from 'lucide-react';
-
+// Replace the URL below with your actual Render URL from Phase 1
+const socket = io("https://poker-server-3vin.onrender.com");
 // --- CONSTANTS & CONFIG ---
 const TOTAL_SEATS = 10;
 const LOCAL_USER_ID = 'human_player';
@@ -211,7 +213,34 @@ const App = () => {
   const isHeroTurn = useMemo(() => activeIdx !== -1 && heroSeatIdx !== -1 && activeIdx === heroSeatIdx && phase !== PHASES.IDLE && !isShowdown, [activeIdx, heroSeatIdx, phase, isShowdown]);
   const minRaiseTo = useMemo(() => highestBet + lastRaiseAmt, [highestBet, lastRaiseAmt]);
   const maxAllIn = useMemo(() => userSeat?.chips || 0, [userSeat]);
+export default function App() {
+  // 1. Existing state hooks (keep these)
+  const [players, setPlayers] = useState(INITIAL_PLAYERS);
+  const [pot, setPot] = useState(0);
+  // ... other state hooks ...
 
+  // 2. INSERT THE SOCKET LISTENER HERE
+  useEffect(() => {
+    // This listens for the server to say "The game has started!"
+    socket.on("gameUpdate", (data) => {
+      console.log("Received data from server:", data);
+      // Logic to update your chips and cards will go here
+    });
+
+    // Cleanup to prevent multiple connections
+    return () => socket.off("gameUpdate");
+  }, []);
+
+  // 3. Rest of your game logic functions (keep these)
+  const handleDeal = useCallback(() => { ... }, []);
+
+  // 4. The UI (keep this)
+  return (
+    <div className="game-container">
+      {/* ... your board and cards ... */}
+    </div>
+  );
+}
   // 4. CORE ENGINE FUNCTIONS
   const addLog = useCallback((data) => {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
