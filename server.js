@@ -4,14 +4,28 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+
+// 1. Explicitly allow your Vercel frontend
+app.use(cors({
+  origin: ["https://dealerschoice.vercel.app", "http://localhost:3000"]
+}));
 
 const server = http.createServer(app);
+
+// 2. Configure Socket.io with specific origins
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: ["https://dealerschoice.vercel.app", "http://localhost:3000"],
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ["websocket", "polling"]
+});
+
+// 3. Ensure the server uses Render's dynamic port
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 // --- POKER CONSTANTS (Mirrored from Frontend) ---
