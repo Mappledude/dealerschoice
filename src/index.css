@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#06080c] overflow-hidden;
+  }
+}
+
+/* --- Casino Grade UI Components --- */
+
+/* Gold Betting Slider */
+input[type=range].gold-slider {
+  -webkit-appearance: none;
+  background: transparent;
+  width: 100%;
+}
+
+input[type=range].gold-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #fbbf24;
+  border-radius: 4px;
+}
+
+input[type=range].gold-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 38px;
+  width: 38px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 30px #fbbf24, inset 0 0 10px rgba(255,255,255,0.8);
+  cursor: pointer;
+  margin-top: -17px;
+  transition: all 0.2s ease-in-out;
+}
+
+input[type=range].gold-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 40px #fbbf24, inset 0 0 12px rgba(255,255,255,0.9);
+}
+
+/* Utilities */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Navy Void Ambient Pulse */
+@keyframes void-pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.animate-void {
+  animation: void-pulse 4s ease-in-out infinite;
+}
