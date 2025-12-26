@@ -15,44 +15,32 @@ const io = new Server(server, {
 });
 
 // --- AUTHORITATIVE SERVER MEMORY ---
-let rooms = {};      // Game states indexed by ID
-let profiles = [];   // Player registry
-let globalLogs = [];
+let rooms = {};      
+let profiles = [];   
 
-// --- SOCKET LOGIC ---
 io.on('connection', (socket) => {
     console.log(`User Connected: ${socket.id}`);
 
-    // Initial Hydration for the client
+    // Initial Hydration
     socket.emit('lobbyUpdate', Object.values(rooms));
     socket.emit('profilesUpdate', profiles);
 
     // 1. NUCLEAR RESET
-    socket.on('adminNuclearReset', (callback) => {
+    socket.on('adminNuclearReset', () => {
         console.log("!!! EMERGENCY NUCLEAR RESET INITIATED !!!");
-        
         rooms = {};
         profiles = [];
-        globalLogs = [];
-
-        // Broadcast wipe to all clients
         io.emit('lobbyUpdate', []);
         io.emit('profilesUpdate', []);
-        io.emit('globalLog', { name: 'SYSTEM', action: 'SERVER WIPED', type: 'system' });
-
-        // Force disconnect all to clear stale states
-        io.sockets.sockets.forEach((s) => {
-            s.disconnect(true);
-        });
-
-        if (callback) callback({ status: 'ok' });
+        io.sockets.sockets.forEach((s) => s.disconnect(true));
     });
 
     // 2. ADMIN: Create Room
-    socket.on('adminCreateRoom', (roomData, callback) => {
-        const newRoom = {
+    socket.on('adminCreateRoom', (roomData) => {
+        const roomId = roomData.id || `room_${Date.now()}`;
+        rooms[roomId] = {
             ...roomData,
-            id: roomData.id || `room_${Date.now()}`,
+            id: roomId,
             phase: 'IDLE',
             players: Array(10).fill(null),
             community: [],
@@ -60,27 +48,19 @@ io.on('connection', (socket) => {
             activeIdx: -1,
             highestBet: 0
         };
-        rooms[newRoom.id] = newRoom;
         io.emit('lobbyUpdate', Object.values(rooms));
-        console.log(`Room Created: ${newRoom.name}`);
-        if (callback) callback({ status: 'ok', room: newRoom });
     });
 
     // 3. ADMIN: Create Player
-    socket.on('adminCreatePlayer', (profileData, callback) => {
-        const newPlayer = { 
-            ...profileData, 
-            uid: profileData.uid || Math.random().toString(36).substr(2, 9),
-            status: 'Verified' 
-        };
-        profiles.push(newPlayer);
+    socket.on('adminCreatePlayer', (profile, callback) => {
+        profiles.push(profile);
         io.emit('profilesUpdate', profiles);
-        if (callback) callback({ status: 'ok', player: newPlayer });
+        if (callback) callback({ status: 'ok' });
     });
 
-    // 4. ADMIN: Delete Room / Player
-    socket.on('adminDeleteRoom', (roomId) => {
-        delete rooms[roomId];
+    // 4. ADMIN: Delete Logic
+    socket.on('adminDeleteRoom', (id) => {
+        delete rooms[id];
         io.emit('lobbyUpdate', Object.values(rooms));
     });
 
@@ -92,9 +72,7 @@ io.on('connection', (socket) => {
     // 5. PLAYER: Login
     socket.on('playerLogin', (data) => {
         const user = profiles.find(p => p.password === data.password);
-        if (user) {
-            socket.emit('loginSuccess', user);
-        }
+        if (user) socket.emit('loginSuccess', user);
     });
 
     // 6. PLAYER: Join Room
@@ -119,12 +97,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 7. GAME: Player Actions
-    socket.on('playerAction', (data) => {
-        console.log("Action received:", data);
-        // Game engine logic would go here
-    });
-
     socket.on('disconnect', () => {
         console.log(`User Disconnected: ${socket.id}`);
     });
@@ -132,5 +104,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`POKER SERVER RUNNING ON PORT ${PORT}`);
+    console.log(`SERVER LIVE ON PORT ${PORT}`);
 });
