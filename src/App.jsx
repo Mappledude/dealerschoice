@@ -184,9 +184,7 @@ const App = () => {
   const [activeIdx, setActiveIdx] = useState(-1);
   const [highestBet, setHighestBet] = useState(0);
   const [lastRaiseAmt, setLastRaiseAmt] = useState(BLINDS.bb);
-  const [deck, setDeck] = useState([]);
   const [dealStaggerIndex, setDealStaggerIndex] = useState(-1);
-  const [showSplash, setShowSplash] = useState(false);
   const [winning5Ids, setWinning5Ids] = useState([]);
   const [winningPlayerIndices, setWinningPlayerIndices] = useState([]); 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -196,6 +194,9 @@ const App = () => {
   const [potTransferring, setPotTransferring] = useState(false);
   const [playerNameInput, setPlayerNameInput] = useState('');
   
+  // Seating Feedback State
+  const [isSeating, setIsSeating] = useState(false);
+  
   // --- MULTIPLAYER SYNC ---
   useEffect(() => {
     socket.on('connect', () => {
@@ -203,18 +204,27 @@ const App = () => {
     });
 
     socket.on('gameUpdate', (state) => {
-        setPlayers(state.players);
-        setCommunity(state.community);
-        setPhase(state.phase);
-        setActiveVariant(state.activeVariant);
-        setPotData(state.potData);
-        setActiveIdx(state.activeIdx);
-        setHighestBet(state.highestBet);
-        setLastRaiseAmt(state.lastRaiseAmt);
+        setPlayers(state.players || INITIAL_PLAYERS);
+        setCommunity(state.community || []);
+        setPhase(state.phase || PHASES.IDLE);
+        setActiveVariant(state.activeVariant || VARIANTS.HOLDEM);
+        setPotData(state.potData || [{ label: 'MAIN', amount: 0, eligible: [] }]);
+        setActiveIdx(state.activeIdx ?? -1);
+        setHighestBet(state.highestBet || 0);
+        setLastRaiseAmt(state.lastRaiseAmt || BLINDS.bb);
         setWinning5Ids(state.winning5Ids || []);
         setWinningPlayerIndices(state.winningPlayerIndices || []);
         setPotTransferring(state.potTransferring || false);
         setIsAnimating(state.isAnimating || false);
+        
+        // Clear loading state if user is found in the player array
+        if (state.players?.some(p => p?.userId === socket.id)) {
+            setIsSeating(false);
+        }
+    });
+
+    socket.on('sitSuccess', (data) => {
+        console.log('Seated successfully at:', data.seatIndex);
     });
 
     socket.on('log', (data) => {
@@ -223,6 +233,7 @@ const App = () => {
 
     return () => {
         socket.off('gameUpdate');
+        socket.off('sitSuccess');
         socket.off('log');
     };
   }, []);
@@ -301,8 +312,10 @@ const App = () => {
   };
 
   const handleSitDown = () => {
-    if (playerNameInput.trim().length === 0) return;
-    socket.emit('sitPlayer', { name: playerNameInput.trim().toUpperCase(), preferredSeat: null });
+    if (playerNameInput.trim().length === 0 || isSeating) return;
+    setIsSeating(true);
+    // Fixed seatIndex: 0 as requested for standard seating start
+    socket.emit('sitPlayer', { name: playerNameInput.trim().toUpperCase(), seatIndex: 0 });
   };
 
   const handleAddBot = () => {
@@ -370,16 +383,30 @@ const App = () => {
               })}
             </div>
 
-            {/* Manual Sit Down / Join Lobby */}
+            {/* Manual Sit Down / Join Lobby Modal */}
             {!userSeat && (
                 <div className="absolute inset-0 z-[9000] flex items-center justify-center pointer-events-auto bg-black/40 backdrop-blur-md">
                     <div className="w-[30vw] min-w-[360px] p-10 rounded-[2vw] bg-black/80 border border-white/10 backdrop-blur-xl shadow-[0_0_5vw_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-300 flex flex-col items-center gap-8">
                         <div className="flex flex-col items-center gap-2"><div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_2vw_rgba(16,185,129,0.1)]"><User size={40} className="text-emerald-400" /></div><h2 className="text-2xl font-black uppercase tracking-[0.3em] text-white">Join Lobby</h2></div>
                         <div className="w-full flex flex-col gap-2">
                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-4">Display Name</label>
-                            <input type="text" maxLength={12} value={playerNameInput} onChange={(e) => setPlayerNameInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSitDown()} placeholder="ENTER YOUR NAME..." className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-xl font-black uppercase tracking-widest text-[#fbbf24] placeholder:text-white/10 focus:outline-none focus:border-[#fbbf24] transition-all" />
+                            <input 
+                                type="text" 
+                                maxLength={12} 
+                                value={playerNameInput} 
+                                onChange={(e) => setPlayerNameInput(e.target.value)} 
+                                onKeyDown={(e) => e.key === 'Enter' && handleSitDown()} 
+                                placeholder="ENTER YOUR NAME..." 
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-xl font-black uppercase tracking-widest text-[#fbbf24] placeholder:text-white/10 focus:outline-none focus:border-[#fbbf24] transition-all" 
+                            />
                         </div>
-                        <button disabled={playerNameInput.trim().length === 0} onClick={handleSitDown} className="w-full p-6 rounded-2xl bg-emerald-600 border border-emerald-500/50 shadow-[0_0_3vw_rgba(16,185,129,0.2)] hover:bg-emerald-500 transition-all duration-300 disabled:opacity-20 disabled:grayscale disabled:pointer-events-none text-lg font-black uppercase tracking-[0.3em] text-white">Sit at Table</button>
+                        <button 
+                            disabled={playerNameInput.trim().length === 0 || isSeating} 
+                            onClick={handleSitDown} 
+                            className="w-full p-6 rounded-2xl bg-emerald-600 border border-emerald-500/50 shadow-[0_0_3vw_rgba(16,185,129,0.2)] hover:bg-emerald-500 transition-all duration-300 disabled:opacity-20 disabled:grayscale disabled:pointer-events-none text-lg font-black uppercase tracking-[0.3em] text-white"
+                        >
+                          {isSeating ? "WAITING FOR SERVER..." : "Sit at Table"}
+                        </button>
                     </div>
                 </div>
             )}
