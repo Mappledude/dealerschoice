@@ -10,6 +10,7 @@ const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] } 
 });
 
+// Authoritative Server Memory
 let globalPlayers = []; 
 let globalRooms = [];
 
@@ -20,13 +21,13 @@ io.on('connection', (socket) => {
     socket.on('adminCreatePlayer', (data, callback) => {
         const newPlayer = { ...data, id: Date.now(), status: 'Verified' };
         globalPlayers.push(newPlayer);
-        io.emit('profilesUpdate', globalPlayers); // Broadcast updated list to all admins
+        io.emit('profilesUpdate', globalPlayers); 
         if (callback) callback({ status: 'ok', player: newPlayer });
     });
 
     socket.on('adminDeletePlayer', (playerId) => {
         globalPlayers = globalPlayers.filter(p => p.id !== playerId);
-        io.emit('profilesUpdate', globalPlayers); // Sync the deletion globally
+        io.emit('profilesUpdate', globalPlayers); 
     });
 
     socket.on('adminCreateRoom', (data, callback) => {
@@ -38,7 +39,16 @@ io.on('connection', (socket) => {
 
     socket.on('adminDeleteRoom', (roomId) => {
         globalRooms = globalRooms.filter(r => r.id !== roomId);
-        io.emit('lobbyUpdate', globalRooms); // Sync the deletion globally
+        io.emit('lobbyUpdate', globalRooms); 
+    });
+
+    // NEW: The Triple Purge Backend Handler
+    socket.on('adminNuclearReset', (callback) => {
+        globalPlayers = []; 
+        globalRooms = [];
+        io.emit('profilesUpdate', []); // Wipe all client registries
+        io.emit('lobbyUpdate', []);    // Wipe all client lobbies
+        if (callback) callback({ status: 'ok' });
     });
 
     // --- PLAYER & ROOM SYNC ---
@@ -55,20 +65,17 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         const room = globalRooms.find(r => r.id === roomId);
         if (room) {
-            // Find first empty seat and sit the player
             const seatIndex = room.players.findIndex(p => p === null);
             if (seatIndex !== -1) {
                 room.players[seatIndex] = { ...profile, tableChips: buyIn, socketId: socket.id };
             }
-            // Tell everyone in the room to update their table
             io.to(roomId).emit('roomUpdate', room);
-            // Tell everyone in the lobby that the seat count changed
             io.emit('lobbyUpdate', globalRooms);
         }
     });
 
     socket.on('disconnect', () => {
-        // Optional: Logic to remove player from a room on disconnect
+        console.log('User Disconnected:', socket.id);
     });
 });
 
