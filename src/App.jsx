@@ -123,3 +123,5 @@ const App = () => {
     </div>
   );
 };
+// ADD THIS LINE AT THE VERY BOTTOM
+export default App;
