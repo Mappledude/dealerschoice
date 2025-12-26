@@ -1,26 +1,16 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { io } from "socket.io-client";
-import {
-  RotateCcw, Play, Coins, Trophy, Landmark, LogOut,
-  Trash2, RefreshCcw, Info, TrendingUp, FastForward,
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { 
+  RotateCcw, Play, Coins, Trophy, Landmark, LogOut, 
+  Trash2, RefreshCcw, Info, TrendingUp, FastForward, 
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
-  Zap, Target, DollarSign, User
-} from "lucide-react";
+  Zap, Target, DollarSign, User, Lock, DoorOpen, LayoutGrid, ShieldAlert, PlusCircle,
+  Users, Layers, Edit3, ScrollText, ArrowLeft, Key, Save, AlertTriangle, Monitor
+} from 'lucide-react';
+import io from 'socket.io-client';
 
-// ─────────────────────────────────────────────────────────────
-// SOCKET CONFIG (Vercel frontend → Render backend)
-// Local dev: http://localhost:3001
-// Production: Render service
-// ─────────────────────────────────────────────────────────────
-const SOCKET_URL =
-  process.env.NODE_ENV === "production"
-    ? "https://poker-server-3vin.onrender.com"
-    : "http://localhost:3001";
-
-const socket = io(SOCKET_URL, {
-  transports: ["websocket"],
-  autoConnect: true,
-});
+// --- PRODUCTION SOCKET CONFIGURATION ---
+const SOCKET_URL = "https://poker-server-3vin.onrender.com"; 
+const socket = io(SOCKET_URL, { transports: ['websocket'] });
 
 // --- ENVIRONMENT DETECTION ---
 const isProduction = !window.location.hostname.includes('gemini') && 
@@ -54,7 +44,6 @@ const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'
 
 const INITIAL_PLAYERS = Array.from({ length: TOTAL_SEATS }, () => null);
 
-// --- SUB-COMPONENTS ---
 const Seat = ({ 
   player, displayPos, phase, dealStaggerIndex, winning5Ids, 
   isWinnerCalculated, potTransferring 
@@ -125,14 +114,15 @@ const App = () => {
   const [buyInAmount, setBuyInAmount] = useState(500);
   const [selectedTableForJoin, setSelectedTableForJoin] = useState(null);
 
-  // --- ADMIN STATE ---
+  // --- ADMIN INTERACTIVE STATE ---
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 5000, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 10, bb: 20 });
   const [allProfiles, setAllProfiles] = useState([]);
   const [activeTables, setActiveTables] = useState([]);
   const [globalLogs, setGlobalLogs] = useState([]);
+  const [isAddingPlayer, setIsAddingPlayer] = useState(false);
 
-  // --- GAME ARENA STATE ---
+  // --- GAME STATE ---
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
   const [phase, setPhase] = useState(PHASES.IDLE);
   const [activeVariant, setActiveVariant] = useState(VARIANTS.HOLDEM);
@@ -152,6 +142,14 @@ const App = () => {
   const [potTransferring, setPotTransferring] = useState(false);
   
   const lastLogRef = useRef({ time: 0, text: '' });
+  const feedScrollRef = useRef(null);
+
+  // Auto-scroll logic for Admin Feed
+  useEffect(() => {
+    if (feedScrollRef.current) {
+        feedScrollRef.current.scrollTop = feedScrollRef.current.scrollHeight;
+    }
+  }, [globalLogs]);
 
   // --- MULTIPLAYER SYNC ---
   useEffect(() => {
@@ -266,12 +264,17 @@ const App = () => {
       if (!newPlayer.name || !newPlayer.password) return;
       socket.emit('adminCreatePlayer', newPlayer);
       setNewPlayer({ name: '', chips: 5000, password: '' });
+      setIsAddingPlayer(false);
   };
 
   const handleAdminCreateTable = () => {
       if (!newTable.name) return;
       socket.emit('adminCreateRoom', newTable);
       setNewTable({ name: '', sb: 10, bb: 20 });
+  };
+
+  const handleAdminEditChips = (uid, amount) => {
+      socket.emit('adminEditChips', { uid, amount });
   };
 
   const handleJoinRoom = () => {
@@ -295,7 +298,7 @@ const App = () => {
   // --- RENDER: LOGIN ---
   if (currentView === VIEWS.LOGIN) {
       return (
-        <div className="h-screen bg-[#06080c] flex items-center justify-center relative overflow-hidden">
+        <div className="h-screen bg-[#06080c] flex items-center justify-center relative overflow-hidden text-white font-sans">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#1a202c_0%,_#06080c_100%)] pointer-events-none" />
             <div className="w-[30vw] min-w-[380px] p-12 rounded-[2vw] bg-black/60 border border-white/10 backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-10 animate-in fade-in zoom-in-95 duration-500">
                 <div className="flex flex-col items-center gap-4">
@@ -312,7 +315,7 @@ const App = () => {
                         <input value={userNameInput} onChange={e => setUserNameInput(e.target.value)} placeholder="IDENTIFICATION..." className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-center text-sm font-black uppercase tracking-widest text-white focus:border-[#fbbf24] outline-none transition-all"/>
                     </div>
                     <div className="space-y-1"><label className="text-[8px] font-black text-white/20 uppercase ml-4 tracking-widest">Passphrase</label>
-                        <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="SECRET KEY..." className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-center text-sm font-black uppercase tracking-widest text-[#fbbf24] focus:border-[#fbbf24] outline-none transition-all"/>
+                        <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="SECRET KEY..." className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-center text-sm font-black uppercase tracking-widest text-[#fbbf24] focus:border-[#fbbf24] outline-none transition-all"/>
                     </div>
                     <button onClick={handleLogin} className="w-full mt-4 p-6 rounded-2xl bg-[#fbbf24] border border-[#fbbf24]/50 shadow-[0_0_3vw_rgba(251,191,36,0.2)] hover:scale-[1.02] transition-all duration-300">
                         <span className="text-lg font-black uppercase tracking-[0.3em] text-black">Authenticate</span>
@@ -326,83 +329,151 @@ const App = () => {
   // --- RENDER: ADMIN ---
   if (currentView === VIEWS.ADMIN) {
       return (
-        <div className="h-screen bg-[#06080c] flex relative overflow-hidden">
+        <div className="h-screen bg-[#06080c] flex relative overflow-hidden text-white font-sans">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_#1e293b_0%,_#06080c_100%)] pointer-events-none" />
-            <aside className="w-72 bg-[#0f172a] border-r border-white/10 flex flex-col z-50">
+            
+            {/* Sidebar Navigation */}
+            <aside className="w-72 bg-[#0f172a] border-r border-white/10 flex flex-col z-[100]">
                 <div className="p-8 border-b border-white/5 mb-8">
                     <div className="flex items-center gap-3 text-[#fbbf24] mb-2"><ShieldAlert size={20} /><span className="font-black uppercase tracking-widest text-sm">Super Admin</span></div>
-                    <p className="text-[10px] text-white/30 uppercase font-black tracking-[0.2em]">Master Command Center</p>
+                    <p className="text-[10px] text-white/30 uppercase font-black tracking-[0.2em]">Table Orchestrator</p>
                 </div>
                 <nav className="flex-1 px-4 flex flex-col gap-2">
-                    <button onClick={() => setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black' : 'text-white/40 hover:bg-white/5'}`}><Users size={18}/> Player Registry</button>
-                    <button onClick={() => setAdminTab(ADMIN_TABS.TABLES)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black' : 'text-white/40 hover:bg-white/5'}`}><Layers size={18}/> Room Control</button>
-                    <button onClick={() => setAdminTab(ADMIN_TABS.LOGS)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.LOGS ? 'bg-[#fbbf24] text-black' : 'text-white/40 hover:bg-white/5'}`}><ScrollText size={18}/> Global Feed</button>
+                    <button onClick={() => setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black shadow-[0_0_20px_rgba(251,191,36,0.3)]' : 'text-white/40 hover:bg-white/5'}`}><Users size={18}/> Player Registry</button>
+                    <button onClick={() => setAdminTab(ADMIN_TABS.TABLES)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black shadow-[0_0_20px_rgba(251,191,36,0.3)]' : 'text-white/40 hover:bg-white/5'}`}><Layers size={18}/> Room Control</button>
+                    <button onClick={() => setAdminTab(ADMIN_TABS.LOGS)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.LOGS ? 'bg-[#fbbf24] text-black shadow-[0_0_20px_rgba(251,191,36,0.3)]' : 'text-white/40 hover:bg-white/5'}`}><ScrollText size={18}/> Global Feed</button>
                 </nav>
-                <div className="p-8 mt-auto border-t border-white/5"><button onClick={() => setCurrentView(VIEWS.LOGIN)} className="flex items-center gap-4 text-white/40 hover:text-white font-black text-[10px] uppercase tracking-widest"><ArrowLeft size={16}/> Back to Login</button></div>
+                <div className="p-8 mt-auto border-t border-white/5">
+                    <button onClick={() => setCurrentView(VIEWS.LOGIN)} className="flex items-center gap-4 text-white/40 hover:text-white font-black text-[10px] uppercase tracking-widest transition-colors"><ArrowLeft size={16}/> Exit Dashboard</button>
+                </div>
             </aside>
-            <main className="flex-1 flex flex-col p-12 overflow-y-auto">
-                {adminTab === ADMIN_TABS.PLAYERS && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 animate-in slide-in-from-bottom-4 duration-500">
-                        <section className="bg-slate-900/40 p-10 rounded-[2vw] border border-white/5 flex flex-col gap-8 shadow-2xl">
-                            <div className="flex items-center gap-3 border-b border-white/10 pb-4"><UserPlus size={20} className="text-indigo-400"/><h3 className="text-lg font-black uppercase tracking-widest">Provision Player</h3></div>
-                            <div className="grid grid-cols-1 gap-4">
-                                <input value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} placeholder="PLAYER NAME" className="bg-white/5 p-4 rounded-xl border border-white/10 text-xs font-black uppercase outline-none"/>
-                                <input type="number" value={newPlayer.chips} onChange={e => setNewPlayer({...newPlayer, chips: Number(e.target.value)})} placeholder="STARTING WALLET" className="bg-white/5 p-4 rounded-xl border border-white/10 text-xs font-black outline-none"/>
-                                <input value={newPlayer.password} onChange={e => setNewPlayer({...newPlayer, password: e.target.value})} placeholder="UNIQUE ACCESS PASSWORD" className="bg-white/5 p-4 rounded-xl border border-white/10 text-xs font-black outline-none"/>
-                                <button onClick={handleAdminCreatePlayer} className="p-5 bg-indigo-600 rounded-xl font-black uppercase text-xs hover:bg-indigo-500 transition-all shadow-xl">Register Account</button>
+
+            {/* Main Content Area */}
+            <main className="flex-1 flex flex-col p-12 overflow-y-auto relative z-10">
+                {/* Modals */}
+                {isAddingPlayer && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="w-[25vw] min-w-[320px] bg-slate-900 border border-white/10 rounded-[1.5vw] p-8 shadow-2xl flex flex-col gap-6">
+                            <h3 className="text-xl font-black uppercase tracking-widest flex items-center gap-3"><UserPlus size={20} className="text-indigo-400"/> New Profile</h3>
+                            <div className="flex flex-col gap-4">
+                                <input value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black uppercase outline-none focus:border-indigo-500"/>
+                                <input type="number" value={newPlayer.chips} onChange={e => setNewPlayer({...newPlayer, chips: Number(e.target.value)})} placeholder="STARTING CHIPS" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black outline-none"/>
+                                <input value={newPlayer.password} onChange={e => setNewPlayer({...newPlayer, password: e.target.value})} placeholder="SECRET PASSWORD" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black outline-none"/>
                             </div>
-                        </section>
-                        <section className="bg-slate-900/40 p-10 rounded-[2vw] border border-white/5 flex flex-col gap-8 shadow-2xl h-[600px]">
-                            <div className="flex items-center gap-3 border-b border-white/10 pb-4"><Users size={20} className="text-[#fbbf24]"/><h3 className="text-lg font-black uppercase tracking-widest">Registry List</h3></div>
-                            <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col gap-3 pr-2">
-                                {allProfiles.map((p, i) => (
-                                    <div key={i} className="flex items-center justify-between bg-black/40 p-4 rounded-2xl border border-white/5">
-                                        <div className="flex flex-col"><span className="text-xs font-black uppercase">{p.name}</span><span className="text-[8px] font-mono text-white/20">UID: {p.uid}</span></div>
-                                        <div className="flex items-center gap-6"><div className="text-right"><span className="text-[8px] font-black text-white/40 block uppercase leading-none">Wallet</span><span className="text-xs font-mono font-black text-emerald-400">${Number(p.chips).toLocaleString()}</span></div>
-                                            <button onClick={() => { const amt = prompt("New Wallet Amount:", p.chips); if(amt) handleAdminEditChips(p.uid, Number(amt)); }} className="p-2 bg-white/5 rounded-lg hover:text-[#fbbf24]"><Edit3 size={14}/></button>
+                            <div className="flex gap-4">
+                                <button onClick={() => setIsAddingPlayer(false)} className="flex-1 p-4 rounded-xl bg-white/5 font-black uppercase text-[10px]">Cancel</button>
+                                <button onClick={handleAdminCreatePlayer} className="flex-2 p-4 rounded-xl bg-indigo-600 font-black uppercase text-[10px]">Deploy Profile</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Player Registry View */}
+                {adminTab === ADMIN_TABS.PLAYERS && (
+                    <div className="flex flex-col gap-8 animate-in slide-in-from-right-4 duration-500">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-6">
+                            <div className="flex flex-col">
+                                <h2 className="text-2xl font-black uppercase tracking-widest">Player Registry</h2>
+                                <span className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">{allProfiles.length} Total Users Verified</span>
+                            </div>
+                            <button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl hover:scale-105 active:scale-95 transition-all"><PlusCircle size={18}/> Add New Player</button>
+                        </div>
+                        
+                        <div className="bg-white/5 border border-white/10 rounded-[2vw] overflow-hidden">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-white/5 border-b border-white/10">
+                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest text-white/40">Username</th>
+                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest text-white/40">Chip Balance</th>
+                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest text-white/40">Status</th>
+                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest text-white/40 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {allProfiles.map((p, i) => (
+                                        <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                            <td className="p-6 font-black uppercase text-sm tracking-widest">{p.name} <span className="text-[8px] opacity-20 block font-mono">UID: {p.uid}</span></td>
+                                            <td className="p-6 font-mono font-black text-emerald-400">${Number(p.chips).toLocaleString()}</td>
+                                            <td className="p-6">
+                                                <span className={`text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${p.isOnline ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-white/5 text-white/20 border border-white/10'}`}>
+                                                    {p.isOnline ? 'Online' : 'Offline'}
+                                                </span>
+                                            </td>
+                                            <td className="p-6 text-right">
+                                                <button onClick={() => { const amt = prompt("Set New Chip Balance:", p.chips); if(amt) handleAdminEditChips(p.uid, Number(amt)); }} className="p-2 px-4 bg-white/5 border border-white/10 rounded-lg hover:border-[#fbbf24] hover:text-[#fbbf24] transition-all font-black uppercase text-[10px] tracking-widest">Quick Edit</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Room Control View */}
+                {adminTab === ADMIN_TABS.TABLES && (
+                    <div className="flex flex-col gap-8 animate-in slide-in-from-right-4 duration-500">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-6">
+                            <h2 className="text-2xl font-black uppercase tracking-widest">Active Table Orchestration</h2>
+                            <button onClick={handleClearArena} className="flex items-center gap-3 p-4 px-8 bg-red-600/20 border border-red-500/30 text-red-500 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all"><Trash2 size={18}/> Kill All Sessions</button>
+                        </div>
+
+                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                            {/* Creation Panel */}
+                            <section className="bg-white/5 border border-white/10 rounded-[2vw] p-8 flex flex-col gap-8">
+                                <h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3"><PlusCircle size={20} className="text-emerald-400"/> New Arena</h3>
+                                <div className="space-y-4">
+                                    <div className="space-y-1"><label className="text-[8px] font-black text-white/20 uppercase ml-2">Room Name</label><input value={newTable.name} onChange={e => setNewTable({...newTable, name: e.target.value})} placeholder="E.G. TABLE ALPHA" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black outline-none focus:border-emerald-500"/></div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1"><label className="text-[8px] font-black text-white/20 uppercase ml-2">Small Blind</label><input type="number" value={newTable.sb} onChange={e => setNewTable({...newTable, sb: Number(e.target.value)})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black outline-none"/></div>
+                                        <div className="space-y-1"><label className="text-[8px] font-black text-white/20 uppercase ml-2">Big Blind</label><input type="number" value={newTable.bb} onChange={e => setNewTable({...newTable, bb: Number(e.target.value)})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black outline-none"/></div>
+                                    </div>
+                                    <button onClick={handleAdminCreateTable} className="w-full p-5 bg-emerald-600 rounded-xl font-black uppercase text-xs hover:bg-emerald-500 transition-all shadow-xl mt-4">Initialize Table</button>
+                                </div>
+                            </section>
+
+                            {/* Active Tables Grid */}
+                            <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {activeTables.map((t, i) => (
+                                    <div key={i} className="bg-black/40 border border-white/10 p-8 rounded-[2vw] flex flex-col justify-between gap-6 shadow-xl hover:border-[#fbbf24]/40 transition-all">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex flex-col"><h4 className="text-xl font-black uppercase tracking-widest text-[#fbbf24]">{t.name}</h4><span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">${t.sb} / ${t.bb} BLINDS</span></div>
+                                            <div className="bg-white/5 p-3 rounded-xl border border-white/10 text-center min-w-[60px]"><span className="text-[10px] font-black text-white/40 block leading-none">Load</span><span className="text-lg font-black">{t.count} / 10</span></div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button className="flex-1 p-3 bg-white/5 border border-white/10 rounded-xl font-black uppercase text-[10px] hover:bg-white/10">Delete</button>
+                                            <button className="flex-1 p-3 bg-white/5 border border-white/10 rounded-xl font-black uppercase text-[10px] hover:bg-white/10">Pause</button>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        </section>
-                    </div>
-                )}
-                {adminTab === ADMIN_TABS.TABLES && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 animate-in slide-in-from-bottom-4 duration-500">
-                        <section className="bg-slate-900/40 p-10 rounded-[2vw] border border-white/5 flex flex-col gap-8 shadow-2xl">
-                            <div className="flex items-center gap-3 border-b border-white/10 pb-4"><PlusCircle size={20} className="text-emerald-400"/><h3 className="text-lg font-black uppercase tracking-widest">Spawn Arena Room</h3></div>
-                            <div className="grid grid-cols-1 gap-4">
-                                <input value={newTable.name} onChange={e => setNewTable({...newTable, name: e.target.value})} placeholder="ROOM NAME (E.G. TABLE ALPHA)" className="bg-white/5 p-4 rounded-xl border border-white/10 text-xs font-black uppercase outline-none"/>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <input type="number" value={newTable.sb} onChange={e => setNewTable({...newTable, sb: Number(e.target.value)})} placeholder="SMALL BLIND" className="bg-white/5 p-4 rounded-xl border border-white/10 text-xs font-black outline-none"/>
-                                    <input type="number" value={newTable.bb} onChange={e => setNewTable({...newTable, bb: Number(e.target.value)})} placeholder="BIG BLIND" className="bg-white/5 p-4 rounded-xl border border-white/10 text-xs font-black outline-none"/>
-                                </div>
-                                <button onClick={handleAdminCreateTable} className="p-5 bg-emerald-600 rounded-xl font-black uppercase text-xs hover:bg-emerald-500 transition-all shadow-xl">Deploy Room</button>
-                            </div>
-                        </section>
-                        <section className="bg-slate-900/40 p-10 rounded-[2vw] border border-white/5 flex flex-col gap-8 shadow-2xl h-[600px]">
-                             <div className="flex items-center gap-3 border-b border-white/10 pb-4"><Layers size={20} className="text-indigo-400"/><h3 className="text-lg font-black uppercase tracking-widest">Active Orchestration</h3></div>
-                             <div className="flex-1 flex flex-col gap-3 overflow-y-auto scrollbar-hide pr-2">
-                                {activeTables.map((t, i) => (
-                                    <div key={i} className="flex items-center justify-between bg-black/40 p-6 rounded-2xl border border-white/5">
-                                        <div className="flex flex-col"><h4 className="text-sm font-black uppercase tracking-widest">{t.name}</h4><span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">${t.sb} / ${t.bb} Stakes</span></div>
-                                        <div className="text-right"><span className="text-[8px] font-black text-white/40 block uppercase">Players</span><span className="text-xs font-black text-white">{t.count} / 10</span></div>
-                                    </div>
-                                ))}
-                             </div>
-                             <button onClick={handleClearArena} className="p-4 bg-red-600/20 border border-red-500/30 text-red-500 rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-red-600 hover:text-white transition-all"><AlertTriangle size={14}/> GLOBAL KILL-SWITCH</button>
-                        </section>
-                    </div>
-                )}
-                {adminTab === ADMIN_TABS.LOGS && (
-                    <section className="flex-1 bg-black p-10 rounded-[2vw] border border-white/5 flex flex-col gap-8 shadow-2xl animate-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex items-center border-b border-white/10 pb-4 gap-3"><ScrollText size={20} className="text-cyan-400"/><h3 className="text-lg font-black uppercase tracking-widest">Global Intelligence Feed</h3></div>
-                        <div className="flex-1 font-mono text-[10px] text-white/60 space-y-2 overflow-y-auto scrollbar-hide pr-4">
-                            {globalLogs.map((l, i) => (
-                                <div key={i} className="py-2 border-b border-white/5 flex gap-4"><span className="text-white/20">[{new Date(l.timestamp).toLocaleTimeString()}]</span><span className="text-indigo-400 font-bold shrink-0">{l.room || "SYSTEM"}</span><span className="text-white uppercase">{l.message}</span></div>
-                            ))}
                         </div>
-                    </section>
+                    </div>
+                )}
+
+                {/* Global Live Feed View */}
+                {adminTab === ADMIN_TABS.LOGS && (
+                    <div className="flex flex-col gap-8 h-full animate-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex items-center gap-3 border-b border-white/10 pb-6">
+                            <Monitor size={24} className="text-cyan-400"/><h2 className="text-2xl font-black uppercase tracking-widest text-cyan-400">Arena Intelligence Stream</h2>
+                        </div>
+                        <div className="flex-1 bg-black/80 rounded-[2vw] border border-white/10 p-8 shadow-2xl overflow-hidden flex flex-col">
+                             <div className="flex-1 overflow-y-auto font-mono text-[11px] leading-relaxed scroll-smooth" ref={feedScrollRef}>
+                                {globalLogs.length > 0 ? globalLogs.map((l, i) => (
+                                    <div key={i} className="py-3 border-b border-white/5 flex gap-6 hover:bg-white/5 transition-colors group">
+                                        <span className="text-white/20 shrink-0">[{new Date(l.timestamp).toLocaleTimeString()}]</span>
+                                        <span className="text-indigo-400 font-bold shrink-0 min-w-[120px]">{l.room?.toUpperCase() || "CORE-SYSTEM"}</span>
+                                        <span className="text-white uppercase tracking-wider group-hover:text-[#fbbf24] transition-colors">{l.message}</span>
+                                    </div>
+                                )) : (
+                                    <div className="h-full flex items-center justify-center opacity-10 flex-col gap-4 text-white">
+                                        <ScrollText size={64} strokeWidth={1}/>
+                                        <span className="text-sm font-black uppercase tracking-[0.5em]">Awaiting Arena Events...</span>
+                                    </div>
+                                )}
+                             </div>
+                        </div>
+                    </div>
                 )}
             </main>
         </div>
@@ -412,7 +483,7 @@ const App = () => {
   // --- VIEW: LOBBY ---
   if (currentView === VIEWS.LOBBY) {
       return (
-        <div className="h-screen bg-[#06080c] flex flex-col relative overflow-hidden">
+        <div className="h-screen bg-[#06080c] flex flex-col relative overflow-hidden text-white font-sans">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#1a202c_0%,_#06080c_100%)] pointer-events-none" />
             
             {/* Join Room Buy-In Modal */}
@@ -498,9 +569,11 @@ const App = () => {
         <div className="relative w-full max-w-[1600px] aspect-[21/10] mx-auto transition-all duration-1000 flex items-center justify-center">
             <div className="absolute inset-0 pointer-events-none z-20">
               {players.map((p, i) => {
-                if (!p || i === heroSeatIdx) return null;
+                if (!p || (userProfile && p.uid === userProfile.uid)) return null;
+                // heroSeatIdx check: If i is mySeatIndex, don't render it here
+                if (heroSeatIdx !== -1 && i === heroSeatIdx) return null;
                 const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
-                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} dealStaggerIndex={dealStaggerIndex} winning5Ids={winning5Ids} potTransferring={potTransferring && winningPlayerIndices.includes(i)} isWinnerCalculated={isWinnerCalculated} />;
+                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} dealStaggerIndex={dealStaggerIndex} winning5Ids={winning5Ids} potTransferring={potTransferring && (winningPlayerIndices || []).includes(i)} isWinnerCalculated={isWinnerCalculated} />;
               })}
             </div>
 
@@ -555,7 +628,7 @@ const App = () => {
         </div>
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 h-[200px] bg-black/40 backdrop-blur-3xl border-t border-white/10 z-[6000] flex flex-row items-end gap-0 pointer-events-none">
+      <footer className="fixed bottom-0 left-0 right-0 h-[200px] bg-black/40 backdrop-blur-3xl border-t border-white/10 z-[6000] flex flex-row items-end gap-0 pointer-events-none text-white">
         <div className="flex-1 h-full bg-white/5 border-r border-white/10 p-6 flex flex-col pointer-events-auto overflow-hidden">
           <div className="flex items-center gap-2 text-slate-400 uppercase font-black text-sm mb-4 tracking-[0.2em] border-b border-white/10 pb-3"><Info size={18}/> INTELLIGENCE FEED</div>
           <div className="flex-1 font-mono text-xs leading-4 space-y-0 overflow-y-auto pr-2 scrollbar-hide flex flex-col">
@@ -593,6 +666,7 @@ const App = () => {
           )}
         </div>
       </footer>
+      <style dangerouslySetInnerHTML={{ __html: `.gold-slider { -webkit-appearance: none; background: transparent; width: 100%; } .gold-slider::-webkit-slider-runnable-track { height: 4px; background: #fbbf24; border-radius: 4px; } .gold-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 38px; width: 38px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 30px #fbbf24, inset 0 0 10px rgba(255,255,255,0.8); cursor: pointer; margin-top: -17px; transition: all 0.2s; } .scrollbar-hide::-webkit-scrollbar { display: none; }`}} />
     </div>
   );
 };
