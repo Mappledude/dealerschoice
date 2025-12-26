@@ -1,14 +1,19 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
 
 const app = express();
 app.use(cors());
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, { 
+    cors: { 
+        origin: "*",
+        methods: ["GET", "POST"]
+    } 
+});
 
-// GLOBAL STATE: Persists as long as the server is running
+// GLOBAL STATE: Persists in server memory
 let globalPlayers = []; 
 let globalRooms = [];
 
@@ -19,14 +24,14 @@ io.on('connection', (socket) => {
     socket.on('adminCreatePlayer', (data, callback) => {
         const newPlayer = { ...data, id: Date.now(), status: 'Verified' };
         globalPlayers.push(newPlayer);
-        io.emit('playerCreated', newPlayer); // Notify all admins
-        if (callback) callback({ status: 'ok', player: newPlayer }); // Unlocks the "Deploying" button
+        io.emit('playerCreated', newPlayer);
+        if (callback) callback({ status: 'ok', player: newPlayer });
     });
 
     socket.on('adminCreateRoom', (data, callback) => {
         const newRoom = { ...data, id: `room_${Date.now()}`, players: [], phase: 'IDLE' };
         globalRooms.push(newRoom);
-        io.emit('lobbyUpdate', globalRooms); // Notify all players in lobby
+        io.emit('lobbyUpdate', globalRooms);
         if (callback) callback({ status: 'ok', room: newRoom });
     });
 
@@ -44,4 +49,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+});
