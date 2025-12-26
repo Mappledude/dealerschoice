@@ -1,10 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { io } from "socket.io-client";
 import { 
   RotateCcw, Play, Coins, Trophy, Landmark, LogOut, 
   Trash2, RefreshCcw, Info, TrendingUp, FastForward, 
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
   Zap, Target, DollarSign
 } from 'lucide-react';
+
+// --- SOCKET CONFIG ---
+// Replace the URL below with your actual Render URL (e.g., https://poker-server.onrender.com)
+const SOCKET_URL = process.env.NODE_ENV === 'production' 
+  ? "https://your-poker-app.onrender.com" 
+  : "http://localhost:3001";
+
+const socket = io(SOCKET_URL, {
+  transports: ["websocket"],
+  autoConnect: true
+});
 
 // --- CONSTANTS & CONFIG ---
 const TOTAL_SEATS = 10;
@@ -117,24 +129,38 @@ const Seat = ({ player, index, phase, dealStaggerIndex, winning5Ids }) => {
   const isWinner = player.isWinner;
   const dimPlayer = isShowdown && !isWinner; 
 
-  // In the Canvas build, Hero seat sometimes returns null here to avoid double-rendering cards
-  if (isHero && !isShowdown) return null;
-
   return (
     <div style={{ left: `${pos.x}%`, top: `${pos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 transition-all duration-1000 ${player?.isFolded ? 'opacity-20 grayscale scale-95' : (dimPlayer ? 'opacity-50' : 'opacity-100')}`}>
-      {!isHero && player?.hand?.length > 0 && !player.isFolded && (
-        <div className={`flex items-end pointer-events-none transition-all duration-1000 mb-[-12px] overflow-visible`}>
+      
+      {/* Name Badge */}
+      <div className={`flex items-center gap-2 p-1 px-5 rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-500 relative ${isWinner && isShowdown ? 'border-yellow-400 shadow-[0_0_30px_rgba(251,191,36,0.8)] scale-110' : 'border-white/10'}`}>
+        <div className="flex flex-col items-center">
+            <div className="flex items-center gap-2">
+                {player?.isDealer && <div className="w-3 h-3 bg-red-600 rounded-full shadow-[0_0_8px_rgba(220,38,38,0.8)] animate-pulse" />}
+                <span className="text-[9px] font-black text-white leading-none uppercase tracking-widest">{String(player?.name || "Player")}</span>
+            </div>
+            <span className={`text-[10px] font-mono font-black mt-0.5 transition-all duration-500 ${isWinner && isShowdown ? 'text-emerald-400 animate-pulse scale-125' : 'text-emerald-500/80'}`}>${Number(player?.chips || 0)}</span>
+        </div>
+      </div>
+
+      {/* Cards: Positioned BELOW for Hero, kept at 1.8x original scale */}
+      {player?.hand?.length > 0 && !player.isFolded && (
+        <div className={`flex items-end pointer-events-none transition-all duration-1000 mt-4 overflow-visible justify-center relative w-full h-16`}>
           {(player.hand || []).map((c, ci) => {
             const isWinningCard = winning5Ids.includes(c.id);
+            const handSize = player.hand.length;
+            const fanOffset = isHero ? (ci - (handSize - 1) / 2) * 45 : (ci * -12);
+            
             return (
               <div key={ci} 
-                className={`w-10 h-14 rounded-[6px] border-none flex flex-col items-start justify-start p-1 text-[10px] font-bold transition-all duration-1000 brightness-125 
-                ${showCards ? 'bg-gradient-to-br from-white via-white to-slate-50 text-slate-950 shadow-[2px_2px_5px_rgba(0,0,0,0.5),_inset_0_0_0_1px_rgba(0,0,0,0.1)]' : 'bg-slate-900 border border-white/10'} 
-                ${dealStaggerIndex >= ci ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-[-20px]'} 
-                ${isWinningCard ? 'scale-[1.1] z-[500] border-yellow-400' : ''}`} 
+                className={`w-10 h-14 rounded-[6px] border-none flex flex-col items-start justify-start p-1.5 text-[8px] font-bold transition-all duration-700 absolute
+                ${showCards ? 'bg-white text-slate-950 shadow-2xl' : 'bg-slate-900 border border-white/10'} 
+                ${isWinningCard && isShowdown ? 'scale-[1.25] z-[500] border-yellow-400' : ''}`} 
                 style={{ 
-                  transform: `translateX(${ci * -12}px)`, 
-                  zIndex: isWinningCard ? 700 : ci 
+                  transform: `translateX(${fanOffset}px) scale(${isHero ? 1.8 : 1})`, 
+                  zIndex: isWinningCard ? 700 : ci,
+                  top: '0px',
+                  transformOrigin: 'top center'
                 }}
               >
                 {showCards ? (
@@ -148,15 +174,6 @@ const Seat = ({ player, index, phase, dealStaggerIndex, winning5Ids }) => {
           })}
         </div>
       )}
-      <div className={`flex items-center gap-2 p-1 px-5 rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-500 relative ${isWinner && isShowdown ? 'border-yellow-400 shadow-[0_0_30px_rgba(251,191,36,0.8)] scale-110' : 'border-white/10'}`}>
-        <div className="flex flex-col items-center">
-            <div className="flex items-center gap-2">
-                {player?.isDealer && <div className="w-3 h-3 bg-red-600 rounded-full shadow-[0_0_8px_rgba(220,38,38,0.8)] animate-pulse" />}
-                <span className="text-[9px] font-black text-white leading-none uppercase tracking-widest">{String(player?.name || "Player")}</span>
-            </div>
-            <span className={`text-[10px] font-mono font-black mt-0.5 transition-all duration-500 ${isWinner && isShowdown ? 'text-emerald-400 animate-pulse scale-125' : 'text-emerald-500/80'}`}>${Number(player?.chips || 0)}</span>
-        </div>
-      </div>
     </div>
   );
 };
@@ -199,7 +216,7 @@ const App = () => {
   const addLog = useCallback((data) => {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const logEntry = { 
-      id: Date.now() + Math.random(), // Secure replacement for randomUUID
+      id: Date.now() + Math.random(), 
       time: String(timestamp), 
       name: String(data.name || "System"), 
       action: String(data.action || ""), 
@@ -285,6 +302,12 @@ const App = () => {
     } 
   }, [phase, seatedCount, handleDeal]);
 
+  // Handle Socket Events for Production
+  useEffect(() => {
+    socket.on("connect", () => addLog({ action: "SYNCED TO ARENA", type: 'system' }));
+    return () => socket.off("connect");
+  }, [addLog]);
+
   return (
     <div className="h-screen bg-[#05070a] text-white font-sans flex flex-col overflow-hidden relative">
       <header className="h-16 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-8 z-[1000]">
@@ -302,8 +325,8 @@ const App = () => {
       <div className="flex-1 flex overflow-hidden">
         <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} bg-[#0f172a]/95 border-r border-white/5 transition-all duration-300 overflow-hidden z-[6000]`}>
           <div className="p-6 space-y-4">
-            <button onClick={() => { const emptyIdx = players.findIndex(p => p === null); if (emptyIdx !== -1) { setPlayers(prev => prev.map((p, i) => i === emptyIdx ? { id: emptyIdx, userId: `bot_${Math.random()}`, name: BOT_NAMES[emptyIdx % 10], isBot: true, chips: 2000, hand: [], currentBet: 0, totalContributed: 0, isFolded: false, isSeated: true, acted: false, joinedAt: Date.now(), handResult: null } : p)); } }} className="w-full flex items-center gap-3 bg-indigo-600/10 border border-indigo-500/20 p-4 rounded-xl text-indigo-400 text-[10px] font-black uppercase tracking-widest"><UserPlus size={16}/> Add Bot</button>
-            <button onClick={() => { setPlayers(INITIAL_PLAYERS); setPhase(PHASES.IDLE); setCommunity([]); setPotData([{label:'MAIN', amount:0, eligible:[]}]); }} className="w-full flex items-center gap-3 bg-red-950/20 border border-red-500/30 p-4 rounded-xl text-red-400 text-[10px] font-black uppercase tracking-widest"><Trash2 size={16}/> Clear Arena</button>
+            <button onClick={() => { const emptyIdx = players.findIndex(p => p === null); if (emptyIdx !== -1) { setPlayers(prev => prev.map((p, i) => i === emptyIdx ? { id: emptyIdx, userId: `bot_${Math.random()}`, name: BOT_NAMES[emptyIdx % 10], isBot: true, chips: 2000, hand: [], currentBet: 0, totalContributed: 0, isFolded: false, isSeated: true, acted: false, joinedAt: Date.now(), handResult: null } : p)); } }} className="w-full flex items-center gap-3 bg-indigo-600/10 border border-indigo-500/20 p-4 rounded-xl text-indigo-400 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600/20"><UserPlus size={16}/> Add Bot</button>
+            <button onClick={() => { setPlayers(INITIAL_PLAYERS); setPhase(PHASES.IDLE); setCommunity([]); setPotData([{label:'MAIN', amount:0, eligible:[]}]); }} className="w-full flex items-center gap-3 bg-red-950/20 border border-red-500/30 p-4 rounded-xl text-red-400 text-[10px] font-black uppercase tracking-widest hover:bg-red-950/40"><Trash2 size={16}/> Clear Arena</button>
           </div>
         </aside>
 
