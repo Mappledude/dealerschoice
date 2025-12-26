@@ -33,8 +33,6 @@ const shuffle = (deck) => {
     return deck;
 };
 
-// --- GAME ENGINE HELPERS ---
-
 const collectBets = (room) => {
     let streetPot = 0;
     room.players.forEach(p => {
@@ -107,8 +105,7 @@ const runIgnition = (roomId) => {
     room.players = room.players.map((p, i) => {
         if (!p) return null;
         let hand = [];
-        const cardCount = room.activeVariant?.holeCards || 2;
-        for (let j = 0; j < cardCount; j++) hand.push(deck.pop());
+        for (let j = 0; j < room.activeVariant.holeCards; j++) hand.push(deck.pop());
         let bet = (i === sbIdx) ? SB_AMT : (i === bbIdx) ? BB_AMT : 0;
         return { 
             ...p, 
@@ -129,7 +126,6 @@ const runIgnition = (roomId) => {
     room.potData = [{ label: 'MAIN', amount: 0 }];
     
     io.to(roomId).emit('roomUpdate', room);
-    io.to(roomId).emit('log', { action: "New Hand Started", type: 'system' });
 };
 
 // --- SOCKET ORCHESTRATION ---
@@ -238,6 +234,7 @@ io.on('connection', (socket) => {
 
     socket.on('adminDeleteRoom', (id) => { delete rooms[id]; io.emit('lobbyUpdate', Object.values(rooms)); });
     socket.on('adminForceDeal', (roomId) => runIgnition(roomId));
+    socket.on('adminNuclearReset', () => { globalProfiles = []; rooms = {}; io.emit('profilesUpdate', []); io.emit('lobbyUpdate', []); });
 });
 
 const PORT = process.env.PORT || 10000;
