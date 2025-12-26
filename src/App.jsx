@@ -97,13 +97,16 @@ const Seat = ({
 };
 
 const App = () => {
+  // --- SESSION & PROFILE STATE ---
   const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
   const [adminTab, setAdminTab] = useState(ADMIN_TABS.PLAYERS);
   const [userProfile, setUserProfile] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
+  const [userNameInput, setUserNameInput] = useState('');
   const [buyInAmount, setBuyInAmount] = useState(500);
   const [selectedTableForJoin, setSelectedTableForJoin] = useState(null);
 
+  // --- REGISTRY STATE ---
   const [allProfiles, setAllProfiles] = useState([]);
   const [activeTables, setActiveTables] = useState([]);
   const [globalLogs, setGlobalLogs] = useState([]);
@@ -111,7 +114,9 @@ const App = () => {
   const [newTable, setNewTable] = useState({ name: '', sb: 10, bb: 20 });
   const [isAddingPlayer, setIsAddingPlayer] = useState(false);
   const [isDeployingPlayer, setIsDeployingPlayer] = useState(false);
+  const [editingPlayer, setEditingPlayer] = useState(null);
 
+  // --- GAME ARENA STATE ---
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
   const [phase, setPhase] = useState(PHASES.IDLE);
   const [activeVariant, setActiveVariant] = useState(VARIANTS.HOLDEM);
@@ -130,6 +135,7 @@ const App = () => {
   const [potTransferring, setPotTransferring] = useState(false);
   
   const lastLogRef = useRef({ time: 0, text: '' });
+  const feedScrollRef = useRef(null);
 
   // --- INITIAL DATA HYDRATION ---
   useEffect(() => {
@@ -164,6 +170,14 @@ const App = () => {
         setAllProfiles(Array.isArray(list) ? list : []);
     });
 
+    socket.on('playerCreated', (player) => {
+        if (!player) return;
+        setAllProfiles(prev => {
+            const combined = [...prev, player];
+            return Array.from(new Map(combined.map(p => [p.uid, p])).values());
+        });
+    });
+
     socket.on('loginSuccess', (profile) => {
         setUserProfile(profile);
         setCurrentView(VIEWS.LOBBY);
@@ -174,11 +188,12 @@ const App = () => {
 
     return () => {
         socket.off('roomUpdate'); socket.off('lobbyUpdate');
-        socket.off('profilesUpdate'); socket.off('loginSuccess');
-        socket.off('globalLog'); socket.off('log');
+        socket.off('profilesUpdate'); socket.off('playerCreated');
+        socket.off('loginSuccess'); socket.off('globalLog'); socket.off('log');
     };
-  }, []);
+  }, [selectedTableForJoin]);
 
+  // --- PERSPECTIVE CALCULATOR ---
   const heroSeatIdx = useMemo(() => {
       if (!userProfile) return -1;
       return players.findIndex(p => p && p.uid === userProfile.uid);
@@ -224,7 +239,7 @@ const App = () => {
     return result.name;
   }, [community, evaluateBestHandSync]);
 
-  // --- UPDATED HANDLERS ---
+  // --- HANDLERS ---
   const handleLogin = () => {
     if (passwordInput === 'pass') { setCurrentView(VIEWS.ADMIN); } 
     else {
@@ -235,7 +250,6 @@ const App = () => {
   const handleJoinRoom = () => {
       if (!selectedTableForJoin || !userProfile) return;
       
-      // IMMEDIATE SEATING HANDSHAKE
       const handshakePlayers = [...INITIAL_PLAYERS];
       handshakePlayers[0] = { ...userProfile, chips: buyInAmount, isSeated: true, isHero: true, hand: [], currentBet: 0, isFolded: false, isWinner: false };
       setPlayers(handshakePlayers);
@@ -248,19 +262,41 @@ const App = () => {
       setSelectedTableForJoin(null);
   };
 
+  const handleAdminCreatePlayer = () => {
+      const { name, password, chips } = newPlayer;
+      if (!name || !password) return;
+      setIsDeployingPlayer(true);
+      const uid = Math.random().toString(36).substr(2, 9);
+      const payload = { name, password, chips, id: uid, uid: uid };
+
+      if (socket.connected) {
+          socket.emit('adminCreatePlayer', payload, (res) => {
+            if(res?.status === 'ok') {
+                setIsDeployingPlayer(false);
+                setIsAddingPlayer(false);
+                setNewPlayer({ name: '', chips: 5000, password: '' });
+            }
+          });
+      } else {
+          setAllProfiles(prev => [...prev, payload]);
+          setIsDeployingPlayer(false);
+          setIsAddingPlayer(false);
+          setNewPlayer({ name: '', chips: 5000, password: '' });
+      }
+  };
+
   const handleAdminCreateTable = () => {
       if (!newTable.name) return;
       const roomId = 'room_' + Math.random().toString(36).substr(2, 9);
       const payload = { ...newTable, id: roomId, count: 0, players: [] };
       if (socket.connected) {
-          socket.emit('adminCreateRoom', payload); // UI updates via lobbyUpdate socket listener
+          socket.emit('adminCreateRoom', payload);
       }
       setNewTable({ name: '', sb: 10, bb: 20 });
   };
 
   const handleNuclearReset = () => {
     if (window.confirm("ARE YOU ABSOLUTELY SURE? THIS WILL HARD WIPE THE SERVER AND YOUR LOCAL STORAGE.")) {
-        // Clear all localized data
         Object.keys(localStorage).forEach(key => { if(key.startsWith('poker_')) localStorage.removeItem(key); });
         setAllProfiles([]);
         setActiveTables([]);
@@ -300,9 +336,27 @@ const App = () => {
   if (currentView === VIEWS.ADMIN) {
       return (
         <div className="h-screen bg-[#06080c] flex relative overflow-hidden text-white font-sans">
-            <aside className="w-72 bg-[#0f172a] border-r border-white/10 flex flex-col z-[100]"><div className="p-8 border-b border-white/5 mb-8 text-[#fbbf24] flex items-center gap-3"><ShieldAlert size={20} /><span className="font-black uppercase tracking-widest text-sm">Super Admin</span></div><nav className="flex-1 px-4 flex flex-col gap-2"><button onClick={() => setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}><Users size={18}/> Registry</button><button onClick={() => setAdminTab(ADMIN_TABS.TABLES)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}><Layers size={18}/> Control</button></nav><div className="p-8 mt-auto border-t border-white/5"><button onClick={() => setCurrentView(VIEWS.LOGIN)} className="flex items-center gap-4 text-white/40 hover:text-white font-black text-[10px] uppercase tracking-widest transition-colors"><ArrowLeft size={16}/> Exit Admin</button></div></aside>
+            <aside className="w-72 bg-[#0f172a] border-r border-white/10 flex flex-col z-[100]"><div className="p-8 border-b border-white/5 mb-8 text-[#fbbf24] flex items-center gap-3"><ShieldAlert size={20} /><span className="font-black uppercase tracking-widest text-sm">Super Admin</span></div><nav className="flex-1 px-4 flex flex-col gap-2"><button onClick={() => setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}><Users size={18}/> Registry</button><button onClick={() => setAdminTab(ADMIN_TABS.TABLES)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}><Layers size={18}/> Control</button></nav><div className="p-8 mt-auto border-t border-white/5"><button onClick={() => setCurrentView(VIEWS.LOGIN)} className="flex items-center gap-4 text-white/40 hover:text-white font-black text-[10px] uppercase tracking-widest transition-colors"><ArrowLeft size={16}/> Logout</button></div></aside>
             <main className="flex-1 flex flex-col p-12 overflow-y-auto relative z-10">
-                {adminTab === ADMIN_TABS.PLAYERS && (<div className="flex flex-col gap-8"><div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Player Registry</h2></div><div className="bg-white/5 border border-white/10 rounded-[2vw] overflow-hidden"><table className="w-full text-left border-collapse"><thead className="bg-white/5 border-b border-white/10"><tr className="text-[10px] font-black uppercase tracking-widest text-white/40"><th className="p-6">Identification</th><th className="p-6">Bankroll</th><th className="p-6 text-right">Utility</th></tr></thead><tbody>{allProfiles.filter(Boolean).map((p, i) => (<tr key={i} className="border-b border-white/5 hover:bg-white/5"><td className="p-6 font-black uppercase text-sm">{String(p.name)} <span className="text-[8px] opacity-20 block">UID: {String(p.uid)}</span></td><td className="p-6 font-mono font-black text-emerald-400">${Number(p.chips).toLocaleString()}</td><td className="p-6 text-right"><button onClick={() => deletePlayer(p.uid)} className="p-2 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all"><Trash2 size={14}/></button></td></tr>))}</tbody></table></div></div>)}
+                {isAddingPlayer && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="w-[25vw] min-w-[320px] bg-slate-900 border border-white/10 rounded-[1.5vw] p-8 shadow-2xl flex flex-col gap-6 text-white">
+                            <h3 className="text-xl font-black uppercase tracking-widest flex items-center gap-3"><UserPlus size={20} className="text-indigo-400"/> Provision Profile</h3>
+                            <div className="flex flex-col gap-4">
+                                <input value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black uppercase outline-none focus:border-indigo-500"/>
+                                <input type="number" value={newPlayer.chips} onChange={e => setNewPlayer({...newPlayer, chips: Number(e.target.value)})} placeholder="CHIPS" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black outline-none"/>
+                                <input value={newPlayer.password} onChange={e => setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASSCODE" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black outline-none"/>
+                            </div>
+                            <div className="flex gap-4">
+                                <button onClick={() => setIsAddingPlayer(false)} className="flex-1 p-4 rounded-xl bg-white/5 font-black uppercase text-[10px]">Cancel</button>
+                                <button disabled={isDeployingPlayer} onClick={handleAdminCreatePlayer} className="flex-2 p-4 rounded-xl bg-indigo-600 font-black uppercase text-[10px]">{isDeployingPlayer ? "DEPLOYING..." : "Confirm"}</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {adminTab === ADMIN_TABS.PLAYERS && (<div className="flex flex-col gap-8"><div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Player Registry</h2>
+                    <button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl transition-all hover:scale-105 active:scale-95"><PlusCircle size={18}/> New Profile</button>
+                </div><div className="bg-white/5 border border-white/10 rounded-[2vw] overflow-hidden"><table className="w-full text-left border-collapse"><thead className="bg-white/5 border-b border-white/10"><tr className="text-[10px] font-black uppercase tracking-widest text-white/40"><th className="p-6">Identification</th><th className="p-6">Bankroll</th><th className="p-6 text-right">Utility</th></tr></thead><tbody>{allProfiles.filter(Boolean).map((p, i) => (<tr key={i} className="border-b border-white/5 hover:bg-white/5"><td className="p-6 font-black uppercase text-sm">{String(p.name)} <span className="text-[8px] opacity-20 block">UID: {String(p.uid)}</span></td><td className="p-6 font-mono font-black text-emerald-400">${Number(p.chips).toLocaleString()}</td><td className="p-6 text-right"><button onClick={() => deletePlayer(p.uid)} className="p-2 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all"><Trash2 size={14}/></button></td></tr>))}</tbody></table></div></div>)}
                 {adminTab === ADMIN_TABS.TABLES && (
                     <div className="flex flex-col gap-8"><div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Room Control</h2><button onClick={handleNuclearReset} className="p-4 px-8 bg-red-600/20 border border-red-500/30 text-red-500 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all"><AlertTriangle size={18}/> Nuclear Reset</button></div>
                         <section className="bg-white/5 border border-white/10 rounded-[2vw] p-8 flex flex-col gap-8"><h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3 text-emerald-400"><PlusCircle size={20}/> Spawn Arena Room</h3><div className="space-y-4"><input value={newTable.name} onChange={e => setNewTable({...newTable, name: e.target.value})} placeholder="ROOM NAME" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-xs font-black outline-none focus:border-emerald-500"/><div className="grid grid-cols-2 gap-4"><input type="number" value={newTable.sb} onChange={e => setNewTable({...newTable, sb: Number(e.target.value)})} placeholder="SB" className="bg-white/5 p-4 rounded-xl border border-white/10 text-xs font-black"/><input type="number" value={newTable.bb} onChange={e => setNewTable({...newTable, bb: Number(e.target.value)})} placeholder="BB" className="bg-white/5 p-4 rounded-xl border border-white/10 text-xs font-black"/></div><button onClick={handleAdminCreateTable} className="w-full p-5 bg-emerald-600 rounded-xl font-black uppercase text-xs hover:bg-emerald-500 transition-all shadow-xl">Deploy Room</button></div></section>
@@ -318,18 +372,10 @@ const App = () => {
       return (
         <div className="h-screen bg-[#06080c] flex flex-col relative overflow-hidden text-white font-sans">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#1a202c_0%,_#06080c_100%)] pointer-events-none" />
-            {selectedTableForJoin && (<div className="absolute inset-0 z-[9000] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in"><div className="w-[30vw] min-w-[360px] p-12 rounded-[2vw] bg-slate-900 border border-[#fbbf24]/30 shadow-2xl flex flex-col gap-10"><div className="text-center"><span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#fbbf24]">Join Room</span><h3 className="text-3xl font-black uppercase tracking-widest text-white">{selectedTableForJoin.name}</h3></div><div className="space-y-6"><div className="flex justify-between items-end px-2"><span className="text-[10px] font-black uppercase text-white/40 tracking-widest">Entry Buy-In</span><span className="text-3xl font-mono font-black text-emerald-400">${buyInAmount}</span></div><input type="range" min={selectedTableForJoin.bb * 20} max={userProfile?.chips || 1000} step="100" value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="gold-slider" /></div><div className="flex gap-4"><button onClick={() => setSelectedTableForJoin(null)} className="flex-1 p-6 rounded-2xl bg-white/5 border border-white/10 font-black uppercase text-xs tracking-widest">Back</button><button onClick={handleJoinRoom} className="flex-2 p-6 rounded-2xl bg-emerald-600 border border-emerald-500/50 font-black uppercase text-sm tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all">Confirm Seat</button></div></div></div>)}
-            <header className="h-20 border-b border-white/10 bg-black/40 backdrop-blur-xl flex items-center justify-between px-12 z-50 shadow-xl"><div className="flex items-center gap-4"><LayoutGrid size={24} className="text-[#fbbf24]" /><h2 className="text-xl font-black uppercase tracking-[0.3em]">Arena Lobby</h2></div><div className="flex items-center gap-12"><div className="flex items-center gap-4 bg-white/5 border border-white/10 p-3 px-6 rounded-2xl"><div className="flex flex-col items-start"><span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Identity</span><span className="text-sm font-black text-white uppercase">{String(userProfile?.name)}</span></div><div className="w-px h-6 bg-white/10 mx-2" /><div className="flex flex-col items-end"><span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Bankroll</span><span className="text-sm font-mono font-black text-emerald-400">${Number(userProfile?.chips || 0).toLocaleString()}</span></div></div><button onClick={() => { setCurrentView(VIEWS.LOGIN); setUserProfile(null); }} className="p-3 text-white/40 hover:text-red-500 transition-all"><LogOut size={20}/></button></div></header>
+            {selectedTableForJoin && (<div className="absolute inset-0 z-[9000] flex items-center justify-center pointer-events-auto bg-black/80 backdrop-blur-md animate-in fade-in"><div className="w-[30vw] min-w-[360px] p-12 rounded-[2vw] bg-slate-900 border border-[#fbbf24]/30 shadow-2xl flex flex-col gap-10"><div className="text-center"><span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#fbbf24]">Join Room</span><h3 className="text-3xl font-black uppercase tracking-widest text-white">{selectedTableForJoin.name}</h3></div><div className="space-y-6"><div className="flex justify-between items-end px-2"><span className="text-[10px] font-black uppercase text-white/40 tracking-widest">Entry Buy-In</span><span className="text-3xl font-mono font-black text-emerald-400">${buyInAmount}</span></div><input type="range" min={selectedTableForJoin.bb * 20} max={userProfile?.chips || 1000} step="100" value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="gold-slider" /></div><div className="flex gap-4"><button onClick={() => setSelectedTableForJoin(null)} className="flex-1 p-6 rounded-2xl bg-white/5 border border-white/10 font-black uppercase text-xs tracking-widest">Back</button><button onClick={handleJoinRoom} className="flex-2 p-6 rounded-2xl bg-emerald-600 border border-emerald-500/50 font-black uppercase text-sm tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all">Confirm Seat</button></div></div></div>)}
+            <header className="h-20 border-b border-white/10 bg-black/40 backdrop-blur-xl flex items-center justify-between px-12 z-50 shadow-xl"><div className="flex items-center gap-4"><LayoutGrid size={24} className="text-[#fbbf24]" /><h2 className="text-xl font-black uppercase tracking-[0.3em]">Arena Lobby</h2></div><div className="flex items-center gap-12"><div className="flex items-center gap-4 bg-white/5 border border-white/10 p-3 px-6 rounded-2xl shadow-inner"><div className="flex flex-col items-start"><span className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none">Identity</span><span className="text-sm font-black text-white uppercase">{String(userProfile?.name)}</span></div><div className="w-px h-6 bg-white/10 mx-2" /><div className="flex flex-col items-end"><span className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none">Bankroll</span><span className="text-sm font-mono font-black text-emerald-400 mt-1">${Number(userProfile?.chips || 0).toLocaleString()}</span></div></div><button onClick={() => { setCurrentView(VIEWS.LOGIN); setUserProfile(null); }} className="p-3 text-white/40 hover:text-red-500 transition-all"><LogOut size={20}/></button></div></header>
             <main className="flex-1 p-20 overflow-y-auto"><div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 animate-in slide-in-from-bottom-4 duration-500">
-                {activeTables.filter(Boolean).map((t, i) => (
-                <div key={i} className="p-10 rounded-[3vw] bg-white/5 border border-white/5 backdrop-blur-3xl flex flex-col gap-8 shadow-2xl hover:border-[#fbbf24]/30 transition-all group relative overflow-hidden">
-                    <div className="flex flex-col gap-1"><h3 className="text-2xl font-black uppercase tracking-[0.1em]">{String(t.name)}</h3><div className="text-[9px] text-white/40 uppercase mt-1 font-bold tracking-widest leading-none">Players: {t.players?.length || 0} / 10</div></div>
-                    <div className="flex justify-between items-center bg-black/60 p-6 rounded-2xl border border-white/5 shadow-inner">
-                        <div className="flex flex-col"><span className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Stakes</span><span className="text-xl font-black text-[#fbbf24]">${t.sb} / ${t.bb}</span></div>
-                    </div>
-                    <button onClick={() => { setSelectedTableForJoin(t); setBuyInAmount(t.bb * 20); }} className="w-full p-8 rounded-3xl bg-emerald-600 border border-emerald-500/50 shadow-2xl hover:scale-[1.02] active:scale-95 transition-all font-black uppercase tracking-[0.3em] text-white">Join Arena</button>
-                </div>
-                ))}
+                {activeTables.filter(Boolean).map((t, i) => (<div key={i} className="p-10 rounded-[3vw] bg-white/5 border border-white/5 backdrop-blur-3xl flex flex-col gap-8 shadow-2xl hover:border-[#fbbf24]/30 transition-all group relative overflow-hidden"><div className="absolute top-0 right-0 w-32 h-32 bg-[#fbbf24]/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl group-hover:bg-[#fbbf24]/10 transition-colors" /><div className="flex flex-col gap-1"><h3 className="text-2xl font-black uppercase tracking-[0.1em]">{String(t.name)}</h3><div className="text-[9px] text-white/40 uppercase mt-1 font-bold tracking-widest leading-none">Players: {t.players?.length || 0} / 10</div></div><div className="flex justify-between items-center bg-black/60 p-6 rounded-2xl border border-white/5 shadow-inner"><div className="flex flex-col"><span className="text-[10px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">Stakes</span><span className="text-xl font-black text-[#fbbf24]">${t.sb} / ${t.bb}</span></div></div><button onClick={() => { setSelectedTableForJoin(t); setBuyInAmount(t.bb * 20); }} className="w-full p-8 rounded-3xl bg-emerald-600 border border-emerald-500/50 shadow-2xl hover:scale-[1.02] active:scale-95 transition-all font-black uppercase tracking-[0.3em] text-white">Join Arena</button></div>))}{activeTables.length === 0 && (<div className="col-span-full text-center p-32 opacity-10 flex flex-col items-center gap-6"><Target size={80} strokeWidth={1}/><span className="text-xl font-black uppercase tracking-[0.5em]">Establishing Global Registry...</span></div>)}
             </div></main>
         </div>
       );
@@ -362,7 +408,6 @@ const App = () => {
               </div>
             </div>
 
-            {/* HERO ALIGNMENT SECTION */}
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className={`absolute flex flex-col items-center pointer-events-none w-fit h-fit z-50`}>
               <div className="relative flex items-center justify-center w-[12vw] h-[6vw] overflow-visible">
                   {userSeat && !userSeat.isFolded && phase !== PHASES.IDLE && (
@@ -411,8 +456,8 @@ const getCombinations = (arr, k) => { const subsets = (a, n) => { if (n === 0) r
 // HELPER: rank hand
 const rankFiveCardHand = (cards) => {
     if (!cards || cards.length < 5) return { power: 0, hand: [], name: "Evaluating..." };
-    const VALUE_MAP = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
-    const ranks = cards.map(c => VALUE_MAP[c.value]).sort((a, b) => b - a);
+    const VM = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
+    const ranks = cards.map(c => VM[c.value]).sort((a, b) => b - a);
     const suits = cards.map(c => c.suit);
     const isFlush = new Set(suits).size === 1;
     let isStraight = true;
