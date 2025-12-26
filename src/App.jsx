@@ -106,10 +106,11 @@ const Seat = ({
 };
 
 const App = () => {
-  // --- SESSION STATE ---
+  // --- SESSION & PROFILE STATE ---
   const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
   const [adminTab, setAdminTab] = useState(ADMIN_TABS.PLAYERS);
   const [userProfile, setUserProfile] = useState(null);
+  const [userNameInput, setUserNameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [buyInAmount, setBuyInAmount] = useState(500);
   const [selectedTableForJoin, setSelectedTableForJoin] = useState(null);
@@ -162,26 +163,7 @@ const App = () => {
     localStorage.setItem('poker_rooms', JSON.stringify(activeTables));
   }, [activeTables]);
 
-  // --- CROSS-TAB SYNC (SIMULATION MODE) ---
-  useEffect(() => {
-    const handleStorageSync = (e) => {
-        if (!socket.connected) {
-            if (e.key === 'poker_rooms') setActiveTables(JSON.parse(e.newValue));
-            if (e.key === 'poker_profiles') setAllProfiles(JSON.parse(e.newValue));
-            // Sync active table players if we're in a game
-            if (e.key === `poker_table_state_${selectedTableForJoin?.id}`) {
-                const state = JSON.parse(e.newValue);
-                setPlayers(state.players);
-                setCommunity(state.community);
-                setPhase(state.phase);
-            }
-        }
-    };
-    window.addEventListener('storage', handleStorageSync);
-    return () => window.removeEventListener('storage', handleStorageSync);
-  }, [selectedTableForJoin]);
-
-  // --- MULTIPLAYER SYNC (PRODUCTION) ---
+  // --- MULTIPLAYER SYNC ---
   useEffect(() => {
     socket.on('gameUpdate', (state) => {
         setPlayers(state.players || INITIAL_PLAYERS);
@@ -201,10 +183,28 @@ const App = () => {
     socket.on('lobbyUpdate', (tables) => setActiveTables(tables));
     socket.on('profilesUpdate', (profiles) => setAllProfiles(profiles));
 
+    socket.on('playerCreated', (player) => {
+        setAllProfiles(prev => [...prev, player]);
+        addLog({ name: "SYSTEM", action: `PLAYER ${player.name} REGISTERED`, type: 'system' });
+    });
+
+    socket.on('playerDeleted', (id) => {
+        setAllProfiles(prev => prev.filter(p => p.uid !== id && p.id !== id));
+    });
+
+    socket.on('roomDeleted', (id) => {
+        setActiveTables(prev => prev.filter(t => t.id !== id));
+        // Force kick to lobby if you're in that room
+        if (selectedTableForJoin?.id === id) {
+            setCurrentView(VIEWS.LOBBY);
+            setSelectedTableForJoin(null);
+        }
+    });
+
     socket.on('loginSuccess', (profile) => {
         setUserProfile(profile);
         setCurrentView(VIEWS.LOBBY);
-        addLog({ action: `AUTHENTICATED: ${profile.name.toUpperCase()}`, type: 'system' });
+        addLog({ action: `IDENTIFICATION VERIFIED: ${profile.name.toUpperCase()}`, type: 'system' });
     });
 
     socket.on('globalLog', (log) => setGlobalLogs(prev => [log, ...prev].slice(0, 100)));
@@ -212,10 +212,28 @@ const App = () => {
 
     return () => {
         socket.off('gameUpdate'); socket.off('lobbyUpdate');
-        socket.off('profilesUpdate'); socket.off('loginSuccess');
-        socket.off('globalLog'); socket.off('log');
+        socket.off('profilesUpdate'); socket.off('playerCreated');
+        socket.off('playerDeleted'); socket.off('roomDeleted');
+        socket.off('loginSuccess'); socket.off('globalLog'); socket.off('log');
     };
-  }, []);
+  }, [selectedTableForJoin]);
+
+  // --- CROSS-TAB SYNC (SIMULATION) ---
+  useEffect(() => {
+    if (!socket.connected) {
+      const handleStorage = (e) => {
+        if (e.key === 'poker_rooms') setActiveTables(JSON.parse(e.newValue));
+        if (e.key === 'poker_profiles') setAllProfiles(JSON.parse(e.newValue));
+        if (selectedTableForJoin && e.key === `poker_table_state_${selectedTableForJoin.id}`) {
+          const state = JSON.parse(e.newValue);
+          setPlayers(state.players);
+          setPhase(state.phase);
+        }
+      };
+      window.addEventListener('storage', handleStorage);
+      return () => window.removeEventListener('storage', handleStorage);
+    }
+  }, [selectedTableForJoin]);
 
   // --- DERIVED PERSPECTIVE ---
   const heroSeatIdx = useMemo(() => {
@@ -275,12 +293,10 @@ const App = () => {
     if (passwordInput === 'pass') {
         setCurrentView(VIEWS.ADMIN);
     } else {
-        // UNIFIED LOGIN LOGIC: Scan local profiles first for simulation, then try socket
         const match = allProfiles.find(p => p.password === passwordInput || p.uid === passwordInput);
         if (match) {
             setUserProfile(match);
             setCurrentView(VIEWS.LOBBY);
-            addLog({ action: `IDENTIFICATION VERIFIED: ${match.name.toUpperCase()}`, type: 'system' });
         } else if (socket.connected) {
             socket.emit('playerLogin', { password: passwordInput });
         } else {
@@ -296,12 +312,12 @@ const App = () => {
       if (socket.connected) {
           socket.emit('joinRoom', { roomId: selectedTableForJoin.id, uid: userProfile.uid, buyIn: buyIn });
       } else {
-          // SIMULATION SEATING: Find empty seat and sync to localStorage
+          // SEATING HANDSHAKE (Simulation)
           const storageKey = `poker_table_state_${selectedTableForJoin.id}`;
           const currentTableState = JSON.parse(localStorage.getItem(storageKey) || JSON.stringify({ players: INITIAL_PLAYERS, community: [], phase: PHASES.IDLE }));
-          
           const nextPlayers = [...currentTableState.players];
           const firstNull = nextPlayers.findIndex(p => p === null);
+          
           if (firstNull !== -1) {
               nextPlayers[firstNull] = { 
                   ...userProfile, 
@@ -340,28 +356,60 @@ const App = () => {
           setIsDeployingPlayer(false);
           setIsAddingPlayer(false);
           setNewPlayer({ name: '', chips: 5000, password: '' });
-          addLog({ action: `SIMULATION: PLAYER ${name} PROVISIONED`, type: 'system' });
       }
+  };
+
+  const handleAdminDeletePlayer = (id) => {
+    if (window.confirm(`DELETE PLAYER ${id}?`)) {
+        if (socket.connected) {
+            socket.emit('adminDeletePlayer', id);
+        } else {
+            setAllProfiles(prev => prev.filter(p => p.uid !== id && p.id !== id));
+        }
+    }
+  };
+
+  const handleAdminUpdatePlayer = () => {
+      if (!editingPlayer) return;
+      if (socket.connected) {
+          socket.emit('adminUpdatePlayer', editingPlayer);
+      } else {
+          setAllProfiles(prev => prev.map(p => (p.uid === editingPlayer.uid ? editingPlayer : p)));
+      }
+      setEditingPlayer(null);
   };
 
   const handleAdminCreateTable = () => {
       if (!newTable.name) return;
       const roomId = 'room_' + Math.random().toString(36).substr(2, 9);
       const payload = { ...newTable, id: roomId, count: 0 };
-      
       if (socket.connected) {
           socket.emit('adminCreateRoom', payload);
       } else {
           setActiveTables(prev => [...prev, payload]);
-          addLog({ action: `SIMULATION: ROOM ${newTable.name.toUpperCase()} SPAWNED`, type: 'system' });
       }
       setNewTable({ name: '', sb: 10, bb: 20 });
+  };
+
+  const handleAdminDeleteRoom = (id) => {
+    if (window.confirm(`SHUT DOWN ROOM ${id}?`)) {
+        if (socket.connected) {
+            socket.emit('adminDeleteRoom', id);
+        } else {
+            setActiveTables(prev => prev.filter(t => t.id !== id));
+        }
+    }
+  };
+
+  const handleClearAllTables = () => {
+      if (window.confirm("ARE YOU SURE? THIS WILL NUCLEAR RESET ALL ACTIVE ROOMS.")) {
+          socket.emit('adminClearAll');
+      }
   };
 
   const handleAction = (type, amt = 0) => { socket.emit('playerAction', { type, amount: amt }); };
   const handleDeal = () => { socket.emit('dealRequest', { variantId: pendingVariantId }); };
   const handleAddBot = () => { socket.emit('addBot'); };
-  const handleClearArena = () => { socket.emit('adminResetServer'); };
 
   const winnerPos = useMemo(() => {
       const idx = (winningPlayerIndices && winningPlayerIndices[0]) || 0;
@@ -375,7 +423,7 @@ const App = () => {
       return (
         <div className="h-screen bg-[#06080c] flex items-center justify-center relative overflow-hidden text-white font-sans">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#1a202c_0%,_#06080c_100%)] pointer-events-none" />
-            <div className="w-[30vw] min-w-[380px] p-12 rounded-[2vw] bg-black/60 border border-white/10 backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-10">
+            <div className="w-[30vw] min-w-[380px] p-12 rounded-[2vw] bg-black/60 border border-white/10 backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-10 animate-in fade-in duration-500">
                 <div className="flex flex-col items-center gap-4 text-center">
                     <div className="w-20 h-20 rounded-full bg-[#fbbf24]/10 border border-[#fbbf24]/30 flex items-center justify-center shadow-[0_0_3vw_rgba(251,191,36,0.1)]"><Lock size={32} className="text-[#fbbf24]" /></div>
                     <h1 className="text-2xl font-black uppercase tracking-[0.4em]">Identity Access</h1>
@@ -386,66 +434,13 @@ const App = () => {
                         <label className="text-[8px] font-black text-white/20 uppercase ml-4 tracking-widest">Entry Passcode</label>
                         <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="ENTER CODE..." className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-center text-sm font-black uppercase tracking-widest text-[#fbbf24] focus:border-[#fbbf24] outline-none transition-all"/>
                     </div>
-                    <button onClick={handleLogin} className="w-full mt-4 p-6 rounded-2xl bg-[#fbbf24] border border-[#fbbf24]/50 shadow-xl font-black uppercase tracking-[0.3em] text-black hover:scale-105 active:scale-95 transition-all">Sit at Table</button>
+                    <button onClick={handleLogin} className="w-full mt-4 p-6 rounded-2xl bg-[#fbbf24] border border-[#fbbf24]/50 shadow-xl font-black uppercase tracking-[0.3em] text-black hover:scale-105 transition-all">Sit at Table</button>
                 </div>
             </div>
         </div>
       );
   }
 
-  if (currentView === VIEWS.LOBBY) {
-      return (
-        <div className="h-screen bg-[#06080c] flex flex-col relative overflow-hidden text-white font-sans">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#1a202c_0%,_#06080c_100%)] pointer-events-none" />
-            
-            {/* Buy-In Slider Modal */}
-            {selectedTableForJoin && (
-                <div className="absolute inset-0 z-[9000] flex items-center justify-center pointer-events-auto bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="w-[30vw] min-w-[360px] p-12 rounded-[2vw] bg-slate-900 border border-[#fbbf24]/30 shadow-2xl flex flex-col gap-10">
-                        <div className="text-center space-y-1"><span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#fbbf24]">Buy-In Allocation</span><h3 className="text-3xl font-black uppercase tracking-widest text-white">{selectedTableForJoin.name}</h3></div>
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-end px-2"><span className="text-[10px] font-black uppercase text-white/40 tracking-widest">Table Stakes</span><span className="text-3xl font-mono font-black text-emerald-400">${buyInAmount}</span></div>
-                            <input type="range" min={selectedTableForJoin.bb * 20} max={userProfile?.chips || 1000} step="100" value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="gold-slider" />
-                            <div className="flex justify-between text-[8px] font-black text-white/20 uppercase px-1"><span>Min: 20BB</span><span>Max: Global Balance</span></div>
-                        </div>
-                        <div className="flex gap-4"><button onClick={() => setSelectedTableForJoin(null)} className="flex-1 p-6 rounded-2xl bg-white/5 border border-white/10 font-black uppercase text-xs tracking-widest hover:bg-white/10 transition-all">Back</button>
-                        <button onClick={handleJoinRoom} className="flex-2 p-6 rounded-2xl bg-emerald-600 border border-emerald-500/50 font-black uppercase text-sm tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all">Confirm Seat</button></div>
-                    </div>
-                </div>
-            )}
-
-            <header className="h-20 border-b border-white/10 bg-black/40 backdrop-blur-xl flex items-center justify-between px-12 z-50 shadow-xl">
-                <div className="flex items-center gap-4"><LayoutGrid size={24} className="text-[#fbbf24]" /><h2 className="text-xl font-black uppercase tracking-[0.3em]">Arena Lobby</h2></div>
-                <div className="flex items-center gap-12">
-                    <div className="flex items-center gap-4 bg-white/5 border border-white/10 p-3 px-6 rounded-2xl">
-                        <div className="flex flex-col items-start"><span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Identity</span><span className="text-sm font-black text-white uppercase">{userProfile?.name}</span></div>
-                        <div className="w-px h-6 bg-white/10 mx-2" />
-                        <div className="flex flex-col items-end"><span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Bankroll</span><span className="text-sm font-mono font-black text-emerald-400">${Number(userProfile?.chips).toLocaleString()}</span></div>
-                    </div>
-                    <button onClick={() => setCurrentView(VIEWS.LOGIN)} className="p-3 hover:bg-red-600/10 rounded-xl text-white/40 hover:text-red-500 transition-all"><LogOut size={20}/></button>
-                </div>
-            </header>
-            
-            <main className="flex-1 p-20 overflow-y-auto">
-                <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                    {activeTables.map((t, i) => (
-                        <div key={i} className="p-10 rounded-[3vw] bg-white/5 border border-white/5 backdrop-blur-3xl flex flex-col gap-8 shadow-2xl hover:border-[#fbbf24]/30 transition-all group relative overflow-hidden">
-                            <div className="flex flex-col gap-1"><h3 className="text-2xl font-black uppercase tracking-[0.1em]">{t.name}</h3><span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Secure Instance</span></div>
-                            <div className="flex justify-between items-center bg-black/60 p-6 rounded-2xl border border-white/5 shadow-inner">
-                                <div className="flex flex-col"><span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Stakes</span><span className="text-xl font-black text-[#fbbf24]">${t.sb} / ${t.bb}</span></div>
-                                <div className="flex flex-col items-end"><span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Seats</span><span className="text-xl font-black text-white">{t.count || 0} / 10</span></div>
-                            </div>
-                            <button onClick={() => { setSelectedTableForJoin(t); setBuyInAmount(t.bb * 20); }} className="w-full p-8 rounded-3xl bg-emerald-600 border border-emerald-500/50 shadow-2xl hover:scale-[1.02] active:scale-95 transition-all font-black uppercase tracking-[0.3em] text-white">Join Table</button>
-                        </div>
-                    ))}
-                    {activeTables.length === 0 && (<div className="col-span-full text-center p-32 opacity-10 flex flex-col items-center gap-6"><Target size={80} strokeWidth={1}/><span className="text-xl font-black uppercase tracking-[0.5em]">Establishing Global Registry...</span></div>)}
-                </div>
-            </main>
-        </div>
-      );
-  }
-
-  // --- VIEW: ADMIN ---
   if (currentView === VIEWS.ADMIN) {
       return (
         <div className="h-screen bg-[#06080c] flex relative overflow-hidden text-white font-sans">
@@ -468,24 +463,39 @@ const App = () => {
                 </div>
             )}
 
+            {editingPlayer && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
+                    <div className="w-[25vw] min-w-[320px] bg-slate-900 border border-white/10 rounded-[2vw] p-8 shadow-2xl flex flex-col gap-8 text-white">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-4"><h3 className="text-xl font-black uppercase tracking-widest">Quick Edit: {editingPlayer.name}</h3><button onClick={() => setEditingPlayer(null)}><X size={20}/></button></div>
+                        <div className="flex flex-col gap-6 text-white">
+                            <div className="space-y-1"><label className="text-[8px] font-black uppercase text-white/40 ml-2">Wallet</label><input type="number" value={editingPlayer.chips} onChange={e => setEditingPlayer({...editingPlayer, chips: Number(e.target.value)})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-sm font-black outline-none"/></div>
+                            <div className="space-y-1"><label className="text-[8px] font-black uppercase text-white/40 ml-2">Reset Password</label><input value={editingPlayer.password} onChange={e => setEditingPlayer({...editingPlayer, password: e.target.value})} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-sm font-black outline-none"/></div>
+                            <button onClick={handleAdminUpdatePlayer} className="w-full p-5 bg-[#fbbf24] text-black rounded-xl font-black uppercase text-xs shadow-xl">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <aside className="w-72 bg-[#0f172a] border-r border-white/10 flex flex-col z-[100]">
                 <div className="p-8 border-b border-white/5 mb-8 text-[#fbbf24]"><div className="flex items-center gap-3"><ShieldAlert size={20} /><span className="font-black uppercase tracking-widest text-sm">Super Admin</span></div></div>
                 <nav className="flex-1 px-4 flex flex-col gap-2">
                     <button onClick={() => setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}><Users size={18}/> Registry</button>
                     <button onClick={() => setAdminTab(ADMIN_TABS.TABLES)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black shadow-lg' : 'text-white/40 hover:bg-white/5'}`}><Layers size={18}/> Control</button>
                 </nav>
-                <div className="p-8 mt-auto border-t border-white/5"><button onClick={() => setCurrentView(VIEWS.LOGIN)} className="flex items-center gap-4 text-white/40 hover:text-white font-black text-[10px] uppercase tracking-widest"><ArrowLeft size={16}/> Exit Admin</button></div>
+                <div className="p-8 mt-auto border-t border-white/5"><button onClick={() => setCurrentView(VIEWS.LOGIN)} className="flex items-center gap-4 text-white/40 hover:text-white font-black text-[10px] uppercase tracking-widest transition-colors"><ArrowLeft size={16}/> Back to Login</button></div>
             </aside>
 
             <main className="flex-1 flex flex-col p-12 overflow-y-auto relative z-10">
                 {adminTab === ADMIN_TABS.PLAYERS && (
                     <div className="flex flex-col gap-8 animate-in slide-in-from-right-4">
-                        <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest">Player Registry</h2><button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl"><PlusCircle size={18}/> New Profile</button></div>
+                        <div className="flex items-center justify-between border-b border-white/10 pb-6"><div className="flex flex-col"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Player Registry</h2><span className="text-[10px] font-bold text-white/30 uppercase">{allProfiles.length} Total Verified</span></div>
+                        <button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl transition-all hover:scale-105 active:scale-95"><PlusCircle size={18}/> New Profile</button></div>
                         <div className="bg-white/5 border border-white/10 rounded-[2vw] overflow-hidden">
                             <table className="w-full text-left">
                                 <thead className="bg-white/5 border-b border-white/10"><tr className="text-[10px] font-black uppercase tracking-widest text-white/40"><th className="p-6">Identification</th><th className="p-6">Bankroll</th><th className="p-6 text-right">Utility</th></tr></thead>
                                 <tbody>
-                                    {allProfiles.map((p, i) => (<tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors"><td className="p-6 font-black uppercase text-sm">{p.name} <span className="text-[8px] opacity-20 block font-mono">UID: {p.uid}</span></td><td className="p-6 font-mono font-black text-emerald-400">${Number(p.chips).toLocaleString()}</td><td className="p-6 text-right flex items-center justify-end gap-3"><button className="p-2 bg-white/5 border border-white/10 rounded-lg text-[#fbbf24]"><Edit3 size={14}/></button></td></tr>))}
+                                    {allProfiles.map((p, i) => (<tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors"><td className="p-6 font-black uppercase text-sm">{p.name || 'UNNAMED'} <span className="text-[8px] opacity-20 block font-mono">UID: {p.uid}</span></td><td className="p-6 font-mono font-black text-emerald-400">${Number(p.chips).toLocaleString()}</td>
+                                    <td className="p-6 text-right flex items-center justify-end gap-3"><button onClick={() => setEditingPlayer(p)} className="p-2 bg-white/5 border border-white/10 rounded-lg text-[#fbbf24] hover:bg-[#fbbf24]/10 transition-all"><Edit3 size={14}/></button><button onClick={() => handleAdminDeletePlayer(p.uid)} className="p-2 bg-red-950/20 text-red-500 rounded-lg hover:bg-red-600 hover:text-white transition-all"><Trash2 size={14}/></button></td></tr>))}
                                 </tbody>
                             </table>
                         </div>
@@ -493,7 +503,7 @@ const App = () => {
                 )}
                 {adminTab === ADMIN_TABS.TABLES && (
                     <div className="flex flex-col gap-8 animate-in slide-in-from-right-4">
-                        <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest">Room Control</h2></div>
+                        <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Room Control</h2><button onClick={handleClearAllTables} className="p-4 px-8 bg-red-600/20 border border-red-500/30 text-red-500 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all"><AlertTriangle size={18}/> Nuclear Reset</button></div>
                         <section className="bg-white/5 border border-white/10 rounded-[2vw] p-8 flex flex-col gap-8">
                             <h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3"><PlusCircle size={20} className="text-emerald-400"/> Spawn Arena Room</h3>
                             <div className="space-y-4">
@@ -507,14 +517,66 @@ const App = () => {
                         </section>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {activeTables.map((t, i) => (
-                                <div key={i} className="p-6 bg-black/40 border border-white/10 rounded-2xl flex justify-between items-center shadow-xl">
-                                    <div><span className="text-[10px] font-black text-white/40 block">Room Instance</span><span className="font-black uppercase text-[#fbbf24]">{t.name}</span></div>
-                                    <div className="text-right"><span className="text-[10px] font-black text-white/40 block">Stakes</span><span className="font-mono text-xs">${t.sb}/${t.bb}</span></div>
+                                <div key={i} className="p-8 bg-black/40 border border-white/10 rounded-2xl flex flex-col gap-6 shadow-xl relative group">
+                                    <div className="flex justify-between items-center"><div><span className="text-[10px] font-black text-white/40 block">Room Instance</span><span className="font-black uppercase text-[#fbbf24] text-xl tracking-widest">{t.name}</span></div><div className="text-right"><span className="text-[10px] font-black text-white/40 block">Stakes</span><span className="font-mono text-sm">${t.sb}/${t.bb}</span></div></div>
+                                    <button onClick={() => handleAdminDeleteRoom(t.id)} className="w-full p-3 bg-red-600/10 border border-red-500/30 text-red-500 rounded-xl font-black uppercase text-[10px] hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-3"><Trash2 size={14}/> Delete Room</button>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
+            </main>
+        </div>
+      );
+  }
+
+  if (currentView === VIEWS.LOBBY) {
+      return (
+        <div className="h-screen bg-[#06080c] flex flex-col relative overflow-hidden text-white font-sans">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#1a202c_0%,_#06080c_100%)] pointer-events-none" />
+            
+            {selectedTableForJoin && (
+                <div className="absolute inset-0 z-[9000] flex items-center justify-center pointer-events-auto bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="w-[30vw] min-w-[360px] p-12 rounded-[2vw] bg-slate-900 border border-[#fbbf24]/30 shadow-2xl flex flex-col gap-10">
+                        <div className="text-center space-y-1"><span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#fbbf24]">Table Entrance</span><h3 className="text-3xl font-black uppercase tracking-widest text-white">{selectedTableForJoin.name}</h3></div>
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-end px-2"><span className="text-[10px] font-black uppercase text-white/40">Entry Buy-In</span><span className="text-3xl font-mono font-black text-emerald-400">${buyInAmount}</span></div>
+                            <input type="range" min={selectedTableForJoin.bb * 20} max={userProfile?.chips || 1000} step="100" value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="gold-slider" />
+                            <div className="flex justify-between text-[8px] font-black text-white/20 uppercase px-1"><span>Min: 20BB</span><span>Max: Global Wallet</span></div>
+                        </div>
+                        <div className="flex gap-4"><button onClick={() => setSelectedTableForJoin(null)} className="flex-1 p-6 rounded-2xl bg-white/5 border border-white/10 font-black uppercase text-xs tracking-widest hover:bg-white/10 transition-all">Back</button>
+                        <button onClick={handleJoinRoom} className="flex-2 p-6 rounded-2xl bg-emerald-600 border border-emerald-500/50 font-black uppercase text-sm tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all">Confirm Seat</button></div>
+                    </div>
+                </div>
+            )}
+
+            <header className="h-20 border-b border-white/10 bg-black/40 backdrop-blur-xl flex items-center justify-between px-12 z-50 shadow-xl">
+                <div className="flex items-center gap-4"><LayoutGrid size={24} className="text-[#fbbf24]" /><h2 className="text-xl font-black uppercase tracking-[0.3em]">Arena Lobby</h2></div>
+                <div className="flex items-center gap-12">
+                    <div className="flex items-center gap-4 bg-white/5 border border-white/10 p-3 px-6 rounded-2xl">
+                        <div className="flex flex-col items-start"><span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Identification</span><span className="text-sm font-black text-white uppercase">{userProfile?.name}</span></div>
+                        <div className="w-px h-6 bg-white/10 mx-2" />
+                        <div className="flex flex-col items-end"><span className="text-[8px] font-black text-white/40 uppercase tracking-widest">Bankroll</span><span className="text-sm font-mono font-black text-emerald-400">${Number(userProfile?.chips).toLocaleString()}</span></div>
+                    </div>
+                    <button onClick={() => setCurrentView(VIEWS.LOGIN)} className="p-3 hover:bg-red-600/10 rounded-xl text-white/40 hover:text-red-500 transition-all"><LogOut size={20}/></button>
+                </div>
+            </header>
+            
+            <main className="flex-1 p-20 overflow-y-auto">
+                <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 animate-in slide-in-from-bottom-4 duration-500">
+                    {activeTables.map((t, i) => (
+                        <div key={i} className="p-10 rounded-[3vw] bg-white/5 border border-white/5 backdrop-blur-3xl flex flex-col gap-8 shadow-2xl hover:border-[#fbbf24]/30 transition-all group relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#fbbf24]/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl group-hover:bg-[#fbbf24]/10 transition-colors" />
+                            <div className="flex flex-col gap-1"><h3 className="text-2xl font-black uppercase tracking-[0.1em]">{t.name}</h3><span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Active Table Instance</span></div>
+                            <div className="flex justify-between items-center bg-black/60 p-6 rounded-2xl border border-white/5 shadow-inner">
+                                <div className="flex flex-col"><span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Stakes</span><span className="text-xl font-black text-[#fbbf24]">${t.sb} / ${t.bb}</span></div>
+                                <div className="flex flex-col items-end"><span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Seats</span><span className="text-xl font-black text-white">{t.count || 0} / 10</span></div>
+                            </div>
+                            <button onClick={() => { setSelectedTableForJoin(t); setBuyInAmount(t.bb * 20); }} className="w-full p-8 rounded-3xl bg-emerald-600 border border-emerald-500/50 shadow-2xl hover:scale-[1.02] active:scale-95 transition-all font-black uppercase tracking-[0.3em] text-white">Join Table</button>
+                        </div>
+                    ))}
+                    {activeTables.length === 0 && (<div className="col-span-full text-center p-32 opacity-10 flex flex-col items-center gap-6"><Target size={80} strokeWidth={1}/><span className="text-xl font-black uppercase tracking-[0.5em]">Establishing Global Handshake...</span></div>)}
+                </div>
             </main>
         </div>
       );
@@ -548,6 +610,7 @@ const App = () => {
         <div className="relative w-full max-w-[1600px] aspect-[21/10] mx-auto transition-all duration-1000 flex items-center justify-center">
             <div className="absolute inset-0 pointer-events-none z-20">
               {players.map((p, i) => {
+                // HIDE MYSELF FROM OPPONENT SEATS (Hero is at bottom)
                 if (!p || (userProfile && p.uid === userProfile.uid)) return null;
                 if (heroSeatIdx !== -1 && i === heroSeatIdx) return null;
                 const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
