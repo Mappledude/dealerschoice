@@ -47,7 +47,7 @@ const collectBets = (room) => {
     if (!room.potData || room.potData.length === 0) room.potData = [{ label: 'MAIN', amount: 0 }];
     room.potData[0].amount += streetPot;
     room.highestBet = 0;
-    room.lastRaiseAmt = room.bb || 20; // Reset raise floor for next street
+    room.lastRaiseAmt = room.bb || 20; 
 };
 
 const advancePhase = (roomId) => {
@@ -74,7 +74,6 @@ const advancePhase = (roomId) => {
 
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     const dealerPos = activeIndices.indexOf(room.dealerIdx);
-    // Standard rule: Action after Flop starts left of dealer
     room.activeIdx = activeIndices[(dealerPos + 1) % activeIndices.length];
 
     io.to(roomId).emit('roomUpdate', room);
@@ -108,7 +107,8 @@ const runIgnition = (roomId) => {
     room.players = room.players.map((p, i) => {
         if (!p) return null;
         let hand = [];
-        for (let j = 0; j < room.activeVariant.holeCards; j++) hand.push(deck.pop());
+        const cardCount = room.activeVariant?.holeCards || 2;
+        for (let j = 0; j < cardCount; j++) hand.push(deck.pop());
         let bet = (i === sbIdx) ? SB_AMT : (i === bbIdx) ? BB_AMT : 0;
         return { 
             ...p, 
@@ -129,7 +129,7 @@ const runIgnition = (roomId) => {
     room.potData = [{ label: 'MAIN', amount: 0 }];
     
     io.to(roomId).emit('roomUpdate', room);
-    io.to(roomId).emit('log', { action: "Hand Started", type: 'system' });
+    io.to(roomId).emit('log', { action: "New Hand Started", type: 'system' });
 };
 
 // --- SOCKET ORCHESTRATION ---
@@ -209,7 +209,6 @@ io.on('connection', (socket) => {
             player.chips -= diff;
             player.currentBet = amount;
             room.highestBet = amount;
-            // Everyone else must act again if a raise occurred
             room.players.forEach(p => { if (p && p.uid !== player.uid) p.hasActed = false; });
             io.to(roomId).emit('log', { name: String(player.name), action: `Raises to $${String(amount)}` });
         }
@@ -239,7 +238,6 @@ io.on('connection', (socket) => {
 
     socket.on('adminDeleteRoom', (id) => { delete rooms[id]; io.emit('lobbyUpdate', Object.values(rooms)); });
     socket.on('adminForceDeal', (roomId) => runIgnition(roomId));
-    socket.on('adminNuclearReset', () => { globalProfiles = []; rooms = {}; io.emit('profilesUpdate', []); io.emit('lobbyUpdate', []); });
 });
 
 const PORT = process.env.PORT || 10000;
