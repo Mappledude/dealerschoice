@@ -22,8 +22,14 @@ const socket = io(SOCKET_URL, {
   autoConnect: true,
 });
 
+// --- ENVIRONMENT DETECTION ---
+const isProduction = !window.location.hostname.includes('gemini') && 
+                     !window.location.hostname.includes('localhost') &&
+                     !window.location.hostname.includes('usercontent');
+
 // --- CONSTANTS & CONFIG ---
 const TOTAL_SEATS = 10;
+const LOCAL_USER_ID = 'simulation_hero';
 
 const VARIANTS = { 
   HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', holeCards: 2, rules: "Best 5 out of 7 cards" }, 
@@ -44,9 +50,6 @@ const PHASES = {
 const BLINDS = { sb: 20, bb: 40 }; 
 const BOT_NAMES = ['Neon', 'Viper', 'Jinx', 'Cipher', 'Astra', 'Raven', 'Blaze', 'Frost', 'Shadow', 'Ghost'];
 
-/**
- * FIXED COORDINATE GRID
- */
 const DISPLAY_POSITIONS = [
   { x: 50, y: 96 }, // 0: Bottom Center (Hero)
   { x: 18, y: 82 }, // 1: Lower Corner Left
@@ -174,7 +177,7 @@ const Seat = ({
 };
 
 const App = () => {
-  // --- SHARED GLOBAL STATE ---
+  // --- STATE ---
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
   const [phase, setPhase] = useState(PHASES.IDLE);
   const [activeVariant, setActiveVariant] = useState(VARIANTS.HOLDEM);
@@ -184,6 +187,7 @@ const App = () => {
   const [activeIdx, setActiveIdx] = useState(-1);
   const [highestBet, setHighestBet] = useState(0);
   const [lastRaiseAmt, setLastRaiseAmt] = useState(BLINDS.bb);
+  const [deck, setDeck] = useState([]);
   const [dealStaggerIndex, setDealStaggerIndex] = useState(-1);
   const [winning5Ids, setWinning5Ids] = useState([]);
   const [winningPlayerIndices, setWinningPlayerIndices] = useState([]); 
@@ -194,18 +198,20 @@ const App = () => {
   const [potTransferring, setPotTransferring] = useState(false);
   const [playerNameInput, setPlayerNameInput] = useState('');
   
-  // --- IDENTITY & HANDSHAKE STATE ---
   const [localId, setLocalId] = useState(null);
   const [isSeating, setIsSeating] = useState(false);
   
+  const hasProcessedShowdown = useRef(false);
+  const timerRef = useRef(null);
+
   // --- MULTIPLAYER SYNC ---
   useEffect(() => {
     socket.on('connect', () => {
-        console.log("Connected to Arena Server:", socket.id);
         setLocalId(socket.id);
     });
 
     socket.on('gameUpdate', (state) => {
+        if (!isProduction) return; // Ignore server updates if we are in local simulation
         setPlayers(state.players || INITIAL_PLAYERS);
         setCommunity(state.community || []);
         setPhase(state.phase || PHASES.IDLE);
@@ -220,18 +226,15 @@ const App = () => {
         setIsAnimating(state.isAnimating || false);
     });
 
-    // FINALIZED SERVER HANDSHAKE LISTENER
     socket.on('sitSuccess', (data) => {
-        console.log('Server confirmed seat:', data.seatIndex);
-        setLocalId(data.userId); // Ensure localId matches the server-recognized ID
-        setSidebarOpen(false);   // Auto-close sidebar on join
-        setIsSeating(false);     // Reset button state
+        if (!isProduction) return;
+        setLocalId(data.userId);
+        setSidebarOpen(false);
+        setIsSeating(false);
         addLog({ name: "System", action: "YOU HAVE TAKEN A SEAT", type: 'system' });
     });
 
-    socket.on('log', (data) => {
-        addLog(data);
-    });
+    socket.on('log', (data) => addLog(data));
 
     return () => {
         socket.off('gameUpdate');
@@ -240,11 +243,11 @@ const App = () => {
     };
   }, []);
 
-  // --- DERIVED PERSPECTIVE & FLAGS ---
-  const heroSeatIdx = useMemo(() => players.findIndex(p => p?.userId === localId), [players, localId]);
+  // --- DERIVED PERSPECTIVE ---
+  const currentUserId = useMemo(() => isProduction ? localId : LOCAL_USER_ID, [localId]);
+  const heroSeatIdx = useMemo(() => players.findIndex(p => p?.userId === currentUserId), [players, currentUserId]);
   const userSeat = heroSeatIdx !== -1 ? players[heroSeatIdx] : null;
 
-  // Global UI Flags
   const isShowdown = phase === PHASES.SHOWDOWN;
   const isWinnerCalculated = (winningPlayerIndices || []).length > 0;
   const isWinnerHero = isShowdown && heroSeatIdx !== -1 && (winningPlayerIndices || []).includes(heroSeatIdx);
@@ -270,67 +273,116 @@ const App = () => {
     setLogs(prev => [logEntry, ...prev].slice(0, 50));
   }, []);
 
+  // --- FALLBACK ENGINE (SIMULATION MODE) ---
+  const getNextSeatedPlayer = useCallback((startIndex, currentPlayers = players) => {
+    for (let i = 1; i <= TOTAL_SEATS; i++) {
+      const idx = (startIndex + i) % TOTAL_SEATS;
+      const p = currentPlayers[idx];
+      if (p?.isSeated && !p?.isFolded && !p?.isAllIn && (p.chips > 0 || p.currentBet > 0 || p.userId === currentUserId)) return idx;
+    }
+    return -1;
+  }, [players, currentUserId]);
+
   const evaluateBestHandSync = useCallback((hand, board, v) => {
     if (!hand || hand.length === 0 || board.length < 3) return { power: 0, hand: [], name: "Evaluating..." };
-    if (v?.id === 'OMAHA') {
-        const hCombos = getCombinations(hand, 2);
-        const bCombos = getCombinations(board, 3);
-        let best = { power: -1, hand: [], name: "High Card" };
-        hCombos.forEach(hc => bCombos.forEach(bc => {
-            const r = rankFiveCardHand([...hc, ...bc]);
-            if (r.power > best.power) { best = r; }
-        }));
-        return best;
-    } else {
-        const subsets = getCombinations([...hand, ...board], 5);
-        let best = { power: -1, name: "High Card", hand: [] };
-        subsets.forEach(c => { 
-            const r = rankFiveCardHand(c); 
-            if (r.power > best.power) { best = r; } 
-        });
-        return best;
-    }
+    const subsets = getCombinations([...hand, ...board], 5);
+    let best = { power: -1, name: "High Card", hand: [] };
+    subsets.forEach(c => { 
+        const r = rankFiveCardHand(c); 
+        if (r.power > best.power) { best = r; } 
+    });
+    return best;
   }, []);
 
   const getCurrentStrength = useCallback((p) => {
     if (!p || p.isFolded || !p.hand || p.hand.length === 0) return "";
-    if (phase === PHASES.SHOWDOWN && winningPlayerIndices.length > 0) {
-       const winnerIndex = winningPlayerIndices[0];
-       const winner = players[winnerIndex];
-       if (winner) return `🏆 ${String(winner.name).toUpperCase()} WINS $${actualPotAmount}`;
-    }
     const result = evaluateBestHandSync(p.hand, community, activeVariant);
     return String(activeVariant?.id === 'MUFLIS' ? `MUFLIS: ${result.name}` : result.name);
-  }, [community, activeVariant, evaluateBestHandSync, phase, winningPlayerIndices, players, actualPotAmount]);
+  }, [community, activeVariant, evaluateBestHandSync]);
 
-  // --- ACTIONS (EMITS ONLY) ---
+  // --- ACTIONS ---
   const handleAction = (type, amt = 0) => {
-      socket.emit('playerAction', { type, amount: amt });
+    if (isProduction && socket.connected) {
+        socket.emit('playerAction', { type, amount: amt });
+    } else {
+        // Local Simulation Logic
+        const player = players[activeIdx];
+        if (!player) return;
+        let nextPlayers = [...players];
+        if (type === 'FOLD') { nextPlayers[activeIdx].isFolded = true; addLog({ name: player.name, action: "FOLDED" }); }
+        if (type === 'CALL' || type === 'CHECK') {
+          const callVal = Math.min(player.chips, highestBet - player.currentBet);
+          nextPlayers[activeIdx].currentBet += callVal; nextPlayers[activeIdx].chips -= callVal;
+          addLog({ name: player.name, action: callVal > 0 ? "CALLED" : "CHECKED" });
+        }
+        if (type === 'RAISE') {
+          const additional = Math.min(player.chips, amt - player.currentBet);
+          nextPlayers[activeIdx].chips -= additional; nextPlayers[activeIdx].currentBet += additional;
+          setHighestBet(nextPlayers[activeIdx].currentBet);
+          addLog({ name: player.name, action: "RAISED to", amount: String(nextPlayers[activeIdx].currentBet) });
+        }
+        nextPlayers[activeIdx].acted = true;
+        setPlayers(nextPlayers);
+        setActiveIdx(getNextSeatedPlayer(activeIdx, nextPlayers));
+    }
   };
 
   const handleDeal = () => {
-      socket.emit('dealRequest', { variantId: pendingVariantId });
+    if (isProduction && socket.connected) {
+        socket.emit('dealRequest', { variantId: pendingVariantId });
+    } else {
+        // Local Simulation Logic
+        setCommunity([]);
+        const fullDeck = SUITS.flatMap(s => VALUES.map(v => ({suit: s, value: v, rank: VALUE_MAP[v], id: v+s}))).sort(() => Math.random() - 0.5);
+        let nextPlayers = players.map(p => p ? { ...p, hand: [], currentBet: 0, isFolded: false, acted: false, isWinner: false } : null);
+        nextPlayers.forEach(p => { if(p) p.hand = fullDeck.splice(0, 2); });
+        setPlayers(nextPlayers);
+        setPhase(PHASES.PRE_FLOP);
+        setActiveIdx(getNextSeatedPlayer(0, nextPlayers));
+        for(let i=0; i<2; i++) setTimeout(() => setDealStaggerIndex(i), i * 200);
+    }
   };
 
   const handleSitDown = () => {
-    if (playerNameInput.trim().length === 0 || isSeating) return;
-    setIsSeating(true);
-    socket.emit('sitPlayer', { name: playerNameInput.trim().toUpperCase(), seatIndex: 0 });
+    if (playerNameInput.trim().length === 0) return;
+    const finalName = playerNameInput.trim().toUpperCase();
+    
+    if (!isProduction) {
+        // Simulation Mode: Manually set Hero at Seat 0
+        const heroObj = {
+          id: 0, userId: LOCAL_USER_ID, name: finalName, isBot: false, chips: 2000, hand: [], currentBet: 0, totalContributed: 0, isFolded: false, isAdmin: true, isDealer: true, isSeated: true, acted: false, joinedAt: Date.now(), handResult: null, variantId: 'HOLDEM', isAllIn: false
+        };
+        setPlayers(prev => prev.map((p, i) => i === 0 ? heroObj : p));
+        setLocalId(LOCAL_USER_ID);
+        addLog({ name: finalName, action: `HAS JOINED THE ARENA (SIMULATION)`, type: 'system' });
+    } else {
+        setIsSeating(true);
+        socket.emit('sitPlayer', { name: finalName, seatIndex: 0 });
+    }
   };
 
   const handleAddBot = () => {
-      socket.emit('addBot');
+    if (isProduction && socket.connected) {
+        socket.emit('addBot');
+    } else {
+        const emptyIdx = players.findIndex(p => p === null);
+        if (emptyIdx === -1) return;
+        const nextBotName = BOT_NAMES[players.filter(p => p?.isBot).length % BOT_NAMES.length];
+        setPlayers(prev => prev.map((p, i) => i === emptyIdx ? {
+            id: emptyIdx, userId: `bot_${Math.random()}`, name: nextBotName, isBot: true, chips: 2000, hand: [], currentBet: 0, totalContributed: 0, isFolded: false, isSeated: true, acted: false, joinedAt: Date.now(), handResult: null, isDealer: false, isAllIn: false
+        } : p));
+    }
   };
 
   const handleClearArena = () => {
-      socket.emit('resetArena');
+    if (isProduction && socket.connected) {
+        socket.emit('resetArena');
+    } else {
+        setPlayers(INITIAL_PLAYERS);
+        setCommunity([]);
+        setPhase(PHASES.IDLE);
+    }
   };
-
-  const winnerPos = useMemo(() => {
-      const idx = (winningPlayerIndices && winningPlayerIndices[0]) || 0;
-      const displayIdx = heroSeatIdx === -1 ? idx : (idx - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
-      return DISPLAY_POSITIONS[displayIdx] || DISPLAY_POSITIONS[0];
-  }, [winningPlayerIndices, heroSeatIdx]);
 
   return (
     <div className="h-screen bg-[#06080c] text-white font-sans flex flex-col overflow-hidden relative selection:bg-cyan-500/30">
@@ -349,11 +401,7 @@ const App = () => {
         </div>
         <div className="flex flex-col items-end w-72 relative text-right">
            <span className="text-white/40 font-bold uppercase text-xs tracking-widest mb-1">On my turn, deal:</span>
-           <select 
-             value={pendingVariantId} 
-             onChange={(e) => setPendingVariantId(String(e.target.value))} 
-             className="bg-transparent text-[#fbbf24] font-black text-lg uppercase border-none outline-none cursor-pointer leading-none"
-           >
+           <select value={pendingVariantId} onChange={(e) => setPendingVariantId(String(e.target.value))} className="bg-transparent text-[#fbbf24] font-black text-lg uppercase border-none outline-none cursor-pointer leading-none">
                {Object.entries(VARIANTS).map(([k, v]) => <option key={k} value={k} className="bg-slate-900">{String(v.name)}</option>)}
            </select>
         </div>
@@ -362,49 +410,23 @@ const App = () => {
       <main className="flex-1 flex items-center justify-center relative min-h-screen pt-16 pb-36 px-4">
         <div className="relative w-full max-w-[1600px] aspect-[21/10] mx-auto transition-all duration-1000 flex items-center justify-center">
             
-            {/* Perspective-Correct Player Mapping */}
             <div className="absolute inset-0 pointer-events-none z-20">
               {players.map((p, i) => {
-                if (!p) return null;
-                if (i === heroSeatIdx) return null;
+                if (!p || i === heroSeatIdx) return null;
                 const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
-                return (
-                  <Seat 
-                    key={i} 
-                    player={p} 
-                    displayPos={DISPLAY_POSITIONS[relativeIdx]} 
-                    phase={phase} 
-                    dealStaggerIndex={dealStaggerIndex} 
-                    winning5Ids={winning5Ids} 
-                    potTransferring={potTransferring && winningPlayerIndices.includes(i)} 
-                    isWinnerCalculated={isWinnerCalculated} 
-                  />
-                );
+                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} dealStaggerIndex={dealStaggerIndex} winning5Ids={winning5Ids} potTransferring={potTransferring && winningPlayerIndices.includes(i)} isWinnerCalculated={isWinnerCalculated} />;
               })}
             </div>
 
-            {/* Manual Sit Down / Join Lobby Modal - Transitions to Live Arena when userSeat is found */}
             {!userSeat && (
                 <div className="absolute inset-0 z-[9000] flex items-center justify-center pointer-events-auto bg-black/40 backdrop-blur-md">
-                    <div className="w-[30vw] min-w-[360px] p-10 rounded-[2vw] bg-black/80 border border-white/10 backdrop-blur-xl shadow-[0_0_5vw_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-300 flex flex-col items-center gap-8">
-                        <div className="flex flex-col items-center gap-2"><div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_2vw_rgba(16,185,129,0.1)]"><User size={40} className="text-emerald-400" /></div><h2 className="text-2xl font-black uppercase tracking-[0.3em] text-white">Join Lobby</h2></div>
+                    <div className="w-[30vw] min-w-[360px] p-10 rounded-[2vw] bg-black/80 border border-white/10 backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col items-center gap-8">
+                        <div className="flex flex-col items-center gap-2"><div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center"><User size={40} className="text-emerald-400" /></div><h2 className="text-2xl font-black uppercase tracking-[0.3em] text-white">Join Lobby</h2></div>
                         <div className="w-full flex flex-col gap-2">
                             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-4">Display Name</label>
-                            <input 
-                                type="text" 
-                                maxLength={12} 
-                                value={playerNameInput} 
-                                onChange={(e) => setPlayerNameInput(e.target.value)} 
-                                onKeyDown={(e) => e.key === 'Enter' && handleSitDown()} 
-                                placeholder="ENTER YOUR NAME..." 
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-xl font-black uppercase tracking-widest text-[#fbbf24] placeholder:text-white/10 focus:outline-none focus:border-[#fbbf24] transition-all" 
-                            />
+                            <input type="text" maxLength={12} value={playerNameInput} onChange={(e) => setPlayerNameInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSitDown()} placeholder="ENTER YOUR NAME..." className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-xl font-black uppercase tracking-widest text-[#fbbf24] placeholder:text-white/10 focus:outline-none focus:border-[#fbbf24] transition-all" />
                         </div>
-                        <button 
-                            disabled={playerNameInput.trim().length === 0 || isSeating} 
-                            onClick={handleSitDown} 
-                            className="w-full p-6 rounded-2xl bg-emerald-600 border border-emerald-500/50 shadow-[0_0_3vw_rgba(16,185,129,0.2)] hover:bg-emerald-500 transition-all duration-300 disabled:opacity-20 disabled:grayscale disabled:pointer-events-none text-lg font-black uppercase tracking-[0.3em] text-white"
-                        >
+                        <button disabled={playerNameInput.trim().length === 0 || isSeating} onClick={handleSitDown} className="w-full p-6 rounded-2xl bg-emerald-600 border border-emerald-500/50 shadow-[0_0_3vw_rgba(16,185,129,0.2)] hover:bg-emerald-500 transition-all duration-300 text-lg font-black uppercase tracking-[0.3em] text-white">
                           {isSeating ? "WAITING FOR SERVER..." : "Sit at Table"}
                         </button>
                     </div>
@@ -426,11 +448,9 @@ const App = () => {
                 <div className="text-[4vw] font-black text-yellow-400 drop-shadow-[0_0.3vw_1vw_rgba(0,0,0,0.8)] font-mono tracking-tighter leading-none">${Number(currentPotOnTable)}</div>
               </div>
 
-              {isShowdown && isWinnerCalculated && (
+              {isShowdown && isWinnerCalculated && players[winningPlayerIndices[0]] && (
                  <div className="absolute -top-32 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-600/0 via-yellow-400/90 to-yellow-600/0 px-16 py-2 whitespace-nowrap animate-in fade-in slide-in-from-top-4 duration-500 z-50">
-                    <span className="text-black font-black text-[1.5vw] uppercase tracking-[0.2em] drop-shadow-sm">
-                        {String(players[winningPlayerIndices[0]]?.handResult?.name || "")}
-                    </span>
+                    <span className="text-black font-black text-[1.5vw] uppercase tracking-[0.2em] drop-shadow-sm">{players[winningPlayerIndices[0]]?.handResult?.name}</span>
                  </div>
               )}
 
@@ -450,27 +470,6 @@ const App = () => {
               </div>
             </div>
 
-            <div className="absolute inset-0 pointer-events-none z-20">
-              {players.map((p, i) => {
-                if (!p) return null;
-                if (i === heroSeatIdx) return null;
-                const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
-                return (
-                  <Seat 
-                    key={i} 
-                    player={p} 
-                    displayPos={DISPLAY_POSITIONS[relativeIdx]} 
-                    phase={phase} 
-                    dealStaggerIndex={dealStaggerIndex} 
-                    winning5Ids={winning5Ids} 
-                    potTransferring={potTransferring && winningPlayerIndices.includes(i)} 
-                    isWinnerCalculated={isWinnerCalculated} 
-                  />
-                );
-              })}
-            </div>
-
-            {/* Perspective Hero Cockpit (Bottom Center) */}
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className={`absolute flex flex-col items-center pointer-events-none w-fit h-fit z-50`}>
               <div className="relative flex items-center justify-center w-[12vw] h-[6vw] overflow-visible">
                   {userSeat && !userSeat.isFolded && phase !== PHASES.IDLE && (
@@ -478,8 +477,7 @@ const App = () => {
                       {(userSeat.hand || []).map((c, ci) => {
                         const fanOffset = (ci - (userSeat.hand.length - 1) / 2) * 2.5; 
                         const rotation = (ci - (userSeat.hand.length - 1) / 2) * 10; 
-                        const isWinnerHeroLocal = isShowdown && (winningPlayerIndices || []).includes(heroSeatIdx);
-                        const shouldHighlightHero = isWinnerHeroLocal && (winning5Ids || []).includes(c.id);
+                        const shouldHighlightHero = isWinnerHero && (winning5Ids || []).includes(c.id);
 
                         return (
                           <div key={ci} 
