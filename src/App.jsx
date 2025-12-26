@@ -38,7 +38,7 @@ const INITIAL_PLAYERS = Array.from({ length: TOTAL_SEATS }, () => null);
 // --- SUB-COMPONENTS ---
 const Seat = ({ 
   player, displayPos, phase, dealStaggerIndex, winning5Ids, 
-  isWinnerCalculated, potTransferring 
+  isWinnerCalculated, potTransferring, isActiveTurn
 }) => {
   if (!player || !displayPos) return null;
   const isShowdown = phase === PHASES.SHOWDOWN;
@@ -52,12 +52,14 @@ const Seat = ({
         ${isShowdown && isWinner ? 'z-[500]' : 'z-20'}`}
     >
       <div className={`flex items-center gap-2 p-[0.6vw] px-[2vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative 
-        ${isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_rgba(251,191,36,0.8)]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_rgba(251,191,36,0.6)]') : 'border-white/10'}`}>
+        ${isActiveTurn ? 'border-cyan-400 shadow-[0_0_1.5vw_rgba(34,211,238,0.6)] scale-105' : 'border-white/10'}
+        ${isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_rgba(251,191,36,0.8)]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_rgba(251,191,36,0.6)]') : ''}`}>
         <div className="flex flex-col items-center">
             {player.isAllIn && !player.isFolded && (
                 <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap bg-red-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest text-white animate-pulse">All-In</div>
             )}
             <div className="flex items-center gap-2">
+                {/* RENDER DEALER BUTTON (Red Dot) */}
                 {player?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full shadow-[0_0_0.5vw_rgba(220,38,38,0.8)] animate-pulse" />}
                 <span className="text-[1.1vw] font-black text-white leading-none uppercase tracking-widest whitespace-nowrap">{String(player?.name || "Player")}</span>
             </div>
@@ -206,6 +208,8 @@ const App = () => {
   const isWinnerCalculated = (winningPlayerIndices || []).length > 0;
   const isWinnerHero = isShowdown && heroSeatIdx !== -1 && (winningPlayerIndices || []).includes(heroSeatIdx);
   const currentPotOnTable = useMemo(() => (potData || []).reduce((acc, p) => acc + (p?.amount || 0), 0) + (players || []).reduce((s, p) => s + (p?.currentBet || 0), 0), [potData, players]);
+  
+  // HUD ACTIVATION LOGIC
   const isHeroTurn = activeIdx !== -1 && heroSeatIdx !== -1 && activeIdx === heroSeatIdx && phase !== PHASES.IDLE && !isShowdown;
   const minRaiseTo = highestBet + lastRaiseAmt;
   const maxAllIn = userSeat?.chips || 0;
@@ -311,7 +315,7 @@ const App = () => {
   const deletePlayer = (uid) => { if (window.confirm(`DELETE PLAYER ${uid}?`)) { socket.emit('adminDeletePlayer', uid); } };
   const deleteRoom = (id) => { if (window.confirm(`TERMINATE ROOM ${id}?`)) { socket.emit('adminDeleteRoom', id); } };
   
-  // ADMIN CONTROL OVER DEAL
+  // ADMIN CONTROL: EMIT ROOM ID
   const handleAdminForceDeal = (roomId) => { 
     if (window.confirm(`FORCE DEAL ON ${roomId}?`)) {
       socket.emit('adminForceDeal', roomId); 
@@ -383,7 +387,7 @@ const App = () => {
                 // PERSPECTIVE HERO visibility: Identity check via userProfile.uid
                 if (!p || (userProfile && p.uid === userProfile.uid)) return null;
                 const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
-                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} dealStaggerIndex={dealStaggerIndex} winning5Ids={winning5Ids} potTransferring={potTransferring && (winningPlayerIndices || []).includes(i)} isWinnerCalculated={isWinnerCalculated} />;
+                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} dealStaggerIndex={dealStaggerIndex} winning5Ids={winning5Ids} potTransferring={potTransferring && (winningPlayerIndices || []).includes(i)} isWinnerCalculated={isWinnerCalculated} isActiveTurn={activeIdx === i} />;
               })}
             </div>
             <div className="absolute inset-0 bg-emerald-950/5 rounded-[40%] border-[1.5vw] border-slate-900 shadow-[inset_0_0_8vw_rgba(245,158,11,0.2),inset_0_0_15vw_rgba(0,0,0,0.9)] overflow-hidden" />
@@ -411,7 +415,7 @@ const App = () => {
               </div>
               {/* EVALUATION BUBBLE - h-7 */}
               {getCurrentStrength(userSeat) && !isShowdown && phase !== PHASES.IDLE && (<div className="z-[5001] h-7 px-3 py-1 bg-purple-600/95 border border-purple-300/30 rounded-full shadow-[0_0_2vw_rgba(147,51,234,0.6)] animate-in fade-in transition-all flex items-center relative -mt-3 mb-1"><span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">{String(getCurrentStrength(userSeat))}</span></div>)}
-              {userSeat && (<div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat.isWinner && isShowdown ? 'border-yellow-400 scale-110' : 'border-white/10'}`}><div className="flex flex-col items-center"><div className="flex items-center gap-2">{userSeat.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat.chips)}</span></div></div>)}
+              {userSeat && (<div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat.isWinner && isShowdown ? 'border-yellow-400 scale-110' : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1vw_#22d3ee]' : ''}`}><div className="flex flex-col items-center"><div className="flex items-center gap-2">{userSeat.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat.chips)}</span></div></div>)}
             </div>
         </div>
       </main>
