@@ -41,7 +41,7 @@ const collectBets = (room) => {
         if (p) {
             streetPot += p.currentBet;
             p.currentBet = 0;
-            p.hasActed = false; // Reset acting status for new street
+            p.hasActed = false; 
         }
     });
     if (!room.potData || room.potData.length === 0) room.potData = [{ label: 'MAIN', amount: 0 }];
@@ -53,7 +53,6 @@ const advancePhase = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
 
-    // Collect all bets into the pot BEFORE advancing
     collectBets(room);
 
     if (room.phase === PHASES.PRE_FLOP) {
@@ -72,13 +71,12 @@ const advancePhase = (roomId) => {
         return;
     }
 
-    // Determine first actor post-flop (left of dealer)
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     const dealerPos = activeIndices.indexOf(room.dealerIdx);
     room.activeIdx = activeIndices[(dealerPos + 1) % activeIndices.length];
 
     io.to(roomId).emit('roomUpdate', room);
-    io.to(roomId).emit('log', { action: `Phase: ${room.phase}`, type: 'system' });
+    io.to(roomId).emit('log', { action: `Phase Transition: ${String(room.phase)}`, type: 'system' });
 };
 
 const runIgnition = (roomId) => {
@@ -89,7 +87,6 @@ const runIgnition = (roomId) => {
 
     room.dealerIdx = (room.dealerIdx === -1) ? seated[0] : seated[(seated.indexOf(room.dealerIdx) + 1) % seated.length];
     
-    // In heads-up, Dealer is SB. In 3+, SB is Dealer+1
     let sbIdx, bbIdx;
     if (seated.length === 2) {
         sbIdx = room.dealerIdx;
@@ -99,7 +96,6 @@ const runIgnition = (roomId) => {
         bbIdx = seated[(seated.indexOf(room.dealerIdx) + 2) % seated.length];
     }
     
-    // Pre-flop action starts left of BB
     room.activeIdx = seated[(seated.indexOf(bbIdx) + 1) % seated.length];
 
     const SB_AMT = room.sb || 10;
@@ -119,7 +115,7 @@ const runIgnition = (roomId) => {
             currentBet: bet, 
             isFolded: false, 
             isWinner: false, 
-            hasActed: false, // Players must act even if they posted blinds
+            hasActed: false, 
             isDealer: (i === room.dealerIdx) 
         };
     });
@@ -199,20 +195,19 @@ io.on('connection', (socket) => {
 
         if (type === 'FOLD') {
             player.isFolded = true;
-            io.to(roomId).emit('log', { name: player.name, action: "Folds" });
+            io.to(roomId).emit('log', { name: String(player.name), action: "Folds" });
         } else if (type === 'CALL') {
             const diff = room.highestBet - player.currentBet;
             player.chips -= diff;
             player.currentBet = room.highestBet;
-            io.to(roomId).emit('log', { name: player.name, action: room.highestBet > 0 ? "Calls" : "Checks" });
+            io.to(roomId).emit('log', { name: String(player.name), action: room.highestBet > 0 ? "Calls" : "Checks" });
         } else if (type === 'RAISE') {
             const diff = amount - player.currentBet;
             player.chips -= diff;
             player.currentBet = amount;
             room.highestBet = amount;
-            // Everyone else must act again if a raise occurred
             room.players.forEach(p => { if (p && p.uid !== player.uid) p.hasActed = false; });
-            io.to(roomId).emit('log', { name: player.name, action: `Raises to $${amount}` });
+            io.to(roomId).emit('log', { name: String(player.name), action: `Raises to $${String(amount)}` });
         }
 
         const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
@@ -220,7 +215,6 @@ io.on('connection', (socket) => {
         const allMatched = activeIndices.every(i => room.players[i].currentBet === room.highestBet);
 
         if (activeIndices.length === 1) {
-            // Collect remaining bets before declaring winner
             collectBets(room);
             room.players[activeIndices[0]].isWinner = true;
             room.phase = PHASES.SHOWDOWN;
@@ -239,12 +233,9 @@ io.on('connection', (socket) => {
         io.emit('profilesUpdate', globalProfiles);
     });
 
-    socket.on('adminDeleteRoom', (id) => {
-        delete rooms[id];
-        io.emit('lobbyUpdate', Object.values(rooms));
-    });
-
+    socket.on('adminDeleteRoom', (id) => { delete rooms[id]; io.emit('lobbyUpdate', Object.values(rooms)); });
     socket.on('adminForceDeal', (roomId) => runIgnition(roomId));
+    socket.on('adminNuclearReset', () => { globalProfiles = []; rooms = {}; io.emit('profilesUpdate', []); io.emit('lobbyUpdate', []); });
 });
 
 const PORT = process.env.PORT || 10000;
