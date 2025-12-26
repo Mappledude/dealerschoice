@@ -126,7 +126,7 @@ const runIgnition = (roomId) => {
 io.on('connection', (socket) => {
     console.log('User Joined:', socket.id);
 
-    // Sync Initial Lobby
+    // Sync Initial Data for generic listeners
     socket.emit('profilesUpdate', globalProfiles);
     socket.emit('lobbyUpdate', Object.values(rooms));
 
@@ -152,6 +152,17 @@ io.on('connection', (socket) => {
             activeVariant: { id: 'HOLDEM', name: 'Texas Hold\'em', holeCards: 2 }
         };
         io.emit('lobbyUpdate', Object.values(rooms));
+    });
+
+    // Player flow: Login
+    socket.on('playerLogin', (data) => {
+        console.log('Login attempt for:', data.password);
+        const profile = globalProfiles.find(p => p.password === data.password);
+        if (profile) {
+            socket.emit('loginSuccess', profile);
+            // Immediately hydrate the lobby for this specific socket
+            socket.emit('lobbyUpdate', Object.values(rooms));
+        }
     });
 
     // Player flow: Join & Seat
