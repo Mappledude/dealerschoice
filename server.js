@@ -6,106 +6,131 @@ import cors from 'cors';
 const app = express();
 app.use(cors());
 
-const server = createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// --- AUTHORITATIVE SERVER MEMORY ---
-let rooms = {};      
-let profiles = [];   
+// --- GLOBAL GAME MEMORY ---
+let globalPlayers = []; // Registry of all profiles
+let rooms = {}; // Active game instances { roomId: { state } }
 
+const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const SUITS = ['♠', '♣', '♥', '♦'];
+
+// --- HELPERS ---
+const createDeck = () => {
+    let deck = [];
+    VALUES.forEach(v => {
+        SUITS.forEach(s => {
+            deck.push({ id: `${v}${s}-${Math.random()}`, value: v, suit: s });
+        });
+    });
+    return deck;
+};
+
+const shuffle = (deck) => {
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    return deck;
+};
+
+// --- SOCKET LOGIC ---
 io.on('connection', (socket) => {
-    console.log(`User Connected: ${socket.id}`);
+    console.log('User Connected:', socket.id);
 
-    // Initial Hydration
+    // Sync Initial Data
+    socket.emit('profilesUpdate', globalPlayers);
     socket.emit('lobbyUpdate', Object.values(rooms));
-    socket.emit('profilesUpdate', profiles);
 
-    // 1. NUCLEAR RESET
+    // Admin: Nuclear Reset
     socket.on('adminNuclearReset', () => {
-        console.log("!!! EMERGENCY NUCLEAR RESET INITIATED !!!");
+        globalPlayers = [];
         rooms = {};
-        profiles = [];
+        io.emit('profilesUpdate', globalPlayers);
         io.emit('lobbyUpdate', []);
-        io.emit('profilesUpdate', []);
-        
-        // Disconnect all clients to force a clean UI state
-        io.sockets.sockets.forEach((s) => s.disconnect(true));
+        console.log('SYSTEM HARD WIPE EXECUTED');
     });
 
-    // 2. ADMIN: Create Room
-    socket.on('adminCreateRoom', (roomData) => {
-        const roomId = roomData.id || `room_${Date.now()}`;
-        rooms[roomId] = {
-            ...roomData,
-            id: roomId,
-            phase: 'IDLE',
-            players: Array(10).fill(null),
-            community: [],
-            potData: [{ label: 'MAIN', amount: 0, eligible: [] }],
-            activeIdx: -1,
-            highestBet: 0
-        };
-        io.emit('lobbyUpdate', Object.values(rooms));
-        console.log(`Room Created: ${roomData.name}`);
-    });
-
-    // 3. ADMIN: Create Player
-    socket.on('adminCreatePlayer', (profile, callback) => {
-        profiles.push(profile);
-        io.emit('profilesUpdate', profiles);
+    // Admin: Create Player
+    socket.on('adminCreatePlayer', (data, callback) => {
+        globalPlayers.push(data);
+        io.emit('profilesUpdate', globalPlayers);
         if (callback) callback({ status: 'ok' });
     });
 
-    // 4. ADMIN: Delete Logic
-    socket.on('adminDeleteRoom', (id) => {
-        delete rooms[id];
+    // Admin: Create Room
+    socket.on('adminCreateRoom', (data) => {
+        rooms[data.id] = { 
+            ...data, 
+            players: Array.from({ length: 10 }, () => null),
+            community: [],
+            phase: 'IDLE',
+            highestBet: 0,
+            potData: [{ label: 'MAIN', amount: 0, eligible: [] }]
+        };
         io.emit('lobbyUpdate', Object.values(rooms));
     });
 
-    socket.on('adminDeletePlayer', (uid) => {
-        profiles = profiles.filter(p => p.uid !== uid);
-        io.emit('profilesUpdate', profiles);
-    });
-
-    // 5. PLAYER: Login
-    socket.on('playerLogin', (data) => {
-        const user = profiles.find(p => p.password === data.password);
-        if (user) socket.emit('loginSuccess', user);
-    });
-
-    // 6. PLAYER: Join Room
-    socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
+    // Admin: Force Deal
+    socket.on('adminForceDeal', (roomId) => {
         const room = rooms[roomId];
-        if (room) {
-            socket.join(roomId);
-            const seatIdx = room.players.findIndex(p => p === null);
-            if (seatIdx !== -1) {
-                room.players[seatIdx] = { 
-                    ...profile, 
-                    chips: buyIn, 
-                    seat: seatIdx,
-                    isFolded: false,
-                    currentBet: 0,
-                    hand: []
-                };
+        if (!room) return;
+
+        console.log(`FORCING DEAL: Room ${roomId}`);
+        
+        let deck = shuffle(createDeck());
+        const variant = room.activeVariant || { holeCards: 2 };
+        
+        // Distribute Cards to non-null players
+        room.players = room.players.map(p => {
+            if (!p) return null;
+            let hand = [];
+            for (let i = 0; i < variant.holeCards; i++) {
+                hand.push(deck.pop());
             }
-            io.to(roomId).emit('roomUpdate', room);
-            io.emit('lobbyUpdate', Object.values(rooms));
-            if (callback) callback({ status: 'ok' });
+            return { ...p, hand, isFolded: false, isWinner: false, currentBet: 0 };
+        });
+
+        room.phase = 'PRE_FLOP';
+        room.community = [];
+        room.deck = deck; // Store remaining deck
+        
+        io.to(roomId).emit('roomUpdate', room);
+        io.emit('lobbyUpdate', Object.values(rooms));
+    });
+
+    // Player: Login
+    socket.on('playerLogin', (data) => {
+        const profile = globalPlayers.find(p => p.password === data.password);
+        if (profile) socket.emit('loginSuccess', profile);
+    });
+
+    // Player: Join Room
+    socket.on('joinRoom', (data, callback) => {
+        const { roomId, profile, buyIn } = data;
+        const room = rooms[roomId];
+        if (!room) return;
+
+        socket.join(roomId);
+        
+        // Find first empty seat
+        const seatIdx = room.players.findIndex(p => p === null);
+        if (seatIdx !== -1) {
+            room.players[seatIdx] = { ...profile, chips: buyIn, uid: profile.uid };
         }
+
+        io.to(roomId).emit('roomUpdate', room);
+        io.emit('lobbyUpdate', Object.values(rooms));
+        if (callback) callback({ status: 'ok' });
     });
 
     socket.on('disconnect', () => {
-        console.log(`User Disconnected: ${socket.id}`);
+        console.log('User Disconnected');
     });
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`SERVER LIVE ON PORT ${PORT}`);
-});
+httpServer.listen(PORT, () => console.log(`Server running on port ${PORT}`));
