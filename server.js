@@ -34,11 +34,8 @@ const shuffle = (deck) => {
 };
 
 // --- GAME ENGINE HELPERS ---
-const advancePhase = (roomId) => {
-    const room = rooms[roomId];
-    if (!room) return;
 
-    // Collect all bets into the pot
+const collectBets = (room) => {
     let streetPot = 0;
     room.players.forEach(p => {
         if (p) {
@@ -47,8 +44,17 @@ const advancePhase = (roomId) => {
             p.hasActed = false; // Reset acting status for new street
         }
     });
+    if (!room.potData || room.potData.length === 0) room.potData = [{ label: 'MAIN', amount: 0 }];
     room.potData[0].amount += streetPot;
     room.highestBet = 0;
+};
+
+const advancePhase = (roomId) => {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    // Collect all bets into the pot BEFORE advancing
+    collectBets(room);
 
     if (room.phase === PHASES.PRE_FLOP) {
         room.phase = PHASES.FLOP;
@@ -62,12 +68,11 @@ const advancePhase = (roomId) => {
     } else {
         room.phase = PHASES.SHOWDOWN;
         room.activeIdx = -1;
-        // Logic for determining winners would trigger here
         io.to(roomId).emit('roomUpdate', room);
         return;
     }
 
-    // Post-flop action starts left of dealer
+    // Determine first actor post-flop (left of dealer)
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     const dealerPos = activeIndices.indexOf(room.dealerIdx);
     room.activeIdx = activeIndices[(dealerPos + 1) % activeIndices.length];
@@ -83,13 +88,22 @@ const runIgnition = (roomId) => {
     if (seated.length < 2) return;
 
     room.dealerIdx = (room.dealerIdx === -1) ? seated[0] : seated[(seated.indexOf(room.dealerIdx) + 1) % seated.length];
-    const sbIdx = seated[(seated.indexOf(room.dealerIdx) + 1) % seated.length];
-    const bbIdx = seated[(seated.indexOf(room.dealerIdx) + 2) % seated.length];
     
+    // In heads-up, Dealer is SB. In 3+, SB is Dealer+1
+    let sbIdx, bbIdx;
+    if (seated.length === 2) {
+        sbIdx = room.dealerIdx;
+        bbIdx = seated[(seated.indexOf(room.dealerIdx) + 1) % seated.length];
+    } else {
+        sbIdx = seated[(seated.indexOf(room.dealerIdx) + 1) % seated.length];
+        bbIdx = seated[(seated.indexOf(room.dealerIdx) + 2) % seated.length];
+    }
+    
+    // Pre-flop action starts left of BB
     room.activeIdx = seated[(seated.indexOf(bbIdx) + 1) % seated.length];
 
-    const SB = room.sb || 10;
-    const BB = room.bb || 20;
+    const SB_AMT = room.sb || 10;
+    const BB_AMT = room.bb || 20;
     let deck = shuffle(createDeck());
     room.deck = deck;
 
@@ -97,7 +111,7 @@ const runIgnition = (roomId) => {
         if (!p) return null;
         let hand = [];
         for (let j = 0; j < room.activeVariant.holeCards; j++) hand.push(deck.pop());
-        let bet = (i === sbIdx) ? SB : (i === bbIdx) ? BB : 0;
+        let bet = (i === sbIdx) ? SB_AMT : (i === bbIdx) ? BB_AMT : 0;
         return { 
             ...p, 
             hand, 
@@ -105,17 +119,18 @@ const runIgnition = (roomId) => {
             currentBet: bet, 
             isFolded: false, 
             isWinner: false, 
-            hasActed: (i === sbIdx || i === bbIdx), // Blinds count as action
+            hasActed: false, // Players must act even if they posted blinds
             isDealer: (i === room.dealerIdx) 
         };
     });
 
     room.phase = PHASES.PRE_FLOP;
-    room.highestBet = BB;
+    room.highestBet = BB_AMT;
     room.community = [];
     room.potData = [{ label: 'MAIN', amount: 0 }];
     
     io.to(roomId).emit('roomUpdate', room);
+    io.to(roomId).emit('log', { action: "Hand Started", type: 'system' });
 };
 
 // --- SOCKET ORCHESTRATION ---
@@ -195,7 +210,7 @@ io.on('connection', (socket) => {
             player.chips -= diff;
             player.currentBet = amount;
             room.highestBet = amount;
-            // When someone raises, everyone else must act again
+            // Everyone else must act again if a raise occurred
             room.players.forEach(p => { if (p && p.uid !== player.uid) p.hasActed = false; });
             io.to(roomId).emit('log', { name: player.name, action: `Raises to $${amount}` });
         }
@@ -205,19 +220,31 @@ io.on('connection', (socket) => {
         const allMatched = activeIndices.every(i => room.players[i].currentBet === room.highestBet);
 
         if (activeIndices.length === 1) {
-            // Instant Win by Fold
+            // Collect remaining bets before declaring winner
+            collectBets(room);
             room.players[activeIndices[0]].isWinner = true;
             room.phase = PHASES.SHOWDOWN;
             io.to(roomId).emit('roomUpdate', room);
         } else if (allActed && allMatched) {
             advancePhase(roomId);
         } else {
-            // Move Turn
             const currentPos = activeIndices.indexOf(room.activeIdx);
             room.activeIdx = activeIndices[(currentPos + 1) % activeIndices.length];
             io.to(roomId).emit('roomUpdate', room);
         }
     });
+
+    socket.on('adminDeletePlayer', (uid) => {
+        globalProfiles = globalProfiles.filter(p => p.uid !== uid);
+        io.emit('profilesUpdate', globalProfiles);
+    });
+
+    socket.on('adminDeleteRoom', (id) => {
+        delete rooms[id];
+        io.emit('lobbyUpdate', Object.values(rooms));
+    });
+
+    socket.on('adminForceDeal', (roomId) => runIgnition(roomId));
 });
 
 const PORT = process.env.PORT || 10000;
