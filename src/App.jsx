@@ -1,33 +1,29 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { 
-  RotateCcw, Play, Coins, Trophy, Landmark, LogOut, 
-  Trash2, RefreshCcw, Info, TrendingUp, FastForward, 
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { io } from "socket.io-client";
+import {
+  RotateCcw, Play, Coins, Trophy, Landmark, LogOut,
+  Trash2, RefreshCcw, Info, TrendingUp, FastForward,
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
   Zap, Target, DollarSign, User
-} from 'lucide-react';
-import io from 'socket.io-client';
+} from "lucide-react";
 
-// --- SOCKET CONFIGURATION ---
-// Priority order:
-// 1) VITE_SOCKET_URL (set in Vercel/Netlify/Render env)
-// 2) localhost during dev
-// 3) Render production server
+// ─────────────────────────────────────────────────────────────
+// SOCKET CONFIG (Vercel frontend → Render backend)
+// Local dev: http://localhost:3001
+// Production: Render service
+// ─────────────────────────────────────────────────────────────
 const SOCKET_URL =
-  (import.meta?.env?.VITE_SOCKET_URL && String(import.meta.env.VITE_SOCKET_URL)) ||
-  (typeof window !== 'undefined' && window.location?.hostname === 'localhost'
-    ? 'http://localhost:3001'
-    : 'https://poker-server-3vin.onrender.com');
+  process.env.NODE_ENV === "production"
+    ? "https://poker-server-3vin.onrender.com"
+    : "http://localhost:3001";
 
 const socket = io(SOCKET_URL, {
-  transports: ['websocket'],
-  reconnection: true,
-  reconnectionAttempts: 10,
-  reconnectionDelay: 500,
+  transports: ["websocket"],
+  autoConnect: true,
 });
 
 // --- CONSTANTS & CONFIG ---
 const TOTAL_SEATS = 10;
-const LOCAL_USER_ID = 'human_player';
 
 const VARIANTS = { 
   HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', holeCards: 2, rules: "Best 5 out of 7 cards" }, 
@@ -51,13 +47,13 @@ const BOT_NAMES = ['Neon', 'Viper', 'Jinx', 'Cipher', 'Astra', 'Raven', 'Blaze',
 /**
  * FIXED COORDINATE GRID
  */
-const SEAT_POSITIONS = [
-  { x: 50, y: 96 }, // 0: Hero (Bottom Center)
+const DISPLAY_POSITIONS = [
+  { x: 50, y: 96 }, // 0: Bottom Center (Hero)
   { x: 18, y: 82 }, // 1: Lower Corner Left
   { x: 5,  y: 50 }, // 2: Side Center Left
   { x: 8,  y: 22 }, // 3: Upper Corner Left
   { x: 28, y: 8  }, // 4: Top Shoulder Left
-  { x: 50, y: 4  }, // 5: Top Center (Raven)
+  { x: 50, y: 4  }, // 5: Top Center
   { x: 72, y: 8  }, // 6: Top Shoulder Right
   { x: 92, y: 22 }, // 7: Upper Corner Right
   { x: 95, y: 50 }, // 8: Side Center Right
@@ -110,19 +106,19 @@ const rankFiveCardHand = (cards) => {
 };
 
 const Seat = ({ 
-  player, index, phase, dealStaggerIndex, winning5Ids, 
+  player, displayPos, phase, dealStaggerIndex, winning5Ids, 
   isWinnerCalculated, potTransferring 
 }) => {
-  if (!player || player.userId === LOCAL_USER_ID) return null;
-  const pos = SEAT_POSITIONS[index];
+  if (!player || !displayPos) return null;
   const isShowdown = phase === PHASES.SHOWDOWN;
   const isWinner = player.isWinner;
 
   return (
     <div 
-      style={{ left: `${pos.x}%`, top: `${pos.y}%` }} 
+      style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} 
       className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col-reverse items-center z-20 transition-all duration-1000 ease-out 
-        ${player?.isFolded ? 'opacity-20 grayscale scale-95' : 'opacity-100'}`}
+        ${player?.isFolded ? 'opacity-20 grayscale scale-95' : 'opacity-100'}
+        ${isShowdown && isWinner ? 'z-[500]' : 'z-20'}`}
     >
       <div className={`flex items-center gap-2 p-[0.6vw] px-[2vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative 
         ${isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_rgba(251,191,36,0.8)]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_rgba(251,191,36,0.6)]') : 'border-white/10'}`}>
@@ -139,23 +135,23 @@ const Seat = ({
       </div>
 
       {player?.hand?.length > 0 && !player.isFolded && (
-        <div className="flex flex-row items-end justify-center pointer-events-none mb-2 overflow-visible relative">
+        <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mb-4 overflow-visible">
           {(player.hand || []).map((c, ci) => {
-            const rotation = (ci - (player.hand.length - 1) / 2) * 5;
+            const fanOffset = (ci - (player.hand.length - 1) / 2) * 2.5; 
+            const rotation = (ci - (player.hand.length - 1) / 2) * 10; 
             const isWinningCard = (winning5Ids || []).includes(c.id);
             const shouldHighlight = isShowdown && isWinner && isWinningCard;
 
             return (
               <div key={ci} 
-                className={`w-[2.5vw] h-[3.5vw] rounded-[0.4vw] flex flex-col items-start justify-start p-[0.2vw] transition-all duration-700 brightness-110 border border-white/40 shadow-lg relative
+                className={`w-[2.5vw] h-[3.5vw] rounded-[0.4vw] flex flex-col items-start justify-start p-[0.2vw] transition-all duration-700 brightness-110 border border-white/40 shadow-lg absolute overflow-hidden
                 ${isShowdown ? 'bg-gradient-to-br from-white via-white to-slate-50 text-slate-950' : 'bg-gradient-to-br from-slate-700 via-slate-900 to-black'} 
                 ${dealStaggerIndex >= ci ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-[-1vw]'} 
                 ${shouldHighlight ? 'ring-4 ring-yellow-400 shadow-[0_0_25px_#fbbf24] animate-pulse z-[100]' : 'opacity-100'}`} 
                 style={{ 
-                  transform: `rotate(${rotation}deg) scale(1.5)`, 
+                  transform: `translateX(${fanOffset}vw) rotate(${rotation}deg) scale(1.5)`, 
                   transformOrigin: 'bottom center', 
-                  marginLeft: ci > 0 ? '-2.2vw' : '0', 
-                  zIndex: shouldHighlight ? 200 : ci 
+                  zIndex: (isShowdown && isWinner ? 500 : 100) + ci 
                 }}
               >
                 {isShowdown ? (
@@ -164,9 +160,8 @@ const Seat = ({
                      <span className={`text-[1.2vw] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-950'}`}>{String(c.suit)}</span>
                    </div>
                  ) : ( 
-                    <div className="w-full h-full flex items-center justify-center opacity-40 relative overflow-hidden">
-                        <div className="absolute inset-0 m-0.5 border border-white/5 rounded-[0.2vw]" />
-                        <ShieldCheck size={10} className="text-white/10" />
+                    <div className="w-full h-full flex items-center justify-center opacity-40 relative">
+                        <ShieldCheck size={12} className="text-white/20" />
                     </div> 
                  )}
               </div>
@@ -179,7 +174,7 @@ const Seat = ({
 };
 
 const App = () => {
-  // 1. STATE INITIALIZATION
+  // --- SHARED GLOBAL STATE ---
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
   const [phase, setPhase] = useState(PHASES.IDLE);
   const [activeVariant, setActiveVariant] = useState(VARIANTS.HOLDEM);
@@ -200,26 +195,56 @@ const App = () => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [potTransferring, setPotTransferring] = useState(false);
   const [playerNameInput, setPlayerNameInput] = useState('');
+  
+  // --- MULTIPLAYER SYNC ---
+  useEffect(() => {
+    socket.on('connect', () => {
+        console.log("Connected to Arena Server:", socket.id);
+    });
 
-  const hasProcessedShowdown = useRef(false);
-  const timerRef = useRef(null);
+    socket.on('gameUpdate', (state) => {
+        setPlayers(state.players);
+        setCommunity(state.community);
+        setPhase(state.phase);
+        setActiveVariant(state.activeVariant);
+        setPotData(state.potData);
+        setActiveIdx(state.activeIdx);
+        setHighestBet(state.highestBet);
+        setLastRaiseAmt(state.lastRaiseAmt);
+        setWinning5Ids(state.winning5Ids || []);
+        setWinningPlayerIndices(state.winningPlayerIndices || []);
+        setPotTransferring(state.potTransferring || false);
+        setIsAnimating(state.isAnimating || false);
+    });
 
-  // 2. DERIVED STATE
+    socket.on('log', (data) => {
+        addLog(data);
+    });
+
+    return () => {
+        socket.off('gameUpdate');
+        socket.off('log');
+    };
+  }, []);
+
+  // --- DERIVED PERSPECTIVE & FLAGS ---
+  const localId = socket.id;
+  const heroSeatIdx = useMemo(() => players.findIndex(p => p?.userId === localId), [players, localId]);
+  const userSeat = heroSeatIdx !== -1 ? players[heroSeatIdx] : null;
+
+  // Global UI Flags
   const isShowdown = phase === PHASES.SHOWDOWN;
-  const isWinnerCalculated = winningPlayerIndices.length > 0;
-  const heroSeatIdx = useMemo(() => players.findIndex(p => p?.userId === LOCAL_USER_ID), [players]);
-  const userSeat = useMemo(() => players.find(p => p?.userId === LOCAL_USER_ID), [players]);
+  const isWinnerCalculated = (winningPlayerIndices || []).length > 0;
+  const isWinnerHero = isShowdown && heroSeatIdx !== -1 && (winningPlayerIndices || []).includes(heroSeatIdx);
 
   const actualPotAmount = useMemo(() => (potData || []).reduce((acc, p) => acc + (p?.amount || 0), 0), [potData]);
   const currentPotOnTable = useMemo(() => actualPotAmount + (players || []).reduce((s, p) => s + (p?.currentBet || 0), 0), [actualPotAmount, players]);
 
   const seatedCount = players.filter(p => p && p.isSeated).length;
-  const dealerIndex = players.findIndex(p => p?.isDealer);
   const isHeroTurn = activeIdx !== -1 && heroSeatIdx !== -1 && activeIdx === heroSeatIdx && phase !== PHASES.IDLE && !isShowdown;
   const minRaiseTo = highestBet + lastRaiseAmt;
   const maxAllIn = userSeat?.chips || 0;
 
-  // 4. CORE ENGINE FUNCTIONS
   const addLog = useCallback((data) => {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const logEntry = { 
@@ -233,18 +258,9 @@ const App = () => {
     setLogs(prev => [logEntry, ...prev].slice(0, 50));
   }, []);
 
-  const getNextSeatedPlayer = useCallback((startIndex, currentPlayers = players) => {
-    for (let i = 1; i <= TOTAL_SEATS; i++) {
-      const idx = (startIndex + i) % TOTAL_SEATS;
-      const p = currentPlayers[idx];
-      if (p?.isSeated && !p?.isFolded && !p?.isAllIn && (p.chips > 0 || p.currentBet > 0 || p.userId === LOCAL_USER_ID)) return idx;
-    }
-    return -1;
-  }, [players]);
-
   const evaluateBestHandSync = useCallback((hand, board, v) => {
     if (!hand || hand.length === 0 || board.length < 3) return { power: 0, hand: [], name: "Evaluating..." };
-    if (v.id === 'OMAHA') {
+    if (v?.id === 'OMAHA') {
         const hCombos = getCombinations(hand, 2);
         const bCombos = getCombinations(board, 3);
         let best = { power: -1, hand: [], name: "High Card" };
@@ -272,270 +288,59 @@ const App = () => {
        if (winner) return `🏆 ${String(winner.name).toUpperCase()} WINS $${actualPotAmount}`;
     }
     const result = evaluateBestHandSync(p.hand, community, activeVariant);
-    return String(activeVariant.id === 'MUFLIS' ? `MUFLIS: ${result.name}` : result.name);
+    return String(activeVariant?.id === 'MUFLIS' ? `MUFLIS: ${result.name}` : result.name);
   }, [community, activeVariant, evaluateBestHandSync, phase, winningPlayerIndices, players, actualPotAmount]);
 
-  const rotateDealer = useCallback(() => {
-    const dIdx = players.findIndex(p => p?.isDealer);
-    const nextD = getNextSeatedPlayer(dIdx);
-    setPlayers(prev => (prev || []).map((p, i) => {
-        if (!p) return null;
-        return { ...p, isDealer: i === nextD, isWinner: false, hand: [], currentBet: 0, acted: false, isFolded: false, handResult: null, isAllIn: false };
-    }));
-    setCommunity([]);
-    setPotData([{ label: 'MAIN', amount: 0, eligible: [] }]);
-    setPhase(PHASES.IDLE);
-    setWinning5Ids([]);
-    setWinningPlayerIndices([]);
-    setPotTransferring(false);
-    setIsAnimating(false);
-  }, [players, getNextSeatedPlayer]);
+  // --- ACTIONS (EMITS ONLY) ---
+  const handleAction = (type, amt = 0) => {
+      socket.emit('playerAction', { type, amount: amt });
+  };
 
-  const handleAction = useCallback((type, amt = 0) => {
-    const player = players[activeIdx];
-    if (!player) return;
-    let nextPlayers = [...players];
-    let newHighestBet = highestBet;
-
-    if (type === 'FOLD') { 
-      nextPlayers[activeIdx].isFolded = true; 
-      addLog({ name: String(player.name), action: "FOLDED" }); 
-    }
-    if (type === 'CALL' || type === 'CHECK') {
-      const callVal = Math.min(player.chips, highestBet - player.currentBet);
-      nextPlayers[activeIdx].currentBet += callVal; 
-      nextPlayers[activeIdx].chips -= callVal;
-      addLog({ name: String(player.name), action: callVal > 0 ? "CALLED" : "CHECKED", amount: callVal > 0 ? String(callVal) : null });
-    }
-    if (type === 'RAISE') {
-      const additional = Math.min(player.chips, amt - player.currentBet);
-      const actualTotal = player.currentBet + additional;
-      setLastRaiseAmt(Math.max(actualTotal - highestBet, lastRaiseAmt));
-      nextPlayers[activeIdx].chips -= additional; 
-      nextPlayers[activeIdx].currentBet = actualTotal; 
-      newHighestBet = actualTotal;
-      setHighestBet(actualTotal);
-      addLog({ name: String(player.name), action: "RAISED to", amount: String(actualTotal) });
-    }
-
-    if (nextPlayers[activeIdx].chips === 0 && !nextPlayers[activeIdx].isFolded) {
-        nextPlayers[activeIdx].isAllIn = true;
-        addLog({ name: nextPlayers[activeIdx].name, action: `IS ALL-IN FOR $${nextPlayers[activeIdx].currentBet}`, type: 'system' });
-    }
-
-    nextPlayers[activeIdx].acted = true;
-    nextPlayers[activeIdx].totalContributed += player.currentBet;
-
-    const totalActivePlayers = nextPlayers.filter(p => p && p.isSeated && !p.isFolded);
-    const roundOver = totalActivePlayers.every(p => p.acted && (p.currentBet === newHighestBet || p.chips === 0 || p.isAllIn));
-
-    setPlayers(nextPlayers);
-
-    if (roundOver) {
-        setTimeout(() => {
-          const streetBets = nextPlayers.reduce((sum, p) => sum + (p?.currentBet || 0), 0);
-          setPotData(prev => [{ ...prev[0], amount: prev[0].amount + streetBets }]);
-          setPlayers(prev => prev.map(p => p ? { ...p, currentBet: 0, acted: false } : null));
-          setHighestBet(0); 
-          setLastRaiseAmt(BLINDS.bb);
-
-          let nextPhase; 
-          let nextDeck = [...deck];
-
-          const chipsAvailable = nextPlayers.filter(p => p && p.isSeated && !p.isFolded && p.chips > 0).length;
-          if (chipsAvailable <= 1 && phase !== PHASES.RIVER) {
-             const boardNeeded = phase === PHASES.PRE_FLOP ? 5 : (phase === PHASES.FLOP ? 2 : 1);
-             setCommunity(prev => [...prev, ...nextDeck.splice(0, boardNeeded)]);
-             setPhase(PHASES.SHOWDOWN);
-             return;
-          }
-
-          if (phase === PHASES.PRE_FLOP) { nextPhase = PHASES.FLOP; setCommunity(nextDeck.splice(0, 3)); }
-          else if (phase === PHASES.FLOP) { nextPhase = PHASES.TURN; setCommunity(prev => [...prev, ...nextDeck.splice(0, 1)]); }
-          else if (phase === PHASES.TURN) { nextPhase = PHASES.RIVER; setCommunity(prev => [...prev, ...nextDeck.splice(0, 1)]); }
-          else { setPhase(PHASES.SHOWDOWN); return; }
-
-          setPhase(nextPhase); 
-          setDeck(nextDeck); 
-          setActiveIdx(getNextSeatedPlayer(dealerIndex, nextPlayers));
-        }, 800);
-    } else { 
-        setActiveIdx(getNextSeatedPlayer(activeIdx, nextPlayers)); 
-    }
-  }, [activeIdx, phase, highestBet, deck, community, players, getNextSeatedPlayer, dealerIndex, addLog, lastRaiseAmt]);
-
-  const handleDeal = useCallback(() => {
-    if (seatedCount < 2 || isAnimating) return;
-    hasProcessedShowdown.current = false;
-    setCommunity([]);
-    setLastRaiseAmt(BLINDS.bb);
-    setDealStaggerIndex(-1);
-    setWinning5Ids([]);
-    setWinningPlayerIndices([]);
-    setPotTransferring(false);
-    setIsAnimating(false);
-
-    let dIdx = players.findIndex(p => p && p.isDealer && p.isSeated);
-    if (dIdx === -1) { dIdx = players.findIndex(p => p && p.isSeated); setPlayers(prev => prev.map((p, i) => i === dIdx ? { ...p, isDealer: true } : { ...p, isDealer: false })); }
-
-    const dealer = players[dIdx];
-    const variantKeys = Object.keys(VARIANTS);
-    const chosenVariantId = pendingVariantId || variantKeys[Math.floor(Math.random() * variantKeys.length)];
-    const variantChoice = VARIANTS[chosenVariantId];
-
-    addLog({ name: dealer?.name || "DEALER", action: `HAS CHOSEN ${variantChoice.name.toUpperCase()}`, type: 'system' });
-
-    setActiveVariant(variantChoice);
-    setShowSplash(true);
-    setTimeout(() => {
-        const fullDeck = SUITS.flatMap(s => VALUES.map(v => ({suit: s, value: v, rank: VALUE_MAP[v], id: v+s}))).sort(() => Math.random() - 0.5);
-        let nextPlayers = players.map(p => p ? { ...p, hand: [], currentBet: 0, totalContributed: 0, isFolded: false, acted: false, isWinner: false, handResult: null, isAllIn: false } : p);
-        let sbIdx = getNextSeatedPlayer(dIdx, nextPlayers);
-        let bbIdx = getNextSeatedPlayer(sbIdx, nextPlayers);
-        let utgIdx = getNextSeatedPlayer(bbIdx, nextPlayers);
-
-        nextPlayers[sbIdx].chips -= BLINDS.sb; 
-        nextPlayers[sbIdx].currentBet = BLINDS.sb;
-        nextPlayers[bbIdx].chips -= BLINDS.bb; 
-        nextPlayers[bbIdx].currentBet = BLINDS.bb;
-
-        setPotData([{ label: 'MAIN', amount: 0, eligible: [] }]); 
-
-        nextPlayers.forEach(p => { if(p) p.hand = fullDeck.splice(0, variantChoice.holeCards); });
-        setPlayers(nextPlayers);
-        setDeck(fullDeck); setHighestBet(BLINDS.bb); setPhase(PHASES.PRE_FLOP); setShowSplash(false); setActiveIdx(utgIdx);
-        for(let i=0; i<variantChoice.holeCards; i++) setTimeout(() => setDealStaggerIndex(i), i * 200);
-    }, 2000);
-  }, [players, seatedCount, getNextSeatedPlayer, pendingVariantId, isAnimating, addLog]);
-
-  useEffect(() => { 
-    const onConnect = () => addLog({ name: 'SOCKET', action: `CONNECTED (${socket.id || 'ok'})`, type: 'system' });
-    const onDisconnect = (reason) => addLog({ name: 'SOCKET', action: `DISCONNECTED (${String(reason)})`, type: 'system' });
-    const onConnectError = (err) => addLog({ name: 'SOCKET', action: `CONNECT ERROR (${String(err?.message || err)})`, type: 'system' });
-    const onLog = (data) => addLog(data);
-
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    socket.on('connect_error', onConnectError);
-    socket.on('log', onLog);
-
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-      socket.off('connect_error', onConnectError);
-      socket.off('log', onLog);
-    };
-  }, [addLog]);
-
-  useEffect(() => { if (phase === PHASES.IDLE && seatedCount >= 2 && !isAnimating) { const dealDelay = setTimeout(() => handleDeal(), 1000); return () => clearTimeout(dealDelay); } }, [phase, seatedCount, handleDeal, isAnimating]);
-
-  useEffect(() => {
-    if (isShowdown && !hasProcessedShowdown.current) {
-      hasProcessedShowdown.current = true;
-      setIsAnimating(true);
-      const isMuflis = activeVariant.id === 'MUFLIS';
-      const evaluated = players.map(p => (!p || !p.isSeated || p.isFolded) ? p : { ...p, handResult: evaluateBestHandSync(p.hand, community, activeVariant) });
-
-      const winnersList = evaluated
-        .filter(p => p && !p.isFolded && p.isSeated)
-        .sort((a,b) => isMuflis ? a.handResult.power - b.handResult.power : b.handResult.power - a.handResult.power);
-
-      if (winnersList.length > 0) {
-          const topPower = winnersList[0].handResult.power;
-          const tiedWinners = winnersList.filter(w => w.handResult.power === topPower);
-          const winIndices = tiedWinners.map(w => players.findIndex(p => p?.userId === w.userId));
-          setWinning5Ids(tiedWinners[0].handResult.hand.map(c => c.id)); 
-          setWinningPlayerIndices(winIndices);
-          const share = Math.floor(actualPotAmount / tiedWinners.length);
-
-          setTimeout(() => {
-              const ann = tiedWinners.length === 1 
-                ? `${tiedWinners[0].name.toUpperCase()} WINS $${actualPotAmount} WITH A ${tiedWinners[0].handResult.name.toUpperCase()}`
-                : `${tiedWinners.map(w => w.name.toUpperCase()).join(' & ')} SPLIT $${actualPotAmount} WITH A ${tiedWinners[0].handResult.name.toUpperCase()}`;
-
-              addLog({ action: ann, type: 'win' });
-              setPotTransferring(true); 
-              setTimeout(() => {
-                setPlayers(prev => prev.map((p, i) => winIndices.includes(i) ? { ...p, chips: p.chips + share, isWinner: true, handResult: evaluated[i].handResult } : p));
-                setTimeout(() => { setIsAnimating(false); rotateDealer(); }, 1200);
-              }, 800);
-          }, 2000); 
-      }
-    }
-  }, [isShowdown, actualPotAmount, players, community, rotateDealer, addLog, evaluateBestHandSync, activeVariant]);
-
-  // SMART BOT AI
-  useEffect(() => { 
-    if (activeIdx !== -1 && players[activeIdx]?.isBot && phase !== PHASES.IDLE && !isShowdown) {
-      const botId = players[activeIdx].userId;
-      const botHand = evaluateBestHandSync(players[activeIdx].hand, community, activeVariant);
-      const isMuflis = activeVariant.id === 'MUFLIS';
-      const delay = Math.random() * 2000 + 1500; 
-
-      let strength = isMuflis ? (1 - (botHand.power / 9000000)) : (botHand.power / 9000000);
-
-      timerRef.current = setTimeout(() => {
-        const currentBot = players.find(p => p?.userId === botId);
-        if (!currentBot || currentBot.isFolded || currentBot.isAllIn) return;
-
-        const potAmt = currentPotOnTable;
-        const callAmt = highestBet - currentBot.currentBet;
-
-        if (strength < 0.25) {
-            if (callAmt > 0) { handleAction('FOLD'); } else { handleAction('CHECK'); }
-        } else if (strength < 0.6) {
-            if (Math.random() > 0.8 && currentBot.chips > potAmt * 0.5) { handleAction('RAISE', highestBet + Math.floor(potAmt * 0.5)); } else { handleAction('CALL'); }
-        } else {
-            if (Math.random() > 0.7 || currentBot.chips < potAmt) { handleAction('RAISE', currentBot.chips + currentBot.currentBet); } else { handleAction('RAISE', highestBet + potAmt); }
-        }
-      }, delay); 
-    } 
-    return () => clearTimeout(timerRef.current); 
-  }, [activeIdx, phase, isShowdown, handleAction, players, community, activeVariant, evaluateBestHandSync, currentPotOnTable, highestBet]);
-
-  const winnerPos = useMemo(() => {
-      const idx = winningPlayerIndices[0] || 0;
-      return SEAT_POSITIONS[idx] || SEAT_POSITIONS[0];
-  }, [winningPlayerIndices]);
+  const handleDeal = () => {
+      socket.emit('dealRequest', { variantId: pendingVariantId });
+  };
 
   const handleSitDown = () => {
     if (playerNameInput.trim().length === 0) return;
-    const finalName = playerNameInput.trim().toUpperCase();
-    const heroObj = {
-      id: 0, userId: LOCAL_USER_ID, name: finalName, isBot: false, chips: 2000, hand: [], currentBet: 0, totalContributed: 0, isFolded: false, isAdmin: true, isDealer: true, isSeated: true, acted: false, joinedAt: Date.now(), handResult: null, variantId: 'HOLDEM', isAllIn: false
-    };
-    setPlayers(prev => prev.map((p, i) => i === 0 ? heroObj : p));
-    addLog({ name: finalName, action: `HAS JOINED THE ARENA`, type: 'system' });
-    socket.emit('sitPlayer', { name: finalName, seatIndex: 0 });
+    socket.emit('sitPlayer', { name: playerNameInput.trim().toUpperCase(), preferredSeat: null });
   };
 
   const handleAddBot = () => {
-    const emptyIdx = players.findIndex(p => p === null);
-    if (emptyIdx === -1) return;
-    const nextBotName = BOT_NAMES[players.filter(p => p?.isBot).length % BOT_NAMES.length];
-    setPlayers(prev => prev.map((p, i) => i === emptyIdx ? {
-        id: emptyIdx, userId: `bot_${Math.random()}`, name: nextBotName, isBot: true, chips: 2000, hand: [], currentBet: 0, totalContributed: 0, isFolded: false, isSeated: true, acted: false, joinedAt: Date.now(), handResult: null, isDealer: false, isAllIn: false
-    } : p));
+      socket.emit('addBot');
   };
+
+  const handleClearArena = () => {
+      socket.emit('resetArena');
+  };
+
+  const winnerPos = useMemo(() => {
+      const idx = (winningPlayerIndices && winningPlayerIndices[0]) || 0;
+      const displayIdx = heroSeatIdx === -1 ? idx : (idx - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
+      return DISPLAY_POSITIONS[displayIdx] || DISPLAY_POSITIONS[0];
+  }, [winningPlayerIndices, heroSeatIdx]);
 
   return (
     <div className="h-screen bg-[#06080c] text-white font-sans flex flex-col overflow-hidden relative selection:bg-cyan-500/30">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#1a202c_0%,_#06080c_100%)] pointer-events-none" />
-
+      
       <header className="absolute top-0 left-0 right-0 h-16 bg-black/30 backdrop-blur-[30px] border-b border-white/10 flex items-center justify-between px-8 z-[8000] shadow-xl">
         <div className="flex items-center gap-6">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/5 rounded-lg text-slate-400 transition-all active:scale-90"><ChevronLeft size={20} className={sidebarOpen ? 'rotate-0' : 'rotate-180'} /></button>
           <div className="flex items-center gap-6 bg-white/5 border border-white/10 px-6 py-2 rounded-2xl">
             <span className="text-[#fbbf24] font-black text-xl uppercase whitespace-nowrap">THIS HAND:</span>
             <div className="flex flex-col leading-tight">
-              <span className="text-[#fbbf24] font-black text-xl uppercase tracking-widest leading-none">{String(activeVariant.name)}</span>
-              <span className="text-white/60 text-sm font-bold italic tracking-tight mt-1">{String(activeVariant.rules)}</span>
+              <span className="text-[#fbbf24] font-black text-xl uppercase tracking-widest leading-none">{String(activeVariant?.name || "Texas Hold'em")}</span>
+              <span className="text-white/60 text-sm font-bold italic tracking-tight mt-1">{String(activeVariant?.rules || "")}</span>
             </div>
           </div>
         </div>
         <div className="flex flex-col items-end w-72 relative text-right">
            <span className="text-white/40 font-bold uppercase text-xs tracking-widest mb-1">On my turn, deal:</span>
-           <select value={pendingVariantId} onChange={(e) => setPendingVariantId(String(e.target.value))} className="bg-transparent text-[#fbbf24] font-black text-lg uppercase border-none outline-none cursor-pointer leading-none">
+           <select 
+             value={pendingVariantId} 
+             onChange={(e) => setPendingVariantId(String(e.target.value))} 
+             className="bg-transparent text-[#fbbf24] font-black text-lg uppercase border-none outline-none cursor-pointer leading-none"
+           >
                {Object.entries(VARIANTS).map(([k, v]) => <option key={k} value={k} className="bg-slate-900">{String(v.name)}</option>)}
            </select>
         </div>
@@ -543,7 +348,29 @@ const App = () => {
 
       <main className="flex-1 flex items-center justify-center relative min-h-screen pt-16 pb-36 px-4">
         <div className="relative w-full max-w-[1600px] aspect-[21/10] mx-auto transition-all duration-1000 flex items-center justify-center">
+            
+            {/* Perspective-Correct Player Mapping */}
+            <div className="absolute inset-0 pointer-events-none z-20">
+              {players.map((p, i) => {
+                if (!p) return null;
+                if (i === heroSeatIdx) return null;
+                const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
+                return (
+                  <Seat 
+                    key={i} 
+                    player={p} 
+                    displayPos={DISPLAY_POSITIONS[relativeIdx]} 
+                    phase={phase} 
+                    dealStaggerIndex={dealStaggerIndex} 
+                    winning5Ids={winning5Ids} 
+                    potTransferring={potTransferring && winningPlayerIndices.includes(i)} 
+                    isWinnerCalculated={isWinnerCalculated} 
+                  />
+                );
+              })}
+            </div>
 
+            {/* Manual Sit Down / Join Lobby */}
             {!userSeat && (
                 <div className="absolute inset-0 z-[9000] flex items-center justify-center pointer-events-auto bg-black/40 backdrop-blur-md">
                     <div className="w-[30vw] min-w-[360px] p-10 rounded-[2vw] bg-black/80 border border-white/10 backdrop-blur-xl shadow-[0_0_5vw_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-300 flex flex-col items-center gap-8">
@@ -561,7 +388,7 @@ const App = () => {
               <div className="flex-1 overflow-y-auto p-6 space-y-8 relative pt-10">
                 <section className="text-left"><div className="flex items-center justify-between mb-6 border-b border-white/10 pb-3"><div className="flex items-center gap-2 text-slate-400 uppercase font-black text-xs tracking-[0.2em]"><Settings2 size={16}/> Arena Settings</div></div>
                 <div className="grid grid-cols-1 gap-4"><button onClick={handleAddBot} className="flex items-center gap-3 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 p-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600/20 transition-all shadow-xl"><UserPlus size={18}/> Add Bot</button>
-                <button onClick={() => { setPlayers(INITIAL_PLAYERS); setCommunity([]); setPotData([{ label: 'MAIN', amount: 0, eligible: [] }]); setPhase(PHASES.IDLE); addLog({ action: "ARENA RESET", type: 'system' }); }} className="flex items-center gap-3 bg-red-950/20 border border-red-500/30 text-red-400 p-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-950/40 transition-all shadow-xl"><Trash2 size={18}/> Clear Arena</button></div></section>
+                <button onClick={handleClearArena} className="flex items-center gap-3 bg-red-950/20 border border-red-500/30 text-red-400 p-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-950/40 transition-all shadow-xl"><Trash2 size={18}/> Clear Arena</button></div></section>
               </div>
             </aside>
 
@@ -572,9 +399,11 @@ const App = () => {
                 <div className="text-[4vw] font-black text-yellow-400 drop-shadow-[0_0.3vw_1vw_rgba(0,0,0,0.8)] font-mono tracking-tighter leading-none">${Number(currentPotOnTable)}</div>
               </div>
 
-              {isShowdown && isWinnerCalculated && players[winningPlayerIndices[0]]?.handResult && (
+              {isShowdown && isWinnerCalculated && (
                  <div className="absolute -top-32 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-600/0 via-yellow-400/90 to-yellow-600/0 px-16 py-2 whitespace-nowrap animate-in fade-in slide-in-from-top-4 duration-500 z-50">
-                    <span className="text-black font-black text-[1.5vw] uppercase tracking-[0.2em] drop-shadow-sm">{players[winningPlayerIndices[0]]?.handResult?.name}</span>
+                    <span className="text-black font-black text-[1.5vw] uppercase tracking-[0.2em] drop-shadow-sm">
+                        {String(players[winningPlayerIndices[0]]?.handResult?.name || "")}
+                    </span>
                  </div>
               )}
 
@@ -594,10 +423,7 @@ const App = () => {
               </div>
             </div>
 
-            <div className="absolute inset-0 pointer-events-none z-20">
-              {(players || []).map((p, i) => i !== 0 && <Seat key={i} player={p} index={i} phase={phase} dealStaggerIndex={dealStaggerIndex} winning5Ids={winning5Ids} potTransferring={potTransferring && winningPlayerIndices.includes(i)} isWinnerCalculated={isWinnerCalculated} />)}
-            </div>
-
+            {/* Perspective Hero Cockpit (Bottom Center) */}
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className={`absolute flex flex-col items-center pointer-events-none w-fit h-fit z-50`}>
               <div className="relative flex items-center justify-center w-[12vw] h-[6vw] overflow-visible">
                   {userSeat && !userSeat.isFolded && phase !== PHASES.IDLE && (
@@ -605,8 +431,8 @@ const App = () => {
                       {(userSeat.hand || []).map((c, ci) => {
                         const fanOffset = (ci - (userSeat.hand.length - 1) / 2) * 2.5; 
                         const rotation = (ci - (userSeat.hand.length - 1) / 2) * 10; 
-                        const isWinnerHero = isShowdown && winningPlayerIndices.includes(0);
-                        const shouldHighlightHero = isWinnerHero && (winning5Ids || []).includes(c.id);
+                        const isWinnerHeroLocal = isShowdown && (winningPlayerIndices || []).includes(heroSeatIdx);
+                        const shouldHighlightHero = isWinnerHeroLocal && (winning5Ids || []).includes(c.id);
 
                         return (
                           <div key={ci} 
@@ -630,7 +456,7 @@ const App = () => {
                   <span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">{String(getCurrentStrength(userSeat))}</span>
                 </div>
               )}
-
+              
               {userSeat && (
                 <div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 
                   ${userSeat.isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : 'border-white/10'}`}>
@@ -691,7 +517,7 @@ const App = () => {
             <div className="flex flex-col items-center justify-center gap-4 opacity-80 h-full">
                <Target size={48} className={phase === PHASES.IDLE && seatedCount >= 2 ? "text-[#22d3ee] animate-pulse" : "text-slate-600"}/>
                <span className={`font-black uppercase text-[#fbbf24] animate-pulse text-[1.5vw] tracking-[0.2em]`}>
-                 {phase === PHASES.IDLE && seatedCount >= 2 ? "DEALING" : (isShowdown ? "REVEAL" : activeIdx !== -1 && players[activeIdx] ? (players[activeIdx].userId === LOCAL_USER_ID ? "YOUR TURN" : `${players[activeIdx].name.toUpperCase()}'S TURN`) : "WAITING")}
+                 {phase === PHASES.IDLE && seatedCount >= 2 ? "DEALING" : (isShowdown ? "REVEAL" : activeIdx !== -1 && players[activeIdx] ? (players[activeIdx].userId === localId ? "YOUR TURN" : `${players[activeIdx].name.toUpperCase()}'S TURN`) : "WAITING")}
                </span>
             </div>
           )}
