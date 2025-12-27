@@ -69,13 +69,13 @@ const Seat = ({
             </div>
         </div>
 
-        {/* --- PRECISION BET ANCHORING --- */}
+        {/* --- PRECISION BET ANCHORING: Snug to cards --- */}
         {player.currentBet > 0 && (
             <div 
-                className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[300]`}
+                className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[250]`}
                 style={{ 
-                    // SNUG HERO LOGIC: Seat at bottom center (isHero) gets north position just above cards
-                    top: isCollectingBets ? `${43 - displayPos.y}vh` : (isHero ? '-9.5vw' : (displayPos.y > 50 ? '-5vw' : '5vw')), 
+                    // Anchor snugly: Hero is bottom center, North is closer to board center
+                    top: isCollectingBets ? `${43 - displayPos.y}vh` : (isHero ? '-6.5vw' : (displayPos.y > 50 ? '-5vw' : '5vw')), 
                     left: isCollectingBets ? `${50 - displayPos.x}vw` : '50%',
                     transform: `translate(-50%, -100%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
                     opacity: isCollectingBets ? 0 : 1
@@ -112,6 +112,7 @@ const Seat = ({
             </div>
         )}
         
+        {/* --- SECURITY: Isolated bubbles for Hero or during Showdown --- */}
         {strengthLabel && !player.isFolded && phase !== PHASES.IDLE && (isHero || isShowdown) && (
             <div className="h-7 px-3 bg-purple-600 border border-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] mb-2 flex items-center animate-in fade-in">
                 <span className="text-[9px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
@@ -211,6 +212,7 @@ const App = () => {
   
   const callRequired = highestBet - (userSeat?.currentBet || 0);
 
+  // Authoritative Real-Time Hand Evaluation for HUD
   const getCurrentStrength = useCallback((player) => {
     if (!player || !player.hand || player.hand.length === 0 || community.length < 3) return null;
     const VM = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
@@ -395,7 +397,6 @@ const App = () => {
             </div>
             <div className="absolute inset-0 bg-emerald-950/5 rounded-[40%] border-[1.5vw] border-slate-900 shadow-[inset_0_0_15vw_rgba(0,0,0,0.9)]" />
             
-            {/* CENTRAL POT CONTAINER */}
             <div className={`absolute top-[43%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center z-30 pointer-events-none`}>
               <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms] ease-out`} 
                    style={{ 
@@ -412,12 +413,12 @@ const App = () => {
             </div>
             
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className="absolute flex flex-col items-center z-50">
-              {/* --- PRECISION HERO BET ANCHORING: Snug just North of cards --- */}
+              {/* --- PRECISION HERO BET ANCHORING: Snug Norte overlapping HUD top edge --- */}
               {userSeat?.currentBet > 0 && (
                 <div 
                   className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] z-[350]`}
                   style={{ 
-                    top: isCollectingBets ? `${43 - 98}vh` : '-9.5vw', // Hard-coded snugly just above cards
+                    top: isCollectingBets ? `${43 - 98}vh` : '-6.8vw', // Optimized snugNorth position
                     left: '50%',
                     transform: `translate(-50%, 0%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
                     opacity: isCollectingBets ? 0 : 1
