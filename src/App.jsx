@@ -69,13 +69,13 @@ const Seat = ({
             </div>
         </div>
 
-        {/* --- PRECISION BET ANCHORING: Snug to cards --- */}
+        {/* --- PRECISION HERO BET ANCHORING: Snug North overlapping top of cards --- */}
         {player.currentBet > 0 && (
             <div 
                 className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[250]`}
                 style={{ 
-                    // Anchor snugly: Hero is bottom center, North is closer to board center
-                    top: isCollectingBets ? `${43 - displayPos.y}vh` : (isHero ? '-6.5vw' : (displayPos.y > 50 ? '-5vw' : '5vw')), 
+                    // Snug positioning: Hero overlaps top of card zone
+                    top: isCollectingBets ? `${43 - displayPos.y}vh` : (isHero ? '-7.2vw' : (displayPos.y > 50 ? '-5vw' : '5vw')), 
                     left: isCollectingBets ? `${50 - displayPos.x}vw` : '50%',
                     transform: `translate(-50%, -100%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
                     opacity: isCollectingBets ? 0 : 1
@@ -112,7 +112,6 @@ const Seat = ({
             </div>
         )}
         
-        {/* --- SECURITY: Isolated bubbles for Hero or during Showdown --- */}
         {strengthLabel && !player.isFolded && phase !== PHASES.IDLE && (isHero || isShowdown) && (
             <div className="h-7 px-3 bg-purple-600 border border-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] mb-2 flex items-center animate-in fade-in">
                 <span className="text-[9px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
@@ -191,14 +190,20 @@ const App = () => {
     });
 
     socket.on('lobbyUpdate', (list) => setActiveTables(list));
-    socket.on('profilesUpdate', (list) => setAllProfiles(list));
+    socket.on('profilesUpdate', (list) => {
+        setAllProfiles(list);
+        if (userProfile) {
+            const updatedMe = list.find(p => p.uid === userProfile.uid);
+            if (updatedMe) setUserProfile(updatedMe);
+        }
+    });
     socket.on('loginSuccess', (profile) => { setUserProfile(profile); setCurrentView(VIEWS.LOBBY); });
     socket.on('log', (data) => {
         const logEntry = { id: Math.random(), time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), ...data };
         setLogs(prev => [logEntry, ...prev].slice(0, 50));
     });
     return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('log'); };
-  }, [phase]);
+  }, [phase, userProfile]);
 
   const heroSeatIdx = useMemo(() => {
       if (!userProfile) return -1;
@@ -375,6 +380,16 @@ const App = () => {
           <span className="text-white font-black text-lg uppercase leading-none mt-1">{String(activeVariant?.name || "Texas Hold'em")}</span>
           <span className="text-white/40 text-[8px] font-bold italic">{String(activeVariant?.rules || "")}</span>
         </div>
+        
+        {/* GLOBAL WALLET DISPLAY */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-4 bg-emerald-600/10 border border-emerald-500/20 px-8 py-2 rounded-2xl backdrop-blur-md">
+            <Coins size={20} className="text-emerald-400" />
+            <div className="flex flex-col items-center">
+                <span className="text-[8px] font-black text-emerald-400/60 uppercase tracking-[0.3em]">Global Wallet</span>
+                <span className="text-xl font-mono font-black text-emerald-400 leading-none mt-1">${Number(userProfile?.chips || 0).toLocaleString()}</span>
+            </div>
+        </div>
+
         <div className="flex items-center gap-6">
            <div className="flex items-center gap-4 bg-white/5 border border-white/10 px-6 py-2 rounded-2xl text-white">
                 <span className="text-white/40 font-bold uppercase text-[9px] tracking-widest leading-none">On turn, deal:</span>
@@ -382,7 +397,11 @@ const App = () => {
                     {Object.entries(VARIANTS).map(([k, v]) => <option key={k} value={k} className="bg-slate-900">{String(v.name)}</option>)}
                 </select>
            </div>
-           <button onClick={() => { setCurrentView(VIEWS.LOBBY); setPlayers(INITIAL_PLAYERS); }} className="p-2 hover:bg-red-600/20 rounded-lg text-red-500 transition-all shadow-md"><LogOut size={20}/></button>
+           
+           <div className="flex items-center gap-3">
+               <span className="text-[10px] font-black text-white/20 uppercase tracking-widest pt-1">v1.0.8-Authoritative</span>
+               <button onClick={() => { setCurrentView(VIEWS.LOBBY); setPlayers(INITIAL_PLAYERS); }} className="p-2 hover:bg-red-600/20 rounded-lg text-red-500 transition-all shadow-md"><LogOut size={20}/></button>
+           </div>
         </div>
       </header>
 
@@ -413,12 +432,12 @@ const App = () => {
             </div>
             
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className="absolute flex flex-col items-center z-50">
-              {/* --- PRECISION HERO BET ANCHORING: Snug Norte overlapping HUD top edge --- */}
+              {/* --- SNUG HERO BET BUBBLE: Optimized North alignment over cards zone --- */}
               {userSeat?.currentBet > 0 && (
                 <div 
-                  className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] z-[350]`}
+                  className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] z-[250]`}
                   style={{ 
-                    top: isCollectingBets ? `${43 - 98}vh` : '-6.8vw', // Optimized snugNorth position
+                    top: isCollectingBets ? `${43 - 98}vh` : '-7.2vw', // Snug north overlapping HUD top edge
                     left: '50%',
                     transform: `translate(-50%, 0%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
                     opacity: isCollectingBets ? 0 : 1
@@ -452,7 +471,7 @@ const App = () => {
                 )}
 
                 <div className="flex flex-col items-center">
-                    <div className="flex items-center gap-2">{userSeat?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat?.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat?.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat?.chips)}</span></div></div>
+                    <div className="flex items-center gap-2">{userSeat?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat?.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat?.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat?.chips || 0)}</span></div></div>
             </div>
         </div>
       </main>
@@ -470,7 +489,7 @@ const App = () => {
               <div className="flex items-center justify-center gap-8 w-full mb-0"><button onClick={() => handleAction('FOLD')} className="w-32 h-12 bg-red-950/40 border border-red-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-lg tracking-widest">FOLD</button><button onClick={() => handleAction('CALL')} className="w-48 h-12 bg-blue-950/40 border border-blue-500/50 rounded-full font-black text-base uppercase hover:brightness-125 shadow-lg tracking-widest">{callRequired > 0 ? `CALL $${callRequired}` : 'CHECK'}</button><button onClick={() => handleAction('RAISE', raiseAmount)} className="w-32 h-12 bg-emerald-950/40 border border-emerald-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-xl transition-all tracking-widest flex items-center justify-center"><Zap size={20} className="mr-2"/>RAISE</button></div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center gap-4 h-full">
+            <div className="flex col flex-col items-center justify-center gap-4 h-full">
                <Target size={48} className={(phase === PHASES.IDLE && players.filter(Boolean).length >= 2) ? "text-[#22d3ee] animate-pulse" : "text-slate-600"}/>
                <span className={`font-black uppercase text-[#fbbf24] animate-pulse text-[1.5vw] tracking-[0.2em]`}>
                  {phase === PHASES.IDLE ? (players.filter(Boolean).length < 2 ? "WAITING FOR PLAYERS" : "DEALING") : (isShowdown ? "REVEAL" : activeIdx !== -1 && players[activeIdx] ? `${String(players[activeIdx].name).toUpperCase()}'S TURN` : "WAITING")}
