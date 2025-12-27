@@ -233,7 +233,6 @@ const processShowdown = (roomId) => {
         return;
     }
     
-    // --- MUFLIS LOGIC INVERSION ---
     const isMuflis = room.activeVariant?.id === 'MUFLIS';
     evals.sort((a, b) => isMuflis ? (a.best.power - b.best.power) : (b.best.power - a.best.power));
     
@@ -431,6 +430,8 @@ io.on('connection', (socket) => {
                 io.to(data.roomId).emit('log', { action: `${data.profile.name} has joined the arena.`, type: 'system' });
             }
         }
+        // --- JOIN CONFIRMATION: Immediate targeted update ---
+        socket.emit('roomUpdate', room); 
         io.to(data.roomId).emit('roomUpdate', room);
         if(cb) cb({ status: 'ok' });
         if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) setTimeout(() => runIgnition(data.roomId), 3000);
@@ -492,4 +493,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative v1.2.1 Stable Engine: ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Authoritative stable engine: ${PORT}`));
