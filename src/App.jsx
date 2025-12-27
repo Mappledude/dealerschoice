@@ -31,12 +31,11 @@ const VARIANTS = {
 
 const INITIAL_PLAYERS = Array.from({ length: TOTAL_SEATS }, () => null);
 
-// --- SEAT COMPONENT ---
+// --- SUB-COMPONENTS ---
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, 
-  potTransferring, isActiveTurn, strengthLabel
+  isCollectingBets, isActiveTurn, strengthLabel
 }) => {
-    // CRITICAL VISIBILITY CHECK: Prevents crash and ensures cards render post-IDLE
     if (!player || !player.hand || !displayPos) return null;
 
     const isShowdown = phase === PHASES.SHOWDOWN;
@@ -50,15 +49,30 @@ const Seat = ({
         >
         <div className={`flex items-center gap-2 p-[0.6vw] px-[2vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative 
             ${isActiveTurn ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee] scale-105' : 'border-white/10'}
-            ${isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : ''}`}>
+            ${isWinner && isShowdown ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : ''}`}>
             <div className="flex flex-col items-center">
                 <div className="flex items-center gap-2">
                     {player?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full shadow-[0_0_0.5vw_red] animate-pulse" />}
                     <span className="text-[1.1vw] font-black text-white leading-none uppercase tracking-widest">{String(player?.name || "Player")}</span>
                 </div>
-                <span className={`text-[1.2vw] font-mono font-black mt-1.5 ${isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(player?.chips || 0)}</span>
+                <span className={`text-[1.2vw] font-mono font-black mt-1.5 ${isWinner && isShowdown ? 'text-emerald-400 animate-pulse' : 'text-emerald-500/80'}`}>${Number(player?.chips || 0)}</span>
             </div>
         </div>
+
+        {/* INDIVIDUAL BET BUBBLE & COLLISION ANIMATION */}
+        {player.currentBet > 0 && (
+            <div 
+                className={`absolute bg-[#fbbf24] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-lg transition-all duration-[800ms] ease-in-out z-[100]`}
+                style={{ 
+                    top: isCollectingBets ? `${43 - displayPos.y}vh` : '-1.5vw', 
+                    left: isCollectingBets ? `${50 - displayPos.x}vw` : '50%',
+                    transform: `translate(-50%, -100%) ${isCollectingBets ? 'scale(0) rotate(180deg)' : 'scale(1)'}`,
+                    opacity: isCollectingBets ? 0 : 1
+                }}
+            >
+                ${player.currentBet}
+            </div>
+        )}
 
         {player?.hand?.length > 0 && !player.isFolded && (
             <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mb-4 overflow-visible">
@@ -85,10 +99,10 @@ const Seat = ({
             })}
             </div>
         )}
-        {/* Strength Bubble h-7 Restore */}
+        
         {strengthLabel && !player.isFolded && phase !== PHASES.IDLE && !isShowdown && (
             <div className="h-7 px-3 bg-purple-600 border border-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] mb-2 flex items-center animate-in fade-in">
-            <span className="text-[9px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
+                <span className="text-[9px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
             </div>
         )}
         </div>
@@ -114,13 +128,13 @@ const App = () => {
   const [potData, setPotData] = useState([{ label: 'MAIN', amount: 0 }]);
   const [activeIdx, setActiveIdx] = useState(-1);
   const [highestBet, setHighestBet] = useState(0);
-  const [lastRaiseAmt, setLastRaiseAmt] = useState(40);
   const [winning5Ids, setWinning5Ids] = useState([]);
   const [winningPlayerIndices, setWinningPlayerIndices] = useState([]); 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [raiseAmount, setRaiseAmount] = useState(0);
   const [logs, setLogs] = useState([]);
-  const [potTransferring, setPotTransferring] = useState(false);
+  const [isCollectingBets, setIsCollectingBets] = useState(false);
+  const [visiblePotAmount, setVisiblePotAmount] = useState(0);
 
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 5000, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 10, bb: 20, minBuy: 400, maxBuy: 2000 });
@@ -129,6 +143,19 @@ const App = () => {
   useEffect(() => {
     socket.on('roomUpdate', (data) => {
         if (!data?.players) return;
+        
+        // COLLISION ANIMATION LOGIC: Detect street transition
+        const isPhaseChanging = data.phase !== phase && phase !== PHASES.IDLE;
+        if (isPhaseChanging) {
+            setIsCollectingBets(true);
+            setTimeout(() => {
+                setIsCollectingBets(false);
+                setVisiblePotAmount(data.potData?.[0]?.amount || 0);
+            }, 800);
+        } else {
+            setVisiblePotAmount(data.potData?.[0]?.amount || 0);
+        }
+
         const nextPlayers = [...INITIAL_PLAYERS];
         data.players.forEach((p, i) => { if (p) nextPlayers[i] = p; });
         setPlayers(nextPlayers);
@@ -137,14 +164,8 @@ const App = () => {
         setActiveVariant(data.activeVariant || VARIANTS.HOLDEM);
         setHighestBet(data.highestBet);
         setActiveIdx(data.activeIdx);
-        setPotData(data.potData || [{ label: 'MAIN', amount: 0 }]);
         setWinning5Ids(data.winning5Ids || []);
         setWinningPlayerIndices(data.winningPlayerIndices || []);
-        
-        if (data.phase === PHASES.SHOWDOWN) {
-            setPotTransferring(true);
-            setTimeout(() => setPotTransferring(false), 4000);
-        }
     });
 
     socket.on('lobbyUpdate', (list) => setActiveTables(list));
@@ -155,7 +176,7 @@ const App = () => {
         setLogs(prev => [logEntry, ...prev].slice(0, 50));
     });
     return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('log'); };
-  }, []);
+  }, [phase]);
 
   const heroSeatIdx = useMemo(() => {
       if (!userProfile) return -1;
@@ -166,7 +187,9 @@ const App = () => {
   const isShowdown = phase === PHASES.SHOWDOWN;
   const isWinnerHero = isShowdown && heroSeatIdx !== -1 && (winningPlayerIndices || []).includes(heroSeatIdx);
   const isHeroTurn = activeIdx !== -1 && heroSeatIdx !== -1 && activeIdx === heroSeatIdx && phase !== PHASES.IDLE && phase !== PHASES.SHOWDOWN;
-  const currentPotOnTable = useMemo(() => (potData.reduce((acc, p) => acc + (p.amount || 0), 0)) + (players.reduce((s, p) => s + (p?.currentBet || 0), 0)), [potData, players]);
+  
+  // HUD AUTHORITATIVE CALL AMOUNT
+  const callRequired = highestBet - (userSeat?.currentBet || 0);
 
   // Authoritative Real-Time Hand Evaluation for HUD
   const getCurrentStrength = useCallback((player) => {
@@ -311,13 +334,13 @@ const App = () => {
               {players.map((p, i) => {
                 if (!p || (userProfile && p.uid === userProfile.uid)) return null;
                 const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
-                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={getCurrentStrength(p)} />;
+                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={getCurrentStrength(p)} isCollectingBets={isCollectingBets} />;
               })}
             </div>
             <div className="absolute inset-0 bg-emerald-950/5 rounded-[40%] border-[1.5vw] border-slate-900 shadow-[inset_0_0_15vw_rgba(0,0,0,0.9)]" />
             <div className={`absolute top-[43%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center z-30 pointer-events-none`}>
-              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms]`} style={{ top: potTransferring ? `${winnerPos.y - 43}vh` : '-4vw', left: potTransferring ? `${winnerPos.x - 50}vw` : '50%', transform: `translate(-50%, -50%) ${potTransferring ? 'scale(0.3)' : 'scale(1)'}`, opacity: 1 }}>
-                <div className="text-[4vw] font-black text-yellow-400 font-mono tracking-tighter">${Number(currentPotOnTable)}</div>
+              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms]`} style={{ transform: `translate(-50%, -50%)`, opacity: 1, top: '-4vw' }}>
+                <div className="text-[4vw] font-black text-yellow-400 font-mono tracking-tighter">${Number(visiblePotAmount)}</div>
               </div>
               <div className="flex gap-2 scale-[1.7]">
                   {community.map((c, i) => (<div key={i} className="w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-slate-950 font-black shadow-lg"><span className="text-[0.9vw]">{c.value}</span><span className={`text-[1.8vw] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : ''}`}>{c.suit}</span></div>))}
@@ -337,7 +360,7 @@ const App = () => {
                   )}
               </div>
               {/* EVALUATION BUBBLE - h-7 */}
-              {userSeat && !isShowdown && phase !== PHASES.IDLE && (<div className="z-[5001] h-7 px-3 py-1 bg-purple-600/95 border border-purple-300/30 rounded-full shadow-[0_0_2vw_rgba(147,51,234,0.6)] animate-in fade-in transition-all flex items-center relative -mt-3 mb-1"><span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">{String(getCurrentStrength(userSeat) || "High Card")}</span></div>)}
+              {userSeat && !isShowdown && phase !== PHASES.IDLE && (<div className="z-[5001] h-7 px-3 py-1 bg-purple-600/95 border border-purple-300/30 rounded-full shadow-[0_0_2vw_rgba(147,51,234,0.6)] animate-in fade-in transition-all flex items-center relative -mt-3 mb-1"><span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">{String(getCurrentStrength(userSeat) || "Evaluating...")}</span></div>)}
               {userSeat && (<div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat.isWinner && isShowdown ? 'border-yellow-400 scale-110 shadow-[0_0_1.5vw_#fbbf24]' : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}><div className="flex flex-col items-center"><div className="flex items-center gap-2">{userSeat.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat.chips)}</span></div></div>)}
             </div>
         </div>
@@ -353,7 +376,7 @@ const App = () => {
             <div className="flex flex-col justify-between items-center w-full h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
               <div className="flex gap-4 justify-center items-center w-full mt-0"><div className="flex gap-4"><button onClick={() => handleAction('RAISE', Math.min(userSeat.chips + userSeat.currentBet, Math.floor(currentPotOnTable * 0.5 + highestBet)))} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-slate-300 hover:brightness-125 transition-all flex items-center justify-center">1/2 POT</button><button onClick={() => handleAction('RAISE', Math.min(userSeat.chips + userSeat.currentBet, currentPotOnTable + highestBet))} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-[#fbbf24] hover:brightness-125 transition-all flex items-center justify-center">POT</button><button onClick={() => handleAction('RAISE', userSeat.chips + userSeat.currentBet)} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-red-500 hover:brightness-125 transition-all flex items-center justify-center">MAX</button></div></div>
               <div className="flex items-center justify-between gap-0 w-full px-4 flex-1"><div className="flex-1 flex items-center h-12 pr-4"><input type="range" min={highestBet + 20} max={userSeat.chips + userSeat.currentBet} step="10" value={raiseAmount} onChange={(e) => setRaiseAmount(Number(e.target.value))} className="gold-slider" /></div><div className="w-32 h-10 flex items-center bg-[#06080c] border border-white/10 rounded-lg px-3 shadow-inner"><span className="text-[#fbbf24] font-black mr-1 text-sm">$</span><input type="number" value={raiseAmount} onChange={(e) => setRaiseAmount(Math.max(0, Math.min(userSeat.chips + userSeat.currentBet, parseInt(e.target.value) || 0)))} className="bg-transparent border-none outline-none text-[#fbbf24] font-mono font-black w-full text-base" /></div></div>
-              <div className="flex items-center justify-center gap-8 w-full mb-0"><button onClick={() => handleAction('FOLD')} className="w-32 h-12 bg-red-950/40 border border-red-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-lg tracking-widest">FOLD</button><button onClick={() => handleAction('CALL')} className="w-48 h-12 bg-blue-950/40 border border-blue-500/50 rounded-full font-black text-base uppercase hover:brightness-125 shadow-lg tracking-widest">{highestBet > userSeat.currentBet ? `CALL $${highestBet - userSeat.currentBet}` : 'CHECK'}</button><button onClick={() => handleAction('RAISE', raiseAmount)} className="w-32 h-12 bg-emerald-950/40 border border-emerald-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-xl transition-all tracking-widest flex items-center justify-center"><Zap size={20} className="mr-2"/>RAISE</button></div>
+              <div className="flex items-center justify-center gap-8 w-full mb-0"><button onClick={() => handleAction('FOLD')} className="w-32 h-12 bg-red-950/40 border border-red-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-lg tracking-widest">FOLD</button><button onClick={() => handleAction('CALL')} className="w-48 h-12 bg-blue-950/40 border border-blue-500/50 rounded-full font-black text-base uppercase hover:brightness-125 shadow-lg tracking-widest">{callRequired > 0 ? `CALL $${callRequired}` : 'CHECK'}</button><button onClick={() => handleAction('RAISE', raiseAmount)} className="w-32 h-12 bg-emerald-950/40 border border-emerald-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-xl transition-all tracking-widest flex items-center justify-center"><Zap size={20} className="mr-2"/>RAISE</button></div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-4 h-full">
