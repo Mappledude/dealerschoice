@@ -129,12 +129,13 @@ const processShowdown = (roomId) => {
     room.phase = PHASES.SHOWDOWN;
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     
-    // Evaluate hands for all active players
+    // Evaluate hands combinatorialy
     const evals = activeIndices.map(i => ({ 
         index: i, 
         best: getBestHand(room.players[i].hand, room.community) 
     }));
     
+    // Split pot detection
     evals.sort((a, b) => b.best.power - a.best.power);
     const topPower = evals[0].best.power;
     const winners = evals.filter(e => e.best.power === topPower);
@@ -336,7 +337,6 @@ io.on('connection', (socket) => {
     socket.on('adminForceDeal', (roomId) => runIgnition(roomId));
     socket.on('adminNuclearReset', () => { globalProfiles=[]; rooms={}; io.emit('profilesUpdate',[]); io.emit('lobbyUpdate',[]); saveToDisk(); });
     
-    // --- AUTHORITATIVE WALLET EDITOR: Syncs to local disk and all clients ---
     socket.on('adminEditChips', (d) => {
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) {
@@ -368,4 +368,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative Persistence Engine: ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Authoritative Backend Running`));
