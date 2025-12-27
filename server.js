@@ -129,6 +129,7 @@ const processShowdown = (roomId) => {
     room.phase = PHASES.SHOWDOWN;
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     
+    // Evaluate hands for all active players
     const evals = activeIndices.map(i => ({ 
         index: i, 
         best: getBestHand(room.players[i].hand, room.community) 
@@ -151,10 +152,9 @@ const processShowdown = (roomId) => {
     room.winning5Ids = winners[0].best.cards.map(c => c.id);
     room.winningPlayerIndices = winners.map(w => w.index);
 
-    const winnerNames = winners.map(w => room.players[w.index].name).join(' and ');
-
     if (winners.length > 1) {
-        io.to(roomId).emit('log', { action: `Pot Split between ${winnerNames} ($${share} each)!`, type: 'win' });
+        const names = winners.map(w => room.players[w.index].name).join(' and ');
+        io.to(roomId).emit('log', { action: `Pot Split between ${names} ($${share} each)!`, type: 'win' });
     } else {
         io.to(roomId).emit('log', { name: String(room.players[winners[0].index].name), action: `wins $${totalPot} with a ${winners[0].best.name}!`, type: 'win' });
     }
@@ -182,7 +182,6 @@ const advancePhase = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
     collectBets(room);
-    
     if (room.phase === PHASES.PRE_FLOP) {
         room.phase = PHASES.FLOP;
         room.community = [room.deck.pop(), room.deck.pop(), room.deck.pop()];
@@ -243,7 +242,7 @@ const runIgnition = (roomId) => {
     room.community = [];
     room.potData = [{ label: 'MAIN', amount: 0 }];
     io.to(roomId).emit('roomUpdate', room);
-    io.to(roomId).emit('log', { action: `Dealer ${dealer.name} chosen ${room.activeVariant.name}`, type: 'system' });
+    io.to(roomId).emit('log', { action: `Dealer ${dealer.name} chose ${room.activeVariant.name}`, type: 'system' });
     saveToDisk();
 };
 
@@ -293,10 +292,8 @@ io.on('connection', (socket) => {
             io.to(roomId).emit('log', { name: String(player.name), action: diff > 0 ? `Calls $${diff}` : "Checks" });
         }
         else if (type === 'RAISE') {
-            // --- MIN RAISE LOGIC: Prevent $0 raises or small raises ---
             const minRaise = room.highestBet + room.bb;
             const targetAmount = Math.max(amount, minRaise);
-            
             const diff = targetAmount - player.currentBet;
             player.chips -= diff;
             player.currentBet = targetAmount;
@@ -339,6 +336,7 @@ io.on('connection', (socket) => {
     socket.on('adminForceDeal', (roomId) => runIgnition(roomId));
     socket.on('adminNuclearReset', () => { globalProfiles=[]; rooms={}; io.emit('profilesUpdate',[]); io.emit('lobbyUpdate',[]); saveToDisk(); });
     
+    // --- AUTHORITATIVE WALLET EDITOR: Syncs to local disk and all clients ---
     socket.on('adminEditChips', (d) => {
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) {
