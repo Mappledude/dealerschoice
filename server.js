@@ -157,14 +157,14 @@ const processShowdown = (roomId) => {
         best: getBestHand(room.players[i].hand, room.community) 
     })).filter(e => e.best !== null);
     
-    // --- SHOWDOWN SAFETY CHECK ---
+    // SHOWDOWN SAFETY CHECK
     if (!evals || evals.length === 0) {
         room.phase = PHASES.IDLE;
         io.to(roomId).emit('roomUpdate', room);
         return;
     }
     
-    // --- MUFLIS LOGIC ---
+    // --- MUFLIS LOGIC INVERSION ---
     const isMuflis = room.activeVariant?.id === 'MUFLIS';
     evals.sort((a, b) => isMuflis ? (a.best.power - b.best.power) : (b.best.power - a.best.power));
     
@@ -320,16 +320,40 @@ io.on('connection', (socket) => {
             if (room.dealerIdx === -1) room.dealerIdx = slot;
         }
         io.to(data.roomId).emit('roomUpdate', room);
-        cb({ status: 'ok' });
+        if(cb) cb({ status: 'ok' });
         if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) setTimeout(() => runIgnition(data.roomId), 3000);
     });
 
     socket.on('playerAction', (data) => handleAction(data.roomId, data.type, data.amount));
-    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); cb({status:'ok'}); saveToDisk(); });
+    
+    // --- ADMIN RE-INTEGRATION ---
+    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); if(cb) cb({status:'ok'}); saveToDisk(); });
     socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array.from({length:10},()=>null), community:[], phase:PHASES.IDLE, potData:[{amount:0}], dealerIdx:-1, activeIdx:-1 }; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
+    
     socket.on('adminEditChips', (d) => {
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) { p.chips = d.chips; io.emit('profilesUpdate', globalProfiles); saveToDisk(); }
+    });
+
+    // --- BOT UTILITY RESTORATION ---
+    socket.on('adminAddBot', (roomId) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        const botId = 'bot_' + Math.random().toString(36).substr(2, 5);
+        const botProfile = { name: "BOT_"+botId.toUpperCase(), uid: botId, chips: 5000, isBot: true };
+        const slot = room.players.findIndex(p => p === null);
+        if (slot !== -1) {
+            room.players[slot] = { ...botProfile, buyInOrigin: 5000, pendingVariant: 'HOLDEM', currentBet: 0, hand: [], isWinner: false, isFolded: false, hasActed: false, socketId: 'internal' };
+            io.to(roomId).emit('roomUpdate', room);
+            if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) runIgnition(roomId);
+            saveToDisk();
+        }
+    });
+
+    socket.on('adminDeletePlayer', (uid) => {
+        globalProfiles = globalProfiles.filter(p => p.uid !== uid);
+        io.emit('profilesUpdate', globalProfiles);
+        saveToDisk();
     });
 
     socket.on('disconnecting', () => {
@@ -352,4 +376,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative stable engine: ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Authoritative Stable v1.0.9 Engine: ${PORT}`));
