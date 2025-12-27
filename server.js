@@ -93,6 +93,7 @@ const rankFiveCardHand = (cards) => {
 };
 
 const getBestHand = (holeCards, community) => {
+    if (!holeCards || !Array.isArray(holeCards)) return null;
     const fullPool = [...holeCards, ...community];
     if (fullPool.length < 5) return null;
     const combos = getCombinations(fullPool, 5);
@@ -254,19 +255,27 @@ const runIgnition = (roomId) => {
     let deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s })));
     for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
     room.deck = deck;
+    
+    // --- COMPLETE ARRAY POPULATION BEFORE BROADCAST ---
     room.players = room.players.map((p, i) => {
         if (!p) return null;
         let hand = [];
-        for (let j = 0; j < room.activeVariant.holeCards; j++) hand.push(room.deck.pop());
+        for (let j = 0; j < room.activeVariant.holeCards; j++) {
+            const card = room.deck.pop();
+            if (card) hand.push(card);
+        }
         let bet = (i === sbIdx) ? room.sb : (i === bbIdx) ? room.bb : 0;
         return { ...p, hand, chips: p.chips - bet, buyInOrigin: p.chips, currentBet: bet, isFolded: false, isWinner: false, hasActed: false, isDealer: (i === room.dealerIdx) };
     });
+    
     room.phase = PHASES.PRE_FLOP;
     room.highestBet = room.bb;
     room.community = [];
     room.potData = [{ label: 'MAIN', amount: 0 }];
+    
     io.to(roomId).emit('roomUpdate', room);
     startShotClock(roomId);
+    saveToDisk();
 };
 
 const handleAction = (roomId, type, amount) => {
@@ -316,20 +325,41 @@ io.on('connection', (socket) => {
         socket.join(data.roomId);
         const slot = room.players.findIndex(p => p === null);
         if (slot !== -1 && !room.players.find(p => p && p.uid === data.profile.uid)) {
-            room.players[slot] = { ...data.profile, buyInOrigin: data.buyIn, chips: data.buyIn, socketId: socket.id };
+            room.players[slot] = { ...data.profile, buyInOrigin: data.buyIn, chips: data.buyIn, socketId: socket.id, hand: [] };
             if (room.dealerIdx === -1) room.dealerIdx = slot;
         }
         io.to(data.roomId).emit('roomUpdate', room);
-        cb({ status: 'ok' });
+        if(cb) cb({ status: 'ok' });
         if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) setTimeout(() => runIgnition(data.roomId), 3000);
     });
 
     socket.on('playerAction', (data) => handleAction(data.roomId, data.type, data.amount));
-    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); cb({status:'ok'}); saveToDisk(); });
+    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); if(cb) cb({status:'ok'}); saveToDisk(); });
     socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array.from({length:10},()=>null), community:[], phase:PHASES.IDLE, potData:[{amount:0}], dealerIdx:-1, activeIdx:-1 }; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
     socket.on('adminEditChips', (d) => {
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) { p.chips = d.chips; io.emit('profilesUpdate', globalProfiles); saveToDisk(); }
+    });
+
+    // --- BOT ACTION FIX: Initialize hand as empty array ---
+    socket.on('adminAddBot', (roomId) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        const botId = 'bot_' + Math.random().toString(36).substr(2, 5);
+        const botProfile = { name: "BOT_"+botId.toUpperCase(), uid: botId, chips: 5000, isBot: true };
+        const slot = room.players.findIndex(p => p === null);
+        if (slot !== -1) {
+            room.players[slot] = { ...botProfile, buyInOrigin: 5000, pendingVariant: 'HOLDEM', currentBet: 0, hand: [], isWinner: false, isFolded: false, hasActed: false, socketId: 'internal' };
+            io.to(roomId).emit('roomUpdate', room);
+            if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) runIgnition(roomId);
+            saveToDisk();
+        }
+    });
+
+    socket.on('adminDeletePlayer', (uid) => {
+        globalProfiles = globalProfiles.filter(p => p.uid !== uid);
+        io.emit('profilesUpdate', globalProfiles);
+        saveToDisk();
     });
 
     socket.on('disconnecting', () => {
