@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 
 const httpServer = createServer(app);
-// --- CORS & ORIGIN LOCKDOWN (v1.2.1 Production) ---
+// --- CORS & ORIGIN LOCKDOWN (v1.2.2 Production) ---
 const io = new Server(httpServer, {
     cors: { 
         origin: true, 
@@ -127,51 +127,6 @@ const getBestHand = (holeCards, community) => {
     return best;
 };
 
-// --- PRO-BOT AI ---
-
-const executeBotAction = (roomId) => {
-    const room = rooms[roomId];
-    if (!room || room.activeIdx === -1) return;
-    const p = room.players[room.activeIdx];
-    if (!p || !p.isBot) return;
-
-    const delay = 1200 + Math.random() * 600;
-
-    setTimeout(() => {
-        const r = rooms[roomId];
-        if (!r || r.activeIdx === -1) return;
-        const bot = r.players[r.activeIdx];
-        if (!bot || !bot.isBot) return;
-
-        const best = getBestHand(bot.hand, r.community);
-        const power = best ? best.power : 0;
-        const isMuflis = r.activeVariant?.id === 'MUFLIS';
-        const callAmt = r.highestBet - bot.currentBet;
-        const potSize = (r.potData?.[0]?.amount || 0) + r.players.reduce((a, b) => a + (b?.currentBet || 0), 0);
-
-        let action = 'CHECK';
-        let raiseTo = 0;
-
-        if (isMuflis) {
-            if (power < 1e10) { 
-                action = 'RAISE';
-                raiseTo = r.highestBet + Math.floor(potSize * 0.5);
-            } else if (power > 3e10) {
-                action = callAmt === 0 ? 'CALL' : 'FOLD';
-            } else { action = 'CALL'; }
-        } else {
-            if (power >= 3e10) { 
-                action = 'RAISE';
-                raiseTo = r.highestBet + Math.max(r.bb, Math.floor(potSize * 0.5));
-            } else if (power >= 1e10 || Math.random() < 0.1) {
-                action = (callAmt > bot.chips * 0.3) ? 'FOLD' : 'CALL';
-            } else { action = callAmt === 0 ? 'CALL' : 'FOLD'; }
-        }
-
-        handleAction(roomId, action, raiseTo);
-    }, delay);
-};
-
 // --- GAME LOGIC HELPERS ---
 
 const clearShotClock = (roomId) => {
@@ -187,8 +142,6 @@ const startShotClock = (roomId) => {
     if (!room || room.activeIdx === -1) return;
 
     room.timeRemaining = 30;
-    if (room.players[room.activeIdx]?.isBot) executeBotAction(roomId);
-
     roomIntervals[roomId] = setInterval(() => {
         const r = rooms[roomId];
         if (!r || r.activeIdx === -1) { clearShotClock(roomId); return; }
@@ -275,11 +228,7 @@ const processShowdown = (roomId) => {
         room.community = [];
         room.winning5Ids = [];
         room.winningPlayerIndices = [];
-        room.players.forEach(p => { 
-            if (p) { 
-                p.hand = []; p.isWinner = false; p.isFolded = false; p.currentBet = 0; p.hasActed = false; p.isAllIn = false;
-            } 
-        });
+        room.players.forEach(p => { if (p) { p.hand = []; p.isWinner = false; p.isFolded = false; p.currentBet = 0; p.hasActed = false; p.isAllIn = false; } });
         const seated = room.players.map((p, i) => p ? i : null).filter(x => x !== null);
         if (seated.length > 0) {
             const dPos = seated.indexOf(room.dealerIdx);
@@ -392,14 +341,14 @@ const runIgnition = (roomId) => {
     room.highestBet = room.bb;
     room.community = [];
     room.potData = [{ label: 'MAIN', amount: 0 }];
-    io.to(roomId).emit('log', { action: `DEALER ${dealer.name} selected ${room.activeVariant.name} for this hand.`, type: 'system' });
+    io.to(roomId).emit('log', { action: `DEALER ${dealer.name} selected ${room.activeVariant.name}.`, type: 'system' });
     io.to(roomId).emit('roomUpdate', room);
     startShotClock(roomId);
 };
 
 io.on('connection', (socket) => {
     socket.on('playerLogin', (data) => {
-        console.log('Login attempt for password:', data.password);
+        console.log('Login attempt for password:', data.password); // P1 Recovery Logging
         const profile = globalProfiles.find(p => p.password === data.password);
         if (profile) { 
             socket.emit('loginSuccess', profile); 
