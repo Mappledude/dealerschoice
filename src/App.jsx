@@ -59,12 +59,11 @@ const Seat = ({
             </div>
         </div>
 
-        {/* --- BET BUBBLE: Anchor logic prevents board overlap --- */}
+        {/* --- BET BUBBLE: Anchor logic avoids board overlap --- */}
         {player.currentBet > 0 && (
             <div 
                 className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[250]`}
                 style={{ 
-                    // Move "inside" the tablefelt relative to the seat
                     top: isCollectingBets ? `${43 - displayPos.y}vh` : (displayPos.y > 50 ? '-6vw' : '6vw'), 
                     left: isCollectingBets ? `${50 - displayPos.x}vw` : '50%',
                     transform: `translate(-50%, -100%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
@@ -87,7 +86,7 @@ const Seat = ({
                     className={`w-[2.5vw] h-[3.5vw] rounded-[0.4vw] flex flex-col items-start justify-start p-[0.2vw] border shadow-lg absolute transition-all duration-300
                     ${isShowdown ? 'bg-white text-slate-950' : 'bg-gradient-to-br from-slate-700 to-black'} 
                     ${isWinningCard ? 'ring-4 ring-yellow-400 shadow-[0_0_25px_#fbbf24] z-[100] border-white' : 'border-white/40'}
-                    ${isShowdown && !isWinningCard ? 'opacity-40 scale-90' : ''}`} 
+                    ${isShowdown && !isWinningCard ? 'opacity-40 scale-90 grayscale' : ''}`} 
                     style={{ transform: `translateX(${fanOffset}vw) rotate(${rotation}deg) scale(1.5)`, transformOrigin: 'bottom center' }}
                 >
                     {isShowdown ? (
@@ -102,6 +101,7 @@ const Seat = ({
             </div>
         )}
         
+        {/* --- SECURITY: Isolated bubbles for Hero or during Showdown --- */}
         {strengthLabel && !player.isFolded && phase !== PHASES.IDLE && (isHero || isShowdown) && (
             <div className="h-7 px-3 bg-purple-600 border border-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] mb-2 flex items-center animate-in fade-in">
                 <span className="text-[9px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
@@ -383,22 +383,30 @@ const App = () => {
               })}
             </div>
             <div className="absolute inset-0 bg-emerald-950/5 rounded-[40%] border-[1.5vw] border-slate-900 shadow-[inset_0_0_15vw_rgba(0,0,0,0.9)]" />
+            
+            {/* CENTRAL POT CONTAINER */}
             <div className={`absolute top-[43%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center z-30 pointer-events-none`}>
-              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms]`} style={{ transform: `translate(-50%, -50%)`, opacity: 1, top: '-4vw' }}>
+              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms] ease-out`} 
+                   style={{ 
+                       transform: `translate(-50%, -50%) ${potTransferring ? 'scale(0.2)' : 'scale(1)'}`, 
+                       opacity: potTransferring ? 0 : 1, 
+                       top: potTransferring ? `${winnerPos.y - 43}vh` : '-4vw',
+                       left: potTransferring ? `${winnerPos.x - 50}vw` : '50%'
+                   }}>
                 <div className="text-[4vw] font-black text-yellow-400 font-mono tracking-tighter shadow-black drop-shadow-2xl">${Number(visiblePotAmount)}</div>
               </div>
               <div className="flex gap-2 scale-[1.7]">
-                  {community.map((c, i) => (<div key={i} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-slate-950 font-black shadow-lg transition-all duration-300 ${Array.isArray(winning5Ids) && winning5Ids.includes(c.id) ? 'ring-4 ring-yellow-400' : ''}`}><span className="text-[0.9vw]">{c.value}</span><span className={`text-[1.8vw] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : ''}`}>{c.suit}</span></div>))}
+                  {community.map((c, i) => (<div key={i} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-slate-950 font-black shadow-lg transition-all duration-300 ${Array.isArray(winning5Ids) && winning5Ids.includes(c.id) ? 'ring-4 ring-yellow-400 z-[300]' : ''}`}><span className="text-[0.9vw]">{c.value}</span><span className={`text-[1.8vw] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : ''}`}>{c.suit}</span></div>))}
               </div>
             </div>
             
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className="absolute flex flex-col items-center z-50">
-              {/* HERO BET BUBBLE: Positioned North of cards for visibility */}
+              {/* HERO BET BUBBLE: Positioned strictly North of cards */}
               {userSeat?.currentBet > 0 && (
                 <div 
-                  className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-white/20 transition-all duration-[800ms] z-[250]`}
+                  className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] z-[250]`}
                   style={{ 
-                    top: isCollectingBets ? `${43 - 98}vh` : '-10vw', // Pushed North of cards
+                    top: isCollectingBets ? `${43 - 98}vh` : '-11vw', // Pushed significantly North to clear HUD
                     left: '50%',
                     transform: `translate(-50%, 0%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
                     opacity: isCollectingBets ? 0 : 1
@@ -412,7 +420,7 @@ const App = () => {
                   {userSeat && !userSeat.isFolded && phase !== PHASES.IDLE && (
                     <div className="relative flex items-center justify-center w-full h-full scale-[1.5]">
                       {userSeat.hand.map((c, ci) => (
-                        <div key={ci} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border border-white/40 flex flex-col items-start p-[0.3vw] font-bold absolute bg-white text-slate-950 shadow-2xl transition-all duration-300 ${isWinnerHero && phase === PHASES.SHOWDOWN && Array.isArray(winning5Ids) && winning5Ids.includes(c.id) ? 'ring-4 ring-yellow-400 z-[200]' : ''}`} style={{ transform: `translateX(${(ci - (userSeat.hand.length-1)/2) * 2.5}vw) rotate(${(ci - (userSeat.hand.length-1)/2) * 10}deg)`, transformOrigin: 'bottom center' }}>
+                        <div key={ci} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border border-white/40 flex flex-col items-start p-[0.3vw] font-bold absolute bg-white text-slate-950 shadow-2xl transition-all duration-300 ${isWinnerHero && phase === PHASES.SHOWDOWN && Array.isArray(winning5Ids) && winning5Ids.includes(c.id) ? 'ring-4 ring-yellow-400 z-[200]' : (phase === PHASES.SHOWDOWN && !isWinnerHero ? 'opacity-40 grayscale scale-90' : '')}`} style={{ transform: `translateX(${(ci - (userSeat.hand.length-1)/2) * 2.5}vw) rotate(${(ci - (userSeat.hand.length-1)/2) * 10}deg)`, transformOrigin: 'bottom center' }}>
                             <span className="text-[1vw] font-black leading-none">{c.value}</span><span className={`text-[1.5vw] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : ''}`}>{c.suit}</span>
                         </div>
                       ))}
@@ -421,7 +429,7 @@ const App = () => {
               </div>
               {/* EVALUATION BUBBLE - h-7 */}
               {userSeat && !isShowdown && phase !== PHASES.IDLE && (<div className="z-[5001] h-7 px-3 py-1 bg-purple-600/95 border border-purple-300/30 rounded-full shadow-[0_0_2vw_rgba(147,51,234,0.6)] animate-in fade-in transition-all flex items-center relative -mt-3 mb-1"><span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">{String(getCurrentStrength(userSeat) || "Evaluating...")}</span></div>)}
-              {userSeat && (<div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat.isWinner && isShowdown ? 'border-yellow-400 scale-110 shadow-[0_0_1.5vw_#22d3ee]' : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}><div className="flex flex-col items-center"><div className="flex items-center gap-2">{userSeat.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat.chips)}</span></div></div>)}
+              {userSeat && (<div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat.isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}><div className="flex flex-col items-center"><div className="flex items-center gap-2">{userSeat.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat.chips)}</span></div></div>)}
             </div>
         </div>
       </main>
