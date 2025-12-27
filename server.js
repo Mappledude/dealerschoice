@@ -115,7 +115,7 @@ const collectBets = (room) => {
             p.hasActed = false; 
         }
     });
-    if (!room.potData) room.potData = [{ amount: 0 }];
+    if (!room.potData) room.potData = [{ label: 'MAIN', amount: 0 }];
     room.potData[0].amount += streetPot;
     room.highestBet = 0;
     room.lastRaiseAmt = room.bb || 20;
@@ -175,7 +175,6 @@ const advancePhase = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
     collectBets(room);
-    const shuffleArray = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
     
     if (room.phase === PHASES.PRE_FLOP) {
         room.phase = PHASES.FLOP;
@@ -255,10 +254,7 @@ io.on('connection', (socket) => {
         const { roomId, profile, buyIn } = data;
         const room = rooms[roomId];
         if (!room) return;
-        
-        // --- ROOM INTEGRITY: Ensure Join before State emission ---
         socket.join(roomId);
-        
         if (room.players.findIndex(p => p && p.uid === profile.uid) === -1) {
             const slot = room.players.findIndex(p => p === null);
             if (slot !== -1) {
@@ -266,14 +262,10 @@ io.on('connection', (socket) => {
                 if (room.dealerIdx === -1) room.dealerIdx = slot;
             }
         }
-        
         io.to(roomId).emit('roomUpdate', room);
         if (callback) callback({ status: 'ok' });
         saveToDisk();
-
-        if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) { 
-            setTimeout(() => runIgnition(roomId), 3000); 
-        }
+        if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) { setTimeout(() => runIgnition(roomId), 3000); }
     });
 
     socket.on('playerAction', (data) => {
@@ -333,8 +325,25 @@ io.on('connection', (socket) => {
     socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array.from({length:10},()=>null), community:[], phase:PHASES.IDLE, potData:[{amount:0}], dealerIdx:-1, activeIdx:-1 }; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
     socket.on('adminDeletePlayer', (uid) => { globalProfiles = globalProfiles.filter(p => p.uid !== uid); io.emit('profilesUpdate', globalProfiles); saveToDisk(); });
     socket.on('adminDeleteRoom', (id) => { delete rooms[id]; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
+    socket.on('adminForceDeal', (roomId) => runIgnition(roomId));
     socket.on('adminNuclearReset', () => { globalProfiles=[]; rooms={}; io.emit('profilesUpdate',[]); io.emit('lobbyUpdate',[]); saveToDisk(); });
+    
+    socket.on('adminEditChips', (d) => {
+        const p = globalProfiles.find(p => p.uid === d.uid);
+        if (p) {
+            p.chips = d.chips;
+            io.emit('profilesUpdate', globalProfiles);
+            Object.values(rooms).forEach(r => {
+                const rp = r.players.find(rp => rp && rp.uid === d.uid);
+                if (rp) {
+                    rp.chips = d.chips;
+                    io.to(r.id).emit('roomUpdate', r);
+                }
+            });
+            saveToDisk();
+        }
+    });
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative Persistence Engine: ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Authoritative Backend Running: ${PORT}`));
