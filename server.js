@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import fs from 'fs';
 
 const app = express();
 app.use(cors());
@@ -11,9 +12,35 @@ const io = new Server(httpServer, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// --- GLOBAL BACKEND MEMORY ---
+// --- PERSISTENCE ENGINE ---
+const DB_PATH = './poker_db.json';
 let globalProfiles = []; 
 let rooms = {}; 
+
+const saveToDisk = () => {
+    try {
+        const data = JSON.stringify({ globalProfiles, rooms }, null, 2);
+        fs.writeFileSync(DB_PATH, data);
+    } catch (err) {
+        console.error("Persistence Error:", err);
+    }
+};
+
+const loadFromDisk = () => {
+    try {
+        if (fs.existsSync(DB_PATH)) {
+            const raw = fs.readFileSync(DB_PATH);
+            const data = JSON.parse(raw);
+            globalProfiles = data.globalProfiles || [];
+            rooms = data.rooms || {};
+            console.log("Database Hydrated from Disk.");
+        }
+    } catch (err) {
+        console.error("Hydration Error:", err);
+    }
+};
+
+loadFromDisk();
 
 const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const SUITS = ['♠', '♣', '♥', '♦'];
@@ -88,10 +115,11 @@ const collectBets = (room) => {
             p.hasActed = false; 
         }
     });
-    if (!room.potData) room.potData = [{ label: 'MAIN', amount: 0 }];
+    if (!room.potData) room.potData = [{ amount: 0 }];
     room.potData[0].amount += streetPot;
     room.highestBet = 0;
     room.lastRaiseAmt = room.bb || 20;
+    saveToDisk();
 };
 
 const processShowdown = (roomId) => {
@@ -110,7 +138,6 @@ const processShowdown = (roomId) => {
     const winnerData = evals[0];
     const winner = room.players[winnerData.index];
     
-    // Final collection
     collectBets(room);
     const winAmount = room.potData[0].amount;
 
@@ -126,6 +153,8 @@ const processShowdown = (roomId) => {
         type: 'win' 
     });
 
+    saveToDisk();
+
     setTimeout(() => {
         if (!rooms[roomId]) return;
         room.phase = PHASES.IDLE;
@@ -137,6 +166,7 @@ const processShowdown = (roomId) => {
         const currentDealerPos = seated.indexOf(room.dealerIdx);
         room.dealerIdx = seated[(currentDealerPos + 1) % seated.length];
         io.to(roomId).emit('roomUpdate', room);
+        saveToDisk();
         setTimeout(() => runIgnition(roomId), 3000);
     }, 6000);
 };
@@ -145,6 +175,8 @@ const advancePhase = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
     collectBets(room);
+    const shuffleArray = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+    
     if (room.phase === PHASES.PRE_FLOP) {
         room.phase = PHASES.FLOP;
         room.community = [room.deck.pop(), room.deck.pop(), room.deck.pop()];
@@ -162,6 +194,7 @@ const advancePhase = (roomId) => {
     const dealerPos = activeIndices.indexOf(room.dealerIdx);
     room.activeIdx = activeIndices[(dealerPos + 1) % activeIndices.length];
     io.to(roomId).emit('roomUpdate', room);
+    saveToDisk();
 };
 
 const runIgnition = (roomId) => {
@@ -186,7 +219,8 @@ const runIgnition = (roomId) => {
 
     const SB_VAL = room.sb || 10;
     const BB_VAL = room.bb || 20;
-    let deck = shuffle(VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))));
+    const shuffleArray = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+    let deck = shuffleArray(VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))));
     room.deck = deck;
 
     room.players = room.players.map((p, i) => {
@@ -203,7 +237,8 @@ const runIgnition = (roomId) => {
     room.community = [];
     room.potData = [{ label: 'MAIN', amount: 0 }];
     io.to(roomId).emit('roomUpdate', room);
-    io.to(roomId).emit('log', { action: `Dealer ${dealer.name} chosen ${room.activeVariant.name}`, type: 'system' });
+    io.to(roomId).emit('log', { action: `Dealer ${dealer.name} chose ${room.activeVariant.name}`, type: 'system' });
+    saveToDisk();
 };
 
 // --- SOCKET HANDLERS ---
@@ -220,17 +255,25 @@ io.on('connection', (socket) => {
         const { roomId, profile, buyIn } = data;
         const room = rooms[roomId];
         if (!room) return;
+        
+        // --- ROOM INTEGRITY: Ensure Join before State emission ---
         socket.join(roomId);
+        
         if (room.players.findIndex(p => p && p.uid === profile.uid) === -1) {
             const slot = room.players.findIndex(p => p === null);
             if (slot !== -1) {
-                room.players[slot] = { ...profile, chips: buyIn, uid: profile.uid, pendingVariant: 'HOLDEM' };
+                room.players[slot] = { ...profile, chips: buyIn, uid: profile.uid, pendingVariant: profile.pendingVariant || 'HOLDEM' };
                 if (room.dealerIdx === -1) room.dealerIdx = slot;
             }
         }
+        
         io.to(roomId).emit('roomUpdate', room);
         if (callback) callback({ status: 'ok' });
-        if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) { setTimeout(() => runIgnition(roomId), 3000); }
+        saveToDisk();
+
+        if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) { 
+            setTimeout(() => runIgnition(roomId), 3000); 
+        }
     });
 
     socket.on('playerAction', (data) => {
@@ -270,14 +313,9 @@ io.on('connection', (socket) => {
             room.activeIdx = activeIndices[(currentPos + 1) % activeIndices.length];
             io.to(roomId).emit('roomUpdate', room);
         }
+        saveToDisk();
     });
 
-    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); if(cb) cb({status:'ok'}); });
-    socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array.from({length:10},()=>null), community:[], phase:PHASES.IDLE, dealerIdx:-1, activeIdx:-1 }; io.emit('lobbyUpdate', Object.values(rooms)); });
-    socket.on('adminDeletePlayer', (uid) => { globalProfiles = globalProfiles.filter(p => p.uid !== uid); io.emit('profilesUpdate', globalProfiles); });
-    socket.on('adminDeleteRoom', (id) => { delete rooms[id]; io.emit('lobbyUpdate', Object.values(rooms)); });
-    socket.on('adminNuclearReset', () => { globalProfiles=[]; rooms={}; io.emit('profilesUpdate',[]); io.emit('lobbyUpdate',[]); });
-    
     socket.on('updatePlayerSettings', (d) => { 
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) {
@@ -288,8 +326,15 @@ io.on('connection', (socket) => {
             const rp = r.players.find(rp => rp && rp.uid === d.uid); 
             if (rp) rp.pendingVariant = d.pendingVariant; 
         });
+        saveToDisk();
     });
+
+    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); cb({status:'ok'}); saveToDisk(); });
+    socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array.from({length:10},()=>null), community:[], phase:PHASES.IDLE, potData:[{amount:0}], dealerIdx:-1, activeIdx:-1 }; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
+    socket.on('adminDeletePlayer', (uid) => { globalProfiles = globalProfiles.filter(p => p.uid !== uid); io.emit('profilesUpdate', globalProfiles); saveToDisk(); });
+    socket.on('adminDeleteRoom', (id) => { delete rooms[id]; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
+    socket.on('adminNuclearReset', () => { globalProfiles=[]; rooms={}; io.emit('profilesUpdate',[]); io.emit('lobbyUpdate',[]); saveToDisk(); });
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Poker Backend Authoritative Engine Ready`));
+httpServer.listen(PORT, () => console.log(`Authoritative Persistence Engine: ${PORT}`));
