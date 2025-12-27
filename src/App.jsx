@@ -90,7 +90,7 @@ const Seat = ({
                 </div>
             </div>
 
-            {/* SNUG BET BUBBLES */}
+            {/* PRECISION SNUG BET ANCHORING */}
             {player.currentBet > 0 && (
                 <div className="absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] z-[250]"
                     style={{ 
@@ -151,11 +151,13 @@ const App = () => {
   const [raiseAmount, setRaiseAmount] = useState(0);
   const [isBroke, setIsBroke] = useState(false);
 
+  // HYDRATION STATE
+  const isHydrated = allProfiles.length > 0 && activeTables.length > 0;
+
   useEffect(() => {
     socket.on('roomUpdate', (data) => {
         if (!data?.players) return;
         
-        // POT TRANSITION DETECTOR
         if (data.phase !== phase && phase !== PHASES.IDLE) {
             setIsCollectingBets(true);
             setTimeout(() => { setIsCollectingBets(false); setVisiblePotAmount(data.potData?.[0]?.amount || 0); }, 800);
@@ -173,15 +175,9 @@ const App = () => {
         setWinningPlayerIndices(data.winningPlayerIndices || []);
         setTimeRemaining(data.timeRemaining || 30);
 
-        // BANKRUPTCY & REBUY DETECTOR
         const me = data.players.find(p => p && p.uid === userProfile?.uid);
-        if (data.phase === PHASES.IDLE && me && me.chips === 0) {
-            setIsBroke(true);
-        } else {
-            setIsBroke(false);
-        }
+        if (data.phase === PHASES.IDLE && me && me.chips === 0) { setIsBroke(true); } else { setIsBroke(false); }
 
-        // UNIDIRECTIONAL POT FLIGHT
         if (data.phase === PHASES.SHOWDOWN) {
             setPotTransferring(true);
             setTimeout(() => setPotTransferring(false), 5500); 
@@ -199,6 +195,7 @@ const App = () => {
     socket.on('loginSuccess', (profile) => { 
         setUserProfile(profile); 
         setPendingVariantId(profile.pendingVariant || 'HOLDEM');
+        socket.emit('getInitialData'); // Force immediate sync
         setCurrentView(VIEWS.LOBBY); 
     });
     
@@ -250,7 +247,10 @@ const App = () => {
   };
 
   const handleLogin = () => {
-    if (passwordInput === 'pass') setCurrentView(VIEWS.ADMIN);
+    if (passwordInput === 'pass') {
+        socket.emit('getInitialData');
+        setCurrentView(VIEWS.ADMIN);
+    }
     else socket.emit('playerLogin', { password: passwordInput });
   };
 
@@ -258,14 +258,21 @@ const App = () => {
     <div className="h-screen bg-[#06080c] flex items-center justify-center text-white font-sans">
         <div className="w-[30vw] min-w-[380px] p-12 rounded-[2vw] bg-black/60 border border-white/10 backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-10">
             <Lock size={32} className="text-[#fbbf24]" />
-            <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (passwordInput === 'pass' ? setCurrentView(VIEWS.ADMIN) : socket.emit('playerLogin', { password: passwordInput }))} placeholder="ENTER CODE..." className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-center font-black text-[#fbbf24] outline-none uppercase tracking-widest"/>
-            <button onClick={() => passwordInput === 'pass' ? setCurrentView(VIEWS.ADMIN) : socket.emit('playerLogin', { password: passwordInput })} className="w-full p-6 rounded-2xl bg-[#fbbf24] font-black uppercase text-black hover:scale-105 transition-all">Sit at Table</button>
+            <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="ENTER CODE..." className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-center font-black text-[#fbbf24] outline-none uppercase tracking-widest"/>
+            <button onClick={handleLogin} className="w-full p-6 rounded-2xl bg-[#fbbf24] font-black uppercase text-black hover:scale-105 transition-all">Sit at Table</button>
         </div>
     </div>
   );
 
+  // ADMIN VIEW WITH HYDRATION CHECK
   if (currentView === VIEWS.ADMIN) return (
     <div className="h-screen bg-[#06080c] flex relative overflow-hidden text-white font-sans">
+        {!isHydrated && (
+            <div className="absolute inset-0 bg-black/90 z-[1000] flex flex-col items-center justify-center gap-4">
+                <RefreshCcw className="animate-spin text-[#fbbf24]" size={48} />
+                <span className="font-black uppercase tracking-widest text-xs">Hydrating Arena Data...</span>
+            </div>
+        )}
         <aside className="w-72 bg-[#0f172a] border-r border-white/10 flex flex-col z-[100]">
             <div className="p-8 border-b border-white/5 mb-8 text-[#fbbf24] flex items-center gap-3"><ShieldAlert size={20} /><span className="font-black uppercase tracking-widest text-sm">Super Admin</span></div>
             <nav className="flex-1 px-4 flex flex-col gap-2">
@@ -276,15 +283,32 @@ const App = () => {
         </aside>
         <main className="flex-1 flex flex-col p-12 overflow-y-auto z-10">
             {adminTab === ADMIN_TABS.PLAYERS && (<div className="flex flex-col gap-8 animate-in fade-in">
-                <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Identity Registry</h2><button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl"><PlusCircle size={18}/> New Profile</button></div>
+                <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Identity Registry</h2><button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl transition-all hover:scale-105 active:scale-95"><PlusCircle size={18}/> New Profile</button></div>
                 <div className="bg-white/5 border border-white/10 rounded-[2vw] overflow-hidden"><table className="w-full text-left border-collapse"><thead className="bg-white/5 border-b border-white/10"><tr className="text-[10px] font-black uppercase tracking-widest text-white/40"><th>ID</th><th>Bankroll</th><th className="text-right">Actions</th></tr></thead><tbody>{allProfiles?.map((p, i) => (<tr key={i} className="border-b border-white/5"><td className="p-6 font-black uppercase text-sm">{String(p.name)}</td><td className="p-6 font-mono text-emerald-400 font-bold">${Number(p.chips || 0).toLocaleString()}</td><td className="p-6 text-right flex justify-end gap-2"><button onClick={() => { const amt = Number(prompt("New Balance:", p.chips)); if(!isNaN(amt)) socket.emit('adminEditChips', {uid: p.uid, chips: amt}); }} className="p-2 text-cyan-400 hover:bg-cyan-600/20 rounded-lg"><Edit3 size={14}/></button><button onClick={() => socket.emit('adminDeletePlayer', p.uid)} className="p-2 text-red-500 hover:bg-red-600/20 rounded-lg"><Trash2 size={14}/></button></td></tr>))}</tbody></table></div>
             </div>)}
+            {isAddingPlayer && (<div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"><div className="w-[25vw] min-w-[320px] bg-slate-900 border border-white/10 rounded-[1.5vw] p-8 shadow-2xl flex flex-col gap-6 text-white"><h3 className="text-xl font-black uppercase tracking-widest flex items-center gap-3"><UserPlus size={20} className="text-indigo-400"/> Provision Profile</h3><div className="flex flex-col gap-4 text-slate-950"><input value={String(newPlayer.name)} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="w-full bg-white p-4 rounded-xl text-xs font-black uppercase outline-none"/><input type="number" value={Number(newPlayer.chips)} onChange={e => setNewPlayer({...newPlayer, chips: Number(e.target.value)})} placeholder="CHIPS" className="w-full bg-white p-4 rounded-xl text-xs font-black outline-none"/><input value={String(newPlayer.password)} onChange={e => setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASSCODE" className="w-full bg-white p-4 rounded-xl text-xs font-black outline-none"/></div><div className="flex gap-4"><button onClick={() => setIsAddingPlayer(false)} className="flex-1 p-4 rounded-xl bg-white/5 font-black uppercase text-[10px]">Cancel</button><button onClick={() => { const uid = Math.random().toString(36).substr(2, 9); socket.emit('adminCreatePlayer', {...newPlayer, uid, id: uid}, () => setIsAddingPlayer(false)); }} className="flex-2 p-4 rounded-xl bg-indigo-600 font-black uppercase text-[10px] tracking-widest">Confirm</button></div></div></div>)}
+            {adminTab === ADMIN_TABS.TABLES && (
+                <div className="flex flex-col gap-8 animate-in fade-in">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Room Control</h2><button onClick={() => { if(window.confirm("HARD RESET ALL SERVER DATA?")) socket.emit('adminNuclearReset'); }} className="p-4 px-8 bg-red-600 border border-red-500 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all">Nuclear Reset</button></div>
+                    <section className="bg-white/5 p-8 rounded-[2vw] border border-white/10 shadow-2xl flex flex-col gap-6 text-slate-950">
+                        <h3 className="text-lg font-black uppercase text-[#fbbf24] flex items-center gap-3"><PlusCircle size={20}/> Deploy Arena Room</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><input value={String(newTable.name)} onChange={e => setNewTable({...newTable, name: e.target.value})} placeholder="ROOM NAME" className="bg-white p-4 rounded-xl text-xs font-black uppercase outline-none"/><div className="grid grid-cols-2 gap-2"><input type="number" value={Number(newTable.sb)} onChange={e => setNewTable({...newTable, sb: Number(e.target.value)})} placeholder="SB" className="bg-white p-4 rounded-xl text-xs font-black"/><input type="number" value={Number(newTable.bb)} onChange={e => setNewTable({...newTable, bb: Number(e.target.value)})} placeholder="BB" className="bg-white p-4 rounded-xl text-xs font-black"/></div><div className="grid grid-cols-2 gap-2"><input type="number" value={Number(newTable.minBuy)} onChange={e => setNewTable({...newTable, minBuy: Number(e.target.value)})} placeholder="MIN BUY" className="bg-white p-4 rounded-xl text-xs font-black"/><input type="number" value={Number(newTable.maxBuy)} onChange={e => setNewTable({...newTable, maxBuy: Number(e.target.value)})} placeholder="MAX BUY" className="bg-white p-4 rounded-xl text-xs font-black"/></div><button onClick={() => { socket.emit('adminCreateRoom', {...newTable, id: 'room_'+Math.random().toString(36).substr(2,9)}); }} className="bg-emerald-600 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-[1.02] transition-all text-white font-black py-4">Spawn Arena</button></div>
+                    </section>
+                    <div className="grid grid-cols-2 gap-6">{activeTables?.map((t, i) => (<div key={i} className="p-8 bg-black/40 border border-white/10 rounded-2xl flex flex-col gap-6 shadow-xl relative group"><div className="flex justify-between items-center"><div className="text-xl font-black uppercase text-[#fbbf24]">{String(t.name)}</div><div className="font-mono text-sm">${t.sb}/${t.bb}</div></div><div className="flex gap-4"><button onClick={() => socket.emit('adminForceDeal', t.id)} className="flex-1 p-3 bg-emerald-600/10 border border-emerald-500/30 text-emerald-500 rounded-xl font-black uppercase text-[10px] transition-all hover:bg-emerald-600 hover:text-white font-black">Force Deal</button><button onClick={() => socket.emit('adminAddBot', { roomId: t.id })} className="flex-1 p-3 bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 rounded-xl font-black uppercase text-[10px] transition-all hover:bg-indigo-600 hover:text-white flex items-center justify-center gap-2 font-black"><Bot size={14}/> Add Bot</button><button onClick={() => socket.emit('adminDeleteRoom', t.id)} className="flex-1 p-3 bg-red-600/10 border border-red-500/30 text-red-500 rounded-xl font-black uppercase text-[10px] transition-all hover:bg-red-600 hover:text-white font-black">Terminate</button></div></div>))}</div>
+                </div>
+            )}
         </main>
     </div>
   );
 
   if (currentView === VIEWS.LOBBY) return (
     <div className="h-screen bg-[#06080c] flex flex-col text-white font-sans">
+        {!isHydrated && (
+            <div className="absolute inset-0 bg-black/90 z-[10000] flex flex-col items-center justify-center gap-4">
+                <RefreshCcw className="animate-spin text-[#fbbf24]" size={48} />
+                <span className="font-black uppercase tracking-widest text-xs">Syncing Arena Tables...</span>
+            </div>
+        )}
         {selectedTableForJoin && (<div className="absolute inset-0 z-[9000] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in"><div className="w-[30vw] min-w-[360px] p-12 rounded-[2vw] bg-slate-900 border border-[#fbbf24]/30 shadow-2xl flex flex-col gap-10">
             <div className="text-center space-y-1"><span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#fbbf24]">Table Entrance</span><h3 className="text-3xl font-black uppercase tracking-widest text-white">{String(selectedTableForJoin.name)}</h3></div>
             <div className="space-y-6"><div className="flex justify-between font-black"><span className="text-white/40 uppercase text-[10px] tracking-widest">Entry Buy-In</span><span className="text-emerald-400 text-3xl font-mono">${Number(buyInAmount)}</span></div><input type="range" min={selectedTableForJoin.minBuy || 400} max={selectedTableForJoin.maxBuy || 2000} step="100" value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="gold-slider" /></div>
@@ -307,12 +331,11 @@ const App = () => {
         onLogout={() => { setCurrentView(VIEWS.LOBBY); setPlayers(INITIAL_PLAYERS); }}
       />
 
-      {/* BROKE? REBUY MODAL */}
       {isBroke && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-xl animate-in zoom-in-95">
               <div className="w-[25vw] p-10 bg-slate-900 border-2 border-red-500/50 rounded-3xl text-center shadow-[0_0_50px_rgba(239,68,68,0.3)]">
                   <AlertTriangle size={48} className="text-red-500 mx-auto mb-6" />
-                  <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-2">BROKE?</h2>
+                  <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-2 font-black">BROKE?</h2>
                   <p className="text-white/40 text-xs mb-8">Refill your table balance from your global wallet.</p>
                   <button onClick={() => socket.emit('adminAddChips', { roomId: currentRoomId, uid: userProfile.uid, chips: 1000 })} className="w-full p-6 bg-red-600 hover:bg-red-500 text-white font-black uppercase rounded-2xl transition-all shadow-xl tracking-widest">REBUY $1,000</button>
               </div>
@@ -330,15 +353,8 @@ const App = () => {
             </div>
             <div className="absolute inset-0 bg-emerald-950/5 rounded-[40%] border-[1.5vw] border-slate-900 shadow-[inset_0_0_15vw_rgba(0,0,0,0.9)]" />
             <div className={`absolute top-[43%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center z-30 pointer-events-none`}>
-              {/* UNIDIRECTIONAL POT ANIMATION */}
-              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms] ease-out`} 
-                   style={{ 
-                       transform: `translate(-50%, -50%) ${potTransferring ? 'scale(0.2)' : 'scale(1)'}`, 
-                       opacity: potTransferring ? 0 : (visiblePotAmount > 0 ? 1 : 0), 
-                       top: potTransferring ? `${winnerPos.y - 43}vh` : '-4vw', 
-                       left: potTransferring ? `${winnerPos.x - 50}vw` : '50%' 
-                   }}>
-                <div className="text-[4vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-2xl">${Number(visiblePotAmount)}</div>
+              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms] ease-out`} style={{ transform: `translate(-50%, -50%) ${potTransferring ? 'scale(0.2)' : 'scale(1)'}`, opacity: potTransferring ? 0 : (visiblePotAmount > 0 ? 1 : 0), top: potTransferring ? `${winnerPos.y - 43}vh` : '-4vw', left: potTransferring ? `${winnerPos.x - 50}vw` : '50%' }}>
+                <div className="text-[4vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-2xl font-black">${Number(visiblePotAmount)}</div>
               </div>
               <div className="flex gap-2 scale-[1.7]">
                   {community.map((c, j) => (<div key={j} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-slate-950 font-black shadow-lg transition-all duration-300 ${Array.isArray(winning5Ids) && winning5Ids.includes(c.id) ? 'ring-4 ring-yellow-400 z-[300] scale-110' : ''}`}><span className="text-[0.9vw]">{String(c.value)}</span><span className={`text-[1.8vw] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : ''}`}>{String(c.suit)}</span></div>))}
@@ -370,7 +386,7 @@ const App = () => {
                 )}
                 <div className="flex flex-col items-center">
                     <div className="flex items-center gap-2">
-                        {userSeat?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}
+                        {player?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}
                         <span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat?.name || "Hero")}</span>
                     </div>
                     <span className={`text-[1.3vw] font-mono font-black mt-1 text-emerald-500/80`}>${Number(userSeat?.chips || 0)}</span></div></div>
@@ -381,7 +397,7 @@ const App = () => {
       <footer className="fixed bottom-0 left-0 right-0 h-[200px] bg-black/40 backdrop-blur-3xl border-t border-white/10 z-[6000] flex">
         <div className="w-1/3 h-full border-r border-white/10 p-6 flex flex-col overflow-hidden text-white font-sans">
           <div className="text-slate-400 uppercase font-black text-[10px] tracking-widest mb-4 tracking-[0.2em] border-b border-white/10 pb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2"><Info size={18}/> INTELLIGENCE FEED</div>
+              <div className="flex items-center gap-2 font-black"><Info size={18}/> INTELLIGENCE FEED</div>
               <button onClick={() => socket.emit('adminAddBot', { roomId: currentRoomId })} className="p-1 hover:text-indigo-400 transition-colors" title="Quick Add Bot"><PlusCircle size={16}/></button>
           </div>
           <div className="flex-1 font-mono text-[10px] space-y-1 overflow-y-auto scrollbar-hide flex flex-col">{logs.map((l, i) => (<div key={i}><span className="text-white/20">[{String(l.time)}]</span> <span className="text-[#fbbf24] uppercase font-bold">{String(l.name || "ARENA")}</span> <span className="text-white/60 ml-2">{String(l.action)}</span></div>))}</div>
@@ -389,14 +405,14 @@ const App = () => {
         <div className="flex-1 h-full bg-white/5 flex flex-col justify-between py-6 px-10 pointer-events-auto relative shadow-inner overflow-hidden text-white font-sans">
           {isHeroTurn ? (
             <div className="flex flex-col justify-between items-center w-full h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
-              <div className="flex gap-4 justify-center items-center w-full mt-0"><div className="flex gap-4"><button onClick={() => handleAction('RAISE', Math.min(userSeat.chips + userSeat.currentBet, Math.floor(visiblePotAmount * 0.5 + highestBet)))} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-slate-300 hover:brightness-125 transition-all flex items-center justify-center">1/2 POT</button><button onClick={() => handleAction('RAISE', Math.min(userSeat.chips + userSeat.currentBet, visiblePotAmount + highestBet))} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-[#fbbf24] hover:brightness-125 transition-all flex items-center justify-center">POT</button><button onClick={() => handleAction('RAISE', userSeat.chips + userSeat.currentBet)} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-red-500 hover:brightness-125 transition-all flex items-center justify-center">MAX</button></div></div>
-              <div className="flex items-center justify-between gap-0 w-full px-4 flex-1"><div className="flex-1 flex items-center h-12 pr-4"><input type="range" min={highestBet + 20} max={userSeat.chips + userSeat.currentBet} step="10" value={raiseAmount} onChange={(e) => setRaiseAmount(Number(e.target.value))} className="gold-slider" /></div><div className="w-32 h-10 flex items-center bg-[#06080c] border border-white/10 rounded-lg px-3 shadow-inner"><span className="text-[#fbbf24] font-black mr-1 text-sm">$</span><input type="number" value={raiseAmount} onChange={(e) => setRaiseAmount(Math.max(0, Math.min(userSeat.chips + userSeat.currentBet, parseInt(e.target.value) || 0)))} className="bg-transparent border-none outline-none text-[#fbbf24] font-mono font-black w-full text-base" /></div></div>
-              <div className="flex items-center justify-center gap-8 w-full mb-0"><button onClick={() => handleAction('FOLD')} className="w-32 h-12 bg-red-950/40 border border-red-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-lg tracking-widest">FOLD</button><button onClick={() => handleAction('CALL')} className="w-48 h-12 bg-blue-950/40 border border-blue-500/50 rounded-full font-black text-base uppercase hover:brightness-125 shadow-lg tracking-widest">{callRequired > 0 ? `CALL $${callRequired}` : 'CHECK'}</button><button onClick={() => handleAction('RAISE', raiseAmount)} className="w-32 h-12 bg-emerald-950/40 border border-emerald-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-xl transition-all tracking-widest flex items-center justify-center"><Zap size={20} className="mr-2"/>RAISE</button></div>
+              <div className="flex gap-4 justify-center items-center w-full mt-0"><div className="flex gap-4"><button onClick={() => handleAction('RAISE', Math.min(userSeat.chips + userSeat.currentBet, Math.floor(visiblePotAmount * 0.5 + highestBet)))} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-slate-300 hover:brightness-125 transition-all flex items-center justify-center font-black">1/2 POT</button><button onClick={() => handleAction('RAISE', Math.min(userSeat.chips + userSeat.currentBet, visiblePotAmount + highestBet))} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-[#fbbf24] hover:brightness-125 transition-all flex items-center justify-center font-black">POT</button><button onClick={() => handleAction('RAISE', userSeat.chips + userSeat.currentBet)} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-red-500 hover:brightness-125 transition-all flex items-center justify-center font-black">MAX</button></div></div>
+              <div className="flex items-center justify-between gap-0 w-full px-4 flex-1"><div className="flex-1 flex items-center h-12 pr-4"><input type="range" min={highestBet + 20} max={userSeat.chips + userSeat.currentBet} step="10" value={raiseAmount} onChange={(e) => setRaiseAmount(Number(e.target.value))} className="gold-slider" /></div><div className="w-32 h-10 flex items-center bg-[#06080c] border border-white/10 rounded-lg px-3 shadow-inner"><span className="text-[#fbbf24] font-black mr-1 text-sm">$</span><input type="number" value={raiseAmount} onChange={(e) => setRaiseAmount(Math.max(0, Math.min(userSeat.chips + userSeat.currentBet, parseInt(e.target.value) || 0)))} className="bg-transparent border-none outline-none text-[#fbbf24] font-mono font-black w-full text-base font-black" /></div></div>
+              <div className="flex items-center justify-center gap-8 w-full mb-0"><button onClick={() => handleAction('FOLD')} className="w-32 h-12 bg-red-950/40 border border-red-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-lg tracking-widest font-black">FOLD</button><button onClick={() => handleAction('CALL')} className="w-48 h-12 bg-blue-950/40 border border-blue-500/50 rounded-full font-black text-base uppercase hover:brightness-125 shadow-lg tracking-widest font-black">{callRequired > 0 ? `CALL $${callRequired}` : 'CHECK'}</button><button onClick={() => handleAction('RAISE', raiseAmount)} className="w-32 h-12 bg-emerald-950/40 border border-emerald-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-xl transition-all tracking-widest flex items-center justify-center font-black"><Zap size={20} className="mr-2"/>RAISE</button></div>
             </div>
           ) : (
             <div className="flex col flex-col items-center justify-center gap-4 h-full">
                <Target size={48} className={(phase === PHASES.IDLE && players.filter(Boolean).length >= 2) ? "text-[#22d3ee] animate-pulse" : "text-slate-600"}/>
-               <span className={`font-black uppercase text-[#fbbf24] animate-pulse text-[1.5vw] tracking-[0.2em]`}>
+               <span className={`font-black uppercase text-[#fbbf24] animate-pulse text-[1.5vw] tracking-[0.2em] font-black`}>
                  {phase === PHASES.IDLE ? (players.filter(Boolean).length < 2 ? "WAITING FOR PLAYERS" : "DEALING") : (isShowdownState ? "REVEAL" : activeIdx !== -1 && players[activeIdx] ? `${String(players[activeIdx].name).toUpperCase()}'S TURN` : "WAITING")}
                </span>
             </div>
