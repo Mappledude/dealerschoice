@@ -16,7 +16,7 @@ const io = new Server(httpServer, {
 const DB_PATH = './poker_db.json';
 let globalProfiles = []; 
 let rooms = {}; 
-let turnTimers = {}; // Store setTimeout IDs per room
+let roomIntervals = {}; // authorative intervals for countdowns
 
 const saveToDisk = () => {
     try {
@@ -108,9 +108,9 @@ const getBestHand = (holeCards, community) => {
 // --- GAME LOGIC HELPERS ---
 
 const clearShotClock = (roomId) => {
-    if (turnTimers[roomId]) {
-        clearTimeout(turnTimers[roomId]);
-        delete turnTimers[roomId];
+    if (roomIntervals[roomId]) {
+        clearInterval(roomIntervals[roomId]);
+        delete roomIntervals[roomId];
     }
 };
 
@@ -119,23 +119,30 @@ const startShotClock = (roomId) => {
     const room = rooms[roomId];
     if (!room || room.activeIdx === -1) return;
 
-    // 30 Second Shot Clock
-    turnTimers[roomId] = setTimeout(() => {
-        const activeRoom = rooms[roomId];
-        if (!activeRoom || activeRoom.activeIdx === -1) return;
-        
-        const player = activeRoom.players[activeRoom.activeIdx];
-        const canCheck = activeRoom.highestBet === player.currentBet;
-        
-        console.log(`Shot clock expired for ${player.name}. Auto-action: ${canCheck ? 'CHECK' : 'FOLD'}`);
-        
-        // Auto-action execution
-        if (canCheck) {
-            handleAction(roomId, 'CALL', 0); // Call $0 is a check
-        } else {
-            handleAction(roomId, 'FOLD', 0);
+    room.timeRemaining = 30;
+    io.to(roomId).emit('log', { action: `30s Clock started for ${room.players[room.activeIdx].name}`, type: 'system' });
+
+    roomIntervals[roomId] = setInterval(() => {
+        const r = rooms[roomId];
+        if (!r || r.activeIdx === -1) {
+            clearShotClock(roomId);
+            return;
         }
-    }, 30000);
+
+        r.timeRemaining -= 1;
+
+        if (r.timeRemaining <= 0) {
+            clearShotClock(roomId);
+            const p = r.players[r.activeIdx];
+            io.to(roomId).emit('log', { action: `${p.name} Folded due to Timeout`, type: 'system' });
+            
+            const canCheck = r.highestBet === p.currentBet;
+            handleAction(roomId, canCheck ? 'CALL' : 'FOLD', 0);
+        } else {
+            // Periodic sync to ensure all clients see same number
+            io.to(roomId).emit('roomUpdate', r);
+        }
+    }, 1000);
 };
 
 const collectBets = (room) => {
@@ -284,7 +291,6 @@ const runIgnition = (roomId) => {
     saveToDisk();
 };
 
-// Internal Action Handler for Shared Logic
 const handleAction = (roomId, type, amount) => {
     const room = rooms[roomId];
     if (!room || room.activeIdx === -1) return;
@@ -318,12 +324,8 @@ const handleAction = (roomId, type, amount) => {
     const allActed = activeIndices.every(i => room.players[i].hasActed);
     const allMatched = activeIndices.every(i => room.players[i].currentBet === room.highestBet);
 
-    if (activeIndices.length === 1) { 
-        processShowdown(roomId); 
-    }
-    else if (allActed && allMatched) { 
-        advancePhase(roomId); 
-    }
+    if (activeIndices.length === 1) { processShowdown(roomId); }
+    else if (allActed && allMatched) { advancePhase(roomId); }
     else {
         const currentPos = activeIndices.indexOf(room.activeIdx);
         room.activeIdx = activeIndices[(currentPos + 1) % activeIndices.length];
@@ -351,7 +353,7 @@ io.on('connection', (socket) => {
         if (room.players.findIndex(p => p && p.uid === profile.uid) === -1) {
             const slot = room.players.findIndex(p => p === null);
             if (slot !== -1) {
-                room.players[slot] = { ...profile, chips: buyIn, uid: profile.uid, pendingVariant: 'HOLDEM' };
+                room.players[slot] = { ...profile, chips: buyIn, uid: profile.uid, pendingVariant: profile.pendingVariant || 'HOLDEM', socketId: socket.id };
                 if (room.dealerIdx === -1) room.dealerIdx = slot;
             }
         }
@@ -377,8 +379,8 @@ io.on('connection', (socket) => {
             p.pendingVariant = d.pendingVariant;
             io.emit('log', { action: `${p.name} pre-selected ${d.pendingVariant}`, type: 'system' });
         }
-        Object.values(rooms).forEach(room => { 
-            const rp = room.players.find(rp => rp && rp.uid === d.uid); 
+        Object.values(rooms).forEach(r => { 
+            const rp = r.players.find(rp => rp && rp.uid === d.uid); 
             if (rp) rp.pendingVariant = d.pendingVariant; 
         });
         saveToDisk();
@@ -427,20 +429,15 @@ io.on('connection', (socket) => {
                 const playerIdx = room.players.findIndex(p => p && p.socketId === socket.id);
                 const player = room.players[playerIdx];
                 if (player) {
-                    // WALLET SETTLEMENT: Save final chips back to global profile
                     const profile = globalProfiles.find(p => p.uid === player.uid);
                     if (profile) profile.chips = player.chips;
-                    
                     io.to(roomId).emit('log', { action: `${player.name} has left the room.`, type: 'system' });
                     room.players[playerIdx] = null;
-                    
                     if (room.players.filter(Boolean).length === 0) {
                         clearShotClock(roomId);
                     } else if (room.activeIdx === playerIdx) {
-                        // If active player leaves, trigger auto-fold
                         handleAction(roomId, 'FOLD', 0);
                     }
-                    
                     io.to(roomId).emit('roomUpdate', room);
                     saveToDisk();
                 }
@@ -450,4 +447,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative Persistence Engine Running: ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Authoritative Persistence Engine: ${PORT}`));
