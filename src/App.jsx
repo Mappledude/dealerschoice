@@ -59,12 +59,13 @@ const Seat = ({
             </div>
         </div>
 
-        {/* BET BUBBLE & COLLISION ANIMATION - High Z-index */}
+        {/* --- BET BUBBLE: Anchor logic prevents board overlap --- */}
         {player.currentBet > 0 && (
             <div 
-                className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.4)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[250]`}
+                className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[250]`}
                 style={{ 
-                    top: isCollectingBets ? `${43 - displayPos.y}vh` : '-1.5vw', 
+                    // Move "inside" the tablefelt relative to the seat
+                    top: isCollectingBets ? `${43 - displayPos.y}vh` : (displayPos.y > 50 ? '-6vw' : '6vw'), 
                     left: isCollectingBets ? `${50 - displayPos.x}vw` : '50%',
                     transform: `translate(-50%, -100%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
                     opacity: isCollectingBets ? 0 : 1
@@ -101,7 +102,6 @@ const Seat = ({
             </div>
         )}
         
-        {/* --- SECURITY: Only show strength for Hero or during Showdown --- */}
         {strengthLabel && !player.isFolded && phase !== PHASES.IDLE && (isHero || isShowdown) && (
             <div className="h-7 px-3 bg-purple-600 border border-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] mb-2 flex items-center animate-in fade-in">
                 <span className="text-[9px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
@@ -392,14 +392,13 @@ const App = () => {
               </div>
             </div>
             
-            {/* HERO perspective locked to bottom center */}
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className="absolute flex flex-col items-center z-50">
-              {/* HERO BET BUBBLE: Positioned higher (above cards) for visibility */}
+              {/* HERO BET BUBBLE: Positioned North of cards for visibility */}
               {userSeat?.currentBet > 0 && (
                 <div 
                   className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-white/20 transition-all duration-[800ms] z-[250]`}
                   style={{ 
-                    top: isCollectingBets ? `${43 - 98}vh` : '-12vw', // Lifted higher
+                    top: isCollectingBets ? `${43 - 98}vh` : '-10vw', // Pushed North of cards
                     left: '50%',
                     transform: `translate(-50%, 0%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
                     opacity: isCollectingBets ? 0 : 1
