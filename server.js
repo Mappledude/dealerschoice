@@ -46,7 +46,7 @@ const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'
 const SUITS = ['♠', '♣', '♥', '♦'];
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 
-// --- AUTHORITATIVE POKER EVALUATOR ---
+// --- AUTHORITATIVE POKER EVALUATOR (21-SUBSET GENERATOR) ---
 
 const getCombinations = (arr, k) => {
     const fn = (n, src, got, all) => {
@@ -129,13 +129,11 @@ const processShowdown = (roomId) => {
     room.phase = PHASES.SHOWDOWN;
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     
-    // Evaluate hands for all active players
     const evals = activeIndices.map(i => ({ 
         index: i, 
         best: getBestHand(room.players[i].hand, room.community) 
     }));
     
-    // --- SPLIT POT LOGIC: Identify all winners with identical top power scores ---
     evals.sort((a, b) => b.best.power - a.best.power);
     const topPower = evals[0].best.power;
     const winners = evals.filter(e => e.best.power === topPower);
@@ -150,23 +148,15 @@ const processShowdown = (roomId) => {
         p.chips += share;
     });
 
-    // Pulse cards of the first winner for visual feedback
     room.winning5Ids = winners[0].best.cards.map(c => c.id);
     room.winningPlayerIndices = winners.map(w => w.index);
 
     const winnerNames = winners.map(w => room.players[w.index].name).join(' and ');
 
     if (winners.length > 1) {
-        io.to(roomId).emit('log', { 
-            action: `Pot Split between ${winnerNames} ($${share} each)!`, 
-            type: 'win' 
-        });
+        io.to(roomId).emit('log', { action: `Pot Split between ${winnerNames} ($${share} each)!`, type: 'win' });
     } else {
-        io.to(roomId).emit('log', { 
-            name: String(winners[0].best.name), 
-            action: `wins $${totalPot} with a ${winners[0].best.name}!`, 
-            type: 'win' 
-        });
+        io.to(roomId).emit('log', { name: String(room.players[winners[0].index].name), action: `wins $${totalPot} with a ${winners[0].best.name}!`, type: 'win' });
     }
 
     io.to(roomId).emit('roomUpdate', room);
@@ -253,7 +243,7 @@ const runIgnition = (roomId) => {
     room.community = [];
     room.potData = [{ label: 'MAIN', amount: 0 }];
     io.to(roomId).emit('roomUpdate', room);
-    io.to(roomId).emit('log', { action: `Dealer ${dealer.name} chose ${room.activeVariant.name}`, type: 'system' });
+    io.to(roomId).emit('log', { action: `Dealer ${dealer.name} chosen ${room.activeVariant.name}`, type: 'system' });
     saveToDisk();
 };
 
@@ -303,12 +293,16 @@ io.on('connection', (socket) => {
             io.to(roomId).emit('log', { name: String(player.name), action: diff > 0 ? `Calls $${diff}` : "Checks" });
         }
         else if (type === 'RAISE') {
-            const diff = amount - player.currentBet;
+            // --- MIN RAISE LOGIC: Prevent $0 raises or small raises ---
+            const minRaise = room.highestBet + room.bb;
+            const targetAmount = Math.max(amount, minRaise);
+            
+            const diff = targetAmount - player.currentBet;
             player.chips -= diff;
-            player.currentBet = amount;
-            room.highestBet = amount;
+            player.currentBet = targetAmount;
+            room.highestBet = targetAmount;
             room.players.forEach(p => { if (p && p.uid !== player.uid) p.hasActed = false; });
-            io.to(roomId).emit('log', { name: String(player.name), action: `Raises to $${amount}` });
+            io.to(roomId).emit('log', { name: String(player.name), action: `Raises to $${targetAmount}` });
         }
 
         const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
@@ -329,7 +323,7 @@ io.on('connection', (socket) => {
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) {
             p.pendingVariant = d.pendingVariant;
-            io.emit('log', { action: `${p.name} has pre-selected ${d.pendingVariant} for their next deal.`, type: 'system' });
+            io.emit('log', { action: `${p.name} pre-selected ${d.pendingVariant}`, type: 'system' });
         }
         Object.values(rooms).forEach(r => { 
             const rp = r.players.find(rp => rp && rp.uid === d.uid); 
@@ -345,7 +339,6 @@ io.on('connection', (socket) => {
     socket.on('adminForceDeal', (roomId) => runIgnition(roomId));
     socket.on('adminNuclearReset', () => { globalProfiles=[]; rooms={}; io.emit('profilesUpdate',[]); io.emit('lobbyUpdate',[]); saveToDisk(); });
     
-    // --- AUTHORITATIVE WALLET EDITOR ---
     socket.on('adminEditChips', (d) => {
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) {
@@ -361,7 +354,20 @@ io.on('connection', (socket) => {
             saveToDisk();
         }
     });
+
+    socket.on('adminAddBot', (roomId) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        const botId = 'bot_' + Math.random().toString(36).substr(2, 5);
+        const botProfile = { name: "BOT_"+botId.toUpperCase(), uid: botId, chips: 5000, isBot: true };
+        const slot = room.players.findIndex(p => p === null);
+        if (slot !== -1) {
+            room.players[slot] = { ...botProfile, pendingVariant: 'HOLDEM', currentBet: 0, hand: [], isWinner: false, isFolded: false, hasActed: false };
+            io.to(roomId).emit('roomUpdate', room);
+            if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) runIgnition(roomId);
+        }
+    });
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative Backend Running: ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Authoritative Persistence Engine: ${PORT}`));
