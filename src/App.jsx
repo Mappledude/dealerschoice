@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import io from 'socket.io-client';
 
+// --- PRODUCTION SOCKET CONFIGURATION (With Local Dev Support) ---
 const SOCKET_URL = window.location.hostname === 'localhost' || window.location.hostname === '0.0.0.0' 
     ? "http://localhost:10000" 
     : "https://poker-server-3vin.onrender.com"; 
@@ -34,8 +35,10 @@ const VARIANTS = {
 
 const INITIAL_PLAYERS = Array.from({ length: TOTAL_SEATS }, () => null);
 
+// --- PERFORMANCE OPTIMIZED HEADER (React.memo) ---
 const AppHeader = React.memo(({ activeVariant, pendingVariantId, onVariantChange, walletBalance, onLogout }) => {
     const [version, setVersion] = useState('');
+
     useEffect(() => {
         const timer = setTimeout(() => setVersion('v1.0.9-Stable'), 500);
         return () => clearTimeout(timer);
@@ -65,7 +68,7 @@ const AppHeader = React.memo(({ activeVariant, pendingVariantId, onVariantChange
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-[10px] font-black text-white/20 uppercase tracking-widest pt-1">{version}</span>
-                    <button onClick={onLogout} className="p-2 hover:bg-red-600/20 rounded-lg text-red-500 shadow-md"><LogOut size={20}/></button>
+                    <button onClick={onLogout} className="p-2 hover:bg-red-600/20 rounded-lg text-red-500 shadow-md transition-all"><LogOut size={20}/></button>
                 </div>
             </div>
         </header>
@@ -76,6 +79,7 @@ const AppHeader = React.memo(({ activeVariant, pendingVariantId, onVariantChange
            prev.pendingVariantId === next.pendingVariantId;
 });
 
+// --- SEAT COMPONENT (Safe Rendering Shield) ---
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, 
   isCollectingBets, isActiveTurn, strengthLabel, potTransferring, isHero, timeRemaining
@@ -113,7 +117,7 @@ const Seat = ({
                 </div>
             )}
 
-            {/* --- HAND INITIALIZATION SAFETY CHECK --- */}
+            {/* --- FRONTEND RENDERING SHIELD: Hardened conditional mapping --- */}
             {player?.hand && Array.isArray(player.hand) && player.hand.length > 0 && !player.isFolded && (
                 <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mb-4 overflow-visible">
                     {player.hand.map((c, ci) => {
@@ -159,6 +163,9 @@ const App = () => {
   const [potTransferring, setPotTransferring] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(30);
   const [isAddingPlayer, setIsAddingPlayer] = useState(false);
+
+  const [newPlayer, setNewPlayer] = useState({ name: '', chips: 5000, password: '' });
+  const [newTable, setNewTable] = useState({ name: '', sb: 10, bb: 20, minBuy: 400, maxBuy: 2000 });
 
   useEffect(() => {
     socket.on('roomUpdate', (data) => {
@@ -251,7 +258,7 @@ const App = () => {
         </aside>
         <main className="flex-1 flex flex-col p-12 overflow-y-auto z-10">
             {adminTab === ADMIN_TABS.PLAYERS && (<div className="flex flex-col gap-8 animate-in fade-in">
-                <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Identity Registry</h2><button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl"><PlusCircle size={18}/> New Profile</button></div>
+                <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Identity Registry</h2><button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl transition-all hover:scale-105 active:scale-95"><PlusCircle size={18}/> New Profile</button></div>
                 <div className="bg-white/5 border border-white/10 rounded-[2vw] overflow-hidden"><table className="w-full text-left border-collapse"><thead className="bg-white/5 border-b border-white/10"><tr className="text-[10px] font-black uppercase tracking-widest text-white/40"><th className="p-6">Identification</th><th className="p-6">Bankroll</th><th className="p-6 text-right">Utility</th></tr></thead><tbody>{allProfiles?.map((p, i) => (<tr key={i} className="border-b border-white/5 transition-colors"><td className="p-6 font-black uppercase text-sm">{String(p.name)} <span className="text-[8px] opacity-20 block">UID: {String(p.uid)}</span></td><td className="p-6 font-mono text-emerald-400 font-bold">${Number(p.chips || 0).toLocaleString()}</td><td className="p-6 text-right flex justify-end gap-2"><button onClick={() => { const amt = Number(prompt("New Balance:", p.chips)); if(!isNaN(amt)) socket.emit('adminEditChips', {uid: p.uid, chips: amt}); }} className="p-2 text-cyan-400 hover:bg-cyan-600/20 rounded-lg"><Edit3 size={14}/></button><button onClick={() => socket.emit('adminDeletePlayer', p.uid)} className="p-2 text-red-500 hover:bg-red-600/20 rounded-lg"><Trash2 size={14}/></button></td></tr>))}</tbody></table></div>
             </div>)}
 
@@ -333,7 +340,7 @@ const App = () => {
                   )}
               </div>
               {userSeat && !isShowdownState && phase !== PHASES.IDLE && (<div className="z-[5001] h-7 px-3 py-1 bg-purple-600/95 border border-purple-300/30 rounded-full shadow-[0_0_2vw_rgba(147,51,234,0.6)] animate-in fade-in transition-all flex items-center relative -mt-3 mb-1"><span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">{String(getCurrentStrength(userSeat) || "Evaluating...")}</span></div>)}
-              <div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat?.isWinner && isShowdownState ? (potTransferring ? 'border-yellow-400 scale-125' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}>
+              <div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat?.isWinner && isShowdownState ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}>
                 {activeIdx === heroSeatIdx && timeRemaining > 0 && (
                     <div className={`absolute -right-12 flex items-center justify-center w-10 h-10 rounded-full border-2 bg-black/80 font-black text-sm z-50 transition-colors ${timeRemaining <= 10 ? 'border-red-500 text-red-500 animate-pulse' : 'border-cyan-400 text-cyan-400'}`}>{timeRemaining}</div>
                 )}
