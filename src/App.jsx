@@ -31,7 +31,7 @@ const VARIANTS = {
 
 const INITIAL_PLAYERS = Array.from({ length: TOTAL_SEATS }, () => null);
 
-// --- SEAT COMPONENT (1.5 Scale Restored) ---
+// --- SEAT COMPONENT ---
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, 
   potTransferring, isActiveTurn, strengthLabel
@@ -83,7 +83,7 @@ const Seat = ({
           })}
         </div>
       )}
-      {/* h-7 bubble */}
+      {/* Strength Bubble h-7 Restore */}
       {strengthLabel && !player.isFolded && phase !== PHASES.IDLE && !isShowdown && (
         <div className="h-7 px-3 bg-purple-600 border border-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] mb-2 flex items-center animate-in fade-in">
            <span className="text-[9px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
@@ -144,8 +144,8 @@ const App = () => {
         }
     });
 
-    socket.on('lobbyUpdate', (list) => setActiveTables(Array.isArray(list) ? list : []));
-    socket.on('profilesUpdate', (list) => setAllProfiles(Array.isArray(list) ? list : []));
+    socket.on('lobbyUpdate', (list) => setActiveTables(list));
+    socket.on('profilesUpdate', (list) => setAllProfiles(list));
     socket.on('loginSuccess', (profile) => { setUserProfile(profile); setCurrentView(VIEWS.LOBBY); });
     socket.on('log', (data) => {
         const logEntry = { id: Math.random(), time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), ...data };
@@ -165,7 +165,46 @@ const App = () => {
   const isHeroTurn = activeIdx !== -1 && heroSeatIdx !== -1 && activeIdx === heroSeatIdx && phase !== PHASES.IDLE && phase !== PHASES.SHOWDOWN;
   const currentPotOnTable = useMemo(() => (potData.reduce((acc, p) => acc + (p.amount || 0), 0)) + (players.reduce((s, p) => s + (p?.currentBet || 0), 0)), [potData, players]);
 
-  // Handlers
+  // LIVE HAND EVALUATION
+  const getCurrentStrength = useCallback((player) => {
+    if (!player || !player.hand || player.hand.length === 0 || community.length < 3) return null;
+    
+    // COMBINATORIAL RANKER (MATCHES SERVER LOGIC)
+    const VM = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
+    const getCombos = (arr, k) => {
+        const fn = (n, src, got, all) => { if (n === 0) { all.push(got); return; } for (let j = 0; j < src.length; j++) { fn(n - 1, src.slice(j + 1), got.concat([src[j]]), all); } };
+        const all = []; fn(k, arr, [], all); return all;
+    };
+    const rankHand = (cards) => {
+        const rks = cards.map(c => VM[c.value]).sort((a,b)=>b-a);
+        const suits = cards.map(c => c.suit);
+        const isF = new Set(suits).size === 1;
+        let isS = true;
+        for(let i=0;i<4;i++) if(rks[i]!==rks[i+1]+1) isS=false;
+        if(!isS && JSON.stringify(rks)==="[14,5,4,3,2]") isS=true;
+        const cnts = {}; rks.forEach(r => cnts[r] = (cnts[r]||0)+1);
+        const vc = Object.values(cnts).sort((a,b)=>b-a);
+        if(isS && isF) return { p: 8, n: "Straight Flush" };
+        if(vc[0]===4) return { p: 7, n: "Four of a Kind" };
+        if(vc[0]===3 && vc[1]===2) return { p: 6, n: "Full House" };
+        if(isF) return { p: 5, n: "Flush" };
+        if(isS) return { p: 4, n: "Straight" };
+        if(vc[0]===3) return { p: 3, n: "Three of a Kind" };
+        if(vc[0]===2 && vc[1]===2) return { p: 2, n: "Two Pair" };
+        if(vc[0]===2) return { p: 1, n: "Pair" };
+        return { p: 0, n: "High Card" };
+    };
+
+    const allCards = [...player.hand, ...community];
+    const combos = getCombos(allCards, 5);
+    let best = { p: -1, n: "" };
+    combos.forEach(c => {
+        const res = rankHand(c);
+        if (res.p > best.p) best = res;
+    });
+    return best.n;
+  }, [community]);
+
   const handleLogin = () => {
     if (passwordInput === 'pass') setCurrentView(VIEWS.ADMIN);
     else socket.emit('playerLogin', { password: passwordInput });
@@ -199,7 +238,6 @@ const App = () => {
     return DISPLAY_POSITIONS[relativeIdx];
   }, [winnerIdx, heroSeatIdx]);
 
-  // --- VIEWS ---
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center text-white">
         <div className="w-[30vw] min-w-[380px] p-12 rounded-[2vw] bg-black/60 border border-white/10 backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-10">
@@ -276,7 +314,7 @@ const App = () => {
   return (
     <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-sans">
       <header className="absolute top-0 left-0 right-0 h-16 bg-black/30 backdrop-blur-[30px] border-b border-white/10 flex items-center justify-between px-8 z-[8000] shadow-xl">
-        <div className="flex flex-col justify-center bg-white/5 px-6 py-2 rounded-2xl">
+        <div className="flex flex-col justify-center bg-white/5 px-6 py-2 rounded-2xl text-white">
           <span className="text-[#fbbf24] font-black text-[10px] tracking-widest uppercase">THIS HAND:</span>
           <span className="text-white font-black text-lg uppercase leading-none mt-1">{String(activeVariant?.name || "Texas Hold'em")}</span>
           <span className="text-white/40 text-[8px] font-bold italic">{String(activeVariant?.rules || "")}</span>
@@ -298,7 +336,7 @@ const App = () => {
               {players.map((p, i) => {
                 if (!p || (userProfile && p.uid === userProfile.uid)) return null;
                 const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
-                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={phase !== PHASES.IDLE ? "Evaluating..." : ""} />;
+                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={getCurrentStrength(p)} />;
               })}
             </div>
             <div className="absolute inset-0 bg-emerald-950/5 rounded-[40%] border-[1.5vw] border-slate-900 shadow-[inset_0_0_15vw_rgba(0,0,0,0.9)]" />
@@ -323,7 +361,8 @@ const App = () => {
                     </div>
                   )}
               </div>
-              {userSeat && !isShowdown && phase !== PHASES.IDLE && (<div className="h-7 px-3 py-1 bg-purple-600/95 border border-purple-300/30 rounded-full shadow-[0_0_2vw_rgba(147,51,234,0.6)] animate-in fade-in transition-all flex items-center relative -mt-3 mb-1"><span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">Evaluating...</span></div>)}
+              {/* EVALUATION BUBBLE - h-7 */}
+              {userSeat && !isShowdown && phase !== PHASES.IDLE && (<div className="z-[5001] h-7 px-3 py-1 bg-purple-600/95 border border-purple-300/30 rounded-full shadow-[0_0_2vw_rgba(147,51,234,0.6)] animate-in fade-in transition-all flex items-center relative -mt-3 mb-1"><span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">{String(getCurrentStrength(userSeat) || "High Card")}</span></div>)}
               {userSeat && (<div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat.isWinner && isShowdown ? 'border-yellow-400 scale-110 shadow-[0_0_1.5vw_#fbbf24]' : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}><div className="flex flex-col items-center"><div className="flex items-center gap-2">{userSeat.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat.chips)}</span></div></div>)}
             </div>
         </div>
@@ -338,7 +377,7 @@ const App = () => {
           {isHeroTurn ? (
             <div className="flex flex-col justify-between items-center w-full h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
               <div className="flex gap-4 justify-center items-center w-full mt-0"><div className="flex gap-4"><button onClick={() => handleAction('RAISE', Math.min(userSeat.chips + userSeat.currentBet, Math.floor(currentPotOnTable * 0.5 + highestBet)))} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-slate-300 hover:brightness-125 transition-all flex items-center justify-center">1/2 POT</button><button onClick={() => handleAction('RAISE', Math.min(userSeat.chips + userSeat.currentBet, currentPotOnTable + highestBet))} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-[#fbbf24] hover:brightness-125 transition-all flex items-center justify-center">POT</button><button onClick={() => handleAction('RAISE', userSeat.chips + userSeat.currentBet)} className="w-24 h-10 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase text-red-500 hover:brightness-125 transition-all flex items-center justify-center">MAX</button></div></div>
-              <div className="flex items-center justify-between gap-0 w-full px-4 flex-1"><div className="flex-1 flex items-center h-12 pr-4"><input type="range" min={highestBet + 20} max={userSeat.chips + userSeat.currentBet} step="10" value={raiseAmount} onChange={(e) => setRaiseAmount(Number(e.target.value))} className="gold-slider" /></div><div className="w-32 h-10 flex items-center bg-[#06080c] border border-white/10 rounded-lg px-3 shadow-inner"><span className="text-[#fbbf24] font-black mr-1 text-sm">$</span><input type="number" value={raiseAmount} onChange={(e) => setRaiseAmount(Math.max(0, Math.min(userSeat.chips + userSeat.currentBet, parseInt(e.target.value) || 0)))} className="bg-transparent border-none outline-none text-[#fbbf24] font-mono font-black w-full text-base" /></div></div>
+              <div className="flex items-center justify-between gap-0 w-full px-4 flex-1"><div className="flex-1 flex items-center h-12 pr-4"><input type="range" min={highestBet + lastRaiseAmt} max={userSeat.chips + userSeat.currentBet} step="10" value={raiseAmount} onChange={(e) => setRaiseAmount(Number(e.target.value))} className="gold-slider" /></div><div className="w-32 h-10 flex items-center bg-[#06080c] border border-white/10 rounded-lg px-3 shadow-inner"><span className="text-[#fbbf24] font-black mr-1 text-sm">$</span><input type="number" value={raiseAmount} onChange={(e) => setRaiseAmount(Math.max(0, Math.min(userSeat.chips + userSeat.currentBet, parseInt(e.target.value) || 0)))} className="bg-transparent border-none outline-none text-[#fbbf24] font-mono font-black w-full text-base" /></div></div>
               <div className="flex items-center justify-center gap-8 w-full mb-0"><button onClick={() => handleAction('FOLD')} className="w-32 h-12 bg-red-950/40 border border-red-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-lg tracking-widest">FOLD</button><button onClick={() => handleAction('CALL')} className="w-48 h-12 bg-blue-950/40 border border-blue-500/50 rounded-full font-black text-base uppercase hover:brightness-125 shadow-lg tracking-widest">{highestBet > userSeat.currentBet ? `CALL $${highestBet - userSeat.currentBet}` : 'CHECK'}</button><button onClick={() => handleAction('RAISE', raiseAmount)} className="w-32 h-12 bg-emerald-950/40 border border-emerald-500/50 rounded-full font-black text-sm uppercase hover:brightness-125 shadow-xl transition-all tracking-widest flex items-center justify-center"><Zap size={20} className="mr-2"/>RAISE</button></div>
             </div>
           ) : (
