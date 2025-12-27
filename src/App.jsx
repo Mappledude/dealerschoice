@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import io from 'socket.io-client';
 
+// --- PRODUCTION SOCKET CONFIGURATION ---
 const SOCKET_URL = window.location.hostname === 'localhost' || window.location.hostname === '0.0.0.0' 
     ? "http://localhost:10000" 
     : "https://poker-server-3vin.onrender.com"; 
@@ -34,6 +35,7 @@ const VARIANTS = {
 
 const INITIAL_PLAYERS = Array.from({ length: TOTAL_SEATS }, () => null);
 
+// --- PERFORMANCE ISOLATED HEADER (v1.2.0) ---
 const AppHeader = React.memo(({ activeVariant, pendingVariantId, onVariantChange, walletBalance, onLogout }) => {
     return (
         <header className="absolute top-0 left-0 right-0 h-16 bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-8 z-[8000] shadow-xl">
@@ -84,11 +86,11 @@ const Seat = ({
                         {player?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}
                         <span className="text-[1.1vw] font-black text-white leading-none uppercase tracking-widest">{String(player?.name || "Player")}</span>
                     </div>
-                    <span className={`text-[1.2vw] font-mono font-black mt-1.5 ${player.isAllIn ? 'text-red-500' : 'text-emerald-500/80'}`}>{player.isAllIn ? 'ALL-IN' : `$${Number(player?.chips || 0)}`}</span>
+                    <span className={`text-[1.2vw] font-mono font-black mt-1.5 ${player.isAllIn ? 'text-red-500 animate-pulse' : 'text-emerald-500/80'}`}>{player.isAllIn ? 'ALL-IN' : `$${Number(player?.chips || 0)}`}</span>
                 </div>
             </div>
 
-            {/* PRECISION SNUG BET ANCHORING */}
+            {/* SNUG BET BUBBLES */}
             {player.currentBet > 0 && (
                 <div className="absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] z-[250]"
                     style={{ 
@@ -153,6 +155,7 @@ const App = () => {
     socket.on('roomUpdate', (data) => {
         if (!data?.players) return;
         
+        // POT TRANSITION DETECTOR
         if (data.phase !== phase && phase !== PHASES.IDLE) {
             setIsCollectingBets(true);
             setTimeout(() => { setIsCollectingBets(false); setVisiblePotAmount(data.potData?.[0]?.amount || 0); }, 800);
@@ -178,10 +181,10 @@ const App = () => {
             setIsBroke(false);
         }
 
-        // UNIDIRECTIONAL POT
+        // UNIDIRECTIONAL POT FLIGHT
         if (data.phase === PHASES.SHOWDOWN) {
             setPotTransferring(true);
-            setTimeout(() => setPotTransferring(false), 5500); // 500ms before hand ends
+            setTimeout(() => setPotTransferring(false), 5500); 
         }
     });
 
@@ -328,7 +331,13 @@ const App = () => {
             <div className="absolute inset-0 bg-emerald-950/5 rounded-[40%] border-[1.5vw] border-slate-900 shadow-[inset_0_0_15vw_rgba(0,0,0,0.9)]" />
             <div className={`absolute top-[43%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center z-30 pointer-events-none`}>
               {/* UNIDIRECTIONAL POT ANIMATION */}
-              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms] ease-out`} style={{ transform: `translate(-50%, -50%) ${potTransferring ? 'scale(0.2)' : 'scale(1)'}`, opacity: potTransferring ? 0 : (visiblePotAmount > 0 ? 1 : 0), top: potTransferring ? `${winnerPos.y - 43}vh` : '-4vw', left: potTransferring ? `${winnerPos.x - 50}vw` : '50%' }}>
+              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms] ease-out`} 
+                   style={{ 
+                       transform: `translate(-50%, -50%) ${potTransferring ? 'scale(0.2)' : 'scale(1)'}`, 
+                       opacity: potTransferring ? 0 : (visiblePotAmount > 0 ? 1 : 0), 
+                       top: potTransferring ? `${winnerPos.y - 43}vh` : '-4vw', 
+                       left: potTransferring ? `${winnerPos.x - 50}vw` : '50%' 
+                   }}>
                 <div className="text-[4vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-2xl">${Number(visiblePotAmount)}</div>
               </div>
               <div className="flex gap-2 scale-[1.7]">
@@ -355,12 +364,16 @@ const App = () => {
                   )}
               </div>
               {userSeat && !isShowdownState && phase !== PHASES.IDLE && (<div className="z-[5001] h-7 px-3 py-1 bg-purple-600/95 border border-purple-300/30 rounded-full shadow-[0_0_2vw_rgba(147,51,234,0.6)] animate-in fade-in transition-all flex items-center relative -mt-3 mb-1"><span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">{String(getCurrentStrength(userSeat) || "Evaluating...")}</span></div>)}
-              <div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat?.isWinner && isShowdownState ? (potTransferring ? 'border-yellow-400 scale-125' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}>
+              <div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat?.isWinner && isShowdownState ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}>
                 {activeIdx === heroSeatIdx && timeRemaining > 0 && (
                     <div className={`absolute -right-12 flex items-center justify-center w-10 h-10 rounded-full border-2 bg-black/80 font-black text-sm z-50 transition-colors ${timeRemaining <= 10 ? 'border-red-500 text-red-500 animate-pulse' : 'border-cyan-400 text-cyan-400'}`}>{timeRemaining}</div>
                 )}
                 <div className="flex flex-col items-center">
-                    <div className="flex items-center gap-2">{userSeat?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.1vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat?.name || "Hero")}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 text-emerald-500/80`}>${Number(userSeat?.chips || 0)}</span></div></div>
+                    <div className="flex items-center gap-2">
+                        {userSeat?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}
+                        <span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat?.name || "Hero")}</span>
+                    </div>
+                    <span className={`text-[1.3vw] font-mono font-black mt-1 text-emerald-500/80`}>${Number(userSeat?.chips || 0)}</span></div></div>
             </div>
         </div>
       </main>
