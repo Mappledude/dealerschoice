@@ -142,7 +142,7 @@ const processShowdown = (roomId) => {
     const winAmount = room.potData[0].amount;
 
     winner.isWinner = true;
-    winner.chips += winAmount;
+    winner.chips += winAmount; 
     room.winning5Ids = winnerData.best.cards.map(c => c.id);
     room.winningPlayerIndices = [winnerData.index];
 
