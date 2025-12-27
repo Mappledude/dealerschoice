@@ -60,6 +60,7 @@ const rankFiveCardHand = (cards) => {
     else if (valCounts[0].count === 2 && valCounts[1].count === 2) { score = 2; name = "Two Pair"; }
     else if (valCounts[0].count === 2) { score = 1; name = "Pair"; }
 
+    // Tie-breaker value using base-100 weighting
     const power = score * 1e10 + valCounts.reduce((acc, v, i) => acc + (v.rank * Math.pow(100, 4 - i)), 0);
     return { power, name, cards };
 };
@@ -100,6 +101,7 @@ const processShowdown = (roomId) => {
     room.phase = PHASES.SHOWDOWN;
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     
+    // Combinatorial analysis for all active players
     const evals = activeIndices.map(i => ({ 
         index: i, 
         best: getBestHand(room.players[i].hand, room.community) 
@@ -122,6 +124,7 @@ const processShowdown = (roomId) => {
         type: 'win' 
     });
 
+    // Auto-Restart Hand Cycle
     setTimeout(() => {
         if (!rooms[roomId]) return;
         room.phase = PHASES.IDLE;
@@ -129,9 +132,11 @@ const processShowdown = (roomId) => {
         room.winning5Ids = [];
         room.winningPlayerIndices = [];
         room.players.forEach(p => { if (p) { p.hand = []; p.isWinner = false; p.isFolded = false; p.currentBet = 0; p.hasActed = false; } });
+        
         const seated = room.players.map((p, i) => p ? i : null).filter(x => x !== null);
         const currentDealerPos = seated.indexOf(room.dealerIdx);
         room.dealerIdx = seated[(currentDealerPos + 1) % seated.length];
+        
         io.to(roomId).emit('roomUpdate', room);
         setTimeout(() => runIgnition(roomId), 3000);
     }, 6000);
@@ -164,6 +169,7 @@ const runIgnition = (roomId) => {
     const room = rooms[roomId];
     if (!room || room.players.filter(Boolean).length < 2) return;
     
+    // OBEY DEALER'S CHOICE
     const dealer = room.players[room.dealerIdx];
     const variantId = dealer?.pendingVariant || 'HOLDEM';
     const variantMap = { 
@@ -226,7 +232,11 @@ io.on('connection', (socket) => {
         }
         io.to(roomId).emit('roomUpdate', room);
         if (callback) callback({ status: 'ok' });
-        if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) { setTimeout(() => runIgnition(roomId), 2000); }
+        // AUTO-DEAL TRIGGER
+        if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) { 
+            io.to(roomId).emit('log', { action: "Players Ready (Dealing in 3s...)", type: 'system' });
+            setTimeout(() => runIgnition(roomId), 3000); 
+        }
     });
 
     socket.on('playerAction', (data) => {
