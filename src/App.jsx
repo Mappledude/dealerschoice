@@ -34,7 +34,7 @@ const INITIAL_PLAYERS = Array.from({ length: TOTAL_SEATS }, () => null);
 // --- SUB-COMPONENTS ---
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, 
-  isCollectingBets, isActiveTurn, strengthLabel
+  isCollectingBets, isActiveTurn, strengthLabel, potTransferring
 }) => {
     if (!player || !player.hand || !displayPos) return null;
 
@@ -49,7 +49,7 @@ const Seat = ({
         >
         <div className={`flex items-center gap-2 p-[0.6vw] px-[2vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative 
             ${isActiveTurn ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee] scale-105' : 'border-white/10'}
-            ${isWinner && isShowdown ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : ''}`}>
+            ${isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : ''}`}>
             <div className="flex flex-col items-center">
                 <div className="flex items-center gap-2">
                     {player?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full shadow-[0_0_0.5vw_red] animate-pulse" />}
@@ -126,6 +126,7 @@ const App = () => {
   const [activeVariant, setActiveVariant] = useState(VARIANTS.HOLDEM);
   const [pendingVariantId, setPendingVariantId] = useState('HOLDEM');
   const [community, setCommunity] = useState([]);
+  const [potData, setPotData] = useState([{ label: 'MAIN', amount: 0 }]);
   const [activeIdx, setActiveIdx] = useState(-1);
   const [highestBet, setHighestBet] = useState(0);
   const [winning5Ids, setWinning5Ids] = useState([]);
@@ -135,9 +136,11 @@ const App = () => {
   const [logs, setLogs] = useState([]);
   const [isCollectingBets, setIsCollectingBets] = useState(false);
   const [visiblePotAmount, setVisiblePotAmount] = useState(0);
+  const [potTransferring, setPotTransferring] = useState(false);
 
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 5000, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 10, bb: 20, minBuy: 400, maxBuy: 2000 });
+  const [isAddingPlayer, setIsAddingPlayer] = useState(false);
   const [editingPlayerUid, setEditingPlayerUid] = useState(null);
   const [editBalance, setEditBalance] = useState(0);
 
@@ -167,6 +170,11 @@ const App = () => {
         setActiveIdx(data.activeIdx);
         setWinning5Ids(data.winning5Ids || []);
         setWinningPlayerIndices(data.winningPlayerIndices || []);
+        
+        if (data.phase === PHASES.SHOWDOWN) {
+            setPotTransferring(true);
+            setTimeout(() => setPotTransferring(false), 4000);
+        }
     });
 
     socket.on('lobbyUpdate', (list) => setActiveTables(list));
@@ -371,7 +379,7 @@ const App = () => {
               {players.map((p, i) => {
                 if (!p || (userProfile && p.uid === userProfile.uid)) return null;
                 const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
-                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={getCurrentStrength(p)} isCollectingBets={isCollectingBets} />;
+                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={getCurrentStrength(p)} isCollectingBets={isCollectingBets} potTransferring={potTransferring} />;
               })}
             </div>
             <div className="absolute inset-0 bg-emerald-950/5 rounded-[40%] border-[1.5vw] border-slate-900 shadow-[inset_0_0_15vw_rgba(0,0,0,0.9)]" />
@@ -380,7 +388,7 @@ const App = () => {
                 <div className="text-[4vw] font-black text-yellow-400 font-mono tracking-tighter shadow-black drop-shadow-2xl">${Number(visiblePotAmount)}</div>
               </div>
               <div className="flex gap-2 scale-[1.7]">
-                  {community.map((c, i) => (<div key={i} className="w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-slate-950 font-black shadow-lg"><span className="text-[0.9vw]">{c.value}</span><span className={`text-[1.8vw] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : ''}`}>{c.suit}</span></div>))}
+                  {community.map((c, i) => (<div key={i} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-slate-950 font-black shadow-lg transition-all duration-300 ${Array.isArray(winning5Ids) && winning5Ids.includes(c.id) ? 'ring-4 ring-yellow-400' : ''}`}><span className="text-[0.9vw]">{c.value}</span><span className={`text-[1.8vw] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : ''}`}>{c.suit}</span></div>))}
               </div>
             </div>
             
@@ -406,7 +414,7 @@ const App = () => {
       <footer className="fixed bottom-0 left-0 right-0 h-[200px] bg-black/40 backdrop-blur-3xl border-t border-white/10 z-[6000] flex">
         <div className="w-1/3 h-full border-r border-white/10 p-6 flex flex-col overflow-hidden text-white font-sans">
           <div className="text-slate-400 uppercase font-black text-[10px] tracking-widest mb-4 tracking-[0.2em] border-b border-white/10 pb-3"><Info size={18}/> INTELLIGENCE FEED</div>
-          <div className="flex-1 font-mono text-[10px] space-y-1 overflow-y-auto scrollbar-hide flex flex-col">{logs.map((l, i) => (<div key={i}><span className="text-white/20">[{String(l.time)}]</span> <span className="text-[#fbbf24] uppercase">{String(l.name || "ARENA")}</span> <span className="text-white/60 ml-2">{String(l.action)} {l.amount ? `$${l.amount}` : ''}</span></div>))}</div>
+          <div className="flex-1 font-mono text-[10px] space-y-1 overflow-y-auto scrollbar-hide flex flex-col">{logs.map((l, i) => (<div key={i}><span className="text-white/20">[{String(l.time)}]</span> <span className="text-[#fbbf24] uppercase">{String(l.name || "ARENA")}</span> <span className="text-white/60 ml-2">{String(l.action)} {l.amount ? `$${String(l.amount)}` : ''}</span></div>))}</div>
         </div>
         <div className="flex-1 h-full bg-white/5 flex flex-col justify-between py-6 px-10 pointer-events-auto relative shadow-inner overflow-hidden text-white font-sans">
           {isHeroTurn ? (
