@@ -90,7 +90,12 @@ const rankFiveCardHand = (cards) => {
 
     const power = score * 1e10 + valCounts.reduce((acc, v, i) => acc + (v.rank * Math.pow(100, 4 - i)), 0);
     const cardString = sorted.map(c => c.value).join('-');
-    return { power, name, cardString, cards: sorted };
+    
+    let handSummary = name;
+    if (score === 1) handSummary = `Pair of ${sorted.find(c => counts[VM[c.value]] === 2).value}'s`;
+    if (score === 6) handSummary = `Full House, ${sorted.find(c => counts[VM[c.value]] === 3).value}'s over ${sorted.find(c => counts[VM[c.value]] === 2).value}'s`;
+
+    return { power, name, summary: handSummary, cardString, cards: sorted };
 };
 
 const getBestHand = (holeCards, community) => {
@@ -114,7 +119,7 @@ const executeBotAction = (roomId) => {
     const p = room.players[room.activeIdx];
     if (!p || !p.isBot) return;
 
-    // Decision Speed: 1.2 to 1.8 seconds
+    // Decision Speed: 1.2 to 1.8 seconds for v1.2.0
     const delay = 1200 + Math.random() * 600;
 
     setTimeout(() => {
@@ -133,17 +138,17 @@ const executeBotAction = (roomId) => {
         let raiseTo = 0;
 
         if (isMuflis) {
-            // Muflis: Raise on High Card, Fold on Sets
+            // Muflis AI: Monster = High Card. Fold = Sets.
             if (power < 1e10) { 
                 action = 'RAISE';
-                raiseTo = r.highestBet + Math.floor(potSize * 0.5);
+                raiseTo = r.highestBet + Math.max(r.bb, Math.floor(potSize * 0.5));
             } else if (power > 3e10) {
                 action = callAmt === 0 ? 'CALL' : 'FOLD';
             } else {
                 action = 'CALL';
             }
         } else {
-            // Standard: Raise 50% Pot on Monster (Sets+)
+            // Standard AI: Monster = Sets+
             if (power >= 3e10) { 
                 action = 'RAISE';
                 raiseTo = r.highestBet + Math.max(r.bb, Math.floor(potSize * 0.5));
@@ -238,17 +243,17 @@ const processShowdown = (roomId) => {
         if (!p.isBot) {
             const profile = globalProfiles.find(prof => prof.uid === p.uid);
             if (profile) profile.chips += (p.chips - p.buyInOrigin);
-            p.buyInOrigin = p.chips; // Reset delta baseline
+            p.buyInOrigin = p.chips; 
         }
     });
 
     room.winning5Ids = winners[0].best.cards.map(c => c.id);
     room.winningPlayerIndices = winners.map(w => w.index);
 
-    // Rich Black Box Logging
+    // Authoritative Summary Logging
     winners.forEach(w => {
         io.to(roomId).emit('log', { 
-            action: `${room.players[w.index].name} wins $${share} with ${w.best.name} (${w.best.cardString}).`, 
+            action: `${room.players[w.index].name} wins $${share} with ${w.best.summary} (${w.best.cardString}).`, 
             type: 'win' 
         });
     });
@@ -308,13 +313,18 @@ const runIgnition = (roomId) => {
     const room = rooms[roomId];
     if (!room || room.players.filter(Boolean).length < 2) return;
     const dealer = room.players[room.dealerIdx];
+    
+    // Dealer Sovereignty Check
     const variantMap = { 
         HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', holeCards: 2 }, 
         OMAHA: { id: 'OMAHA', name: 'OMAHA', holeCards: 4 }, 
         PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', holeCards: 3 }, 
         MUFLIS: { id: 'MUFLIS', name: 'Muflis', holeCards: 2 } 
     };
-    room.activeVariant = variantMap[dealer?.pendingVariant || 'HOLDEM'];
+    
+    const selectedId = dealer?.pendingVariant || room.pendingVariant || 'HOLDEM';
+    room.activeVariant = variantMap[selectedId];
+
     const seated = room.players.map((p, i) => p ? i : null).filter(x => x !== null);
     const dIdx = seated.indexOf(room.dealerIdx);
     const sbIdx = seated[(dIdx + 1) % seated.length];
@@ -354,7 +364,6 @@ const handleAction = (roomId, type, amount) => {
         player.isFolded = true; 
     } else if (type === 'CALL') {
         const diff = room.highestBet - player.currentBet;
-        // Forced All-In check
         if (diff >= player.chips) {
             player.currentBet += player.chips;
             player.chips = 0;
@@ -405,6 +414,21 @@ io.on('connection', (socket) => {
         if (profile) { socket.emit('loginSuccess', profile); }
     });
 
+    socket.on('updatePlayerSettings', (d) => { 
+        const p = globalProfiles.find(p => p.uid === d.uid);
+        if (p) {
+            p.pendingVariant = d.pendingVariant;
+        }
+        Object.values(rooms).forEach(r => { 
+            const rp = r.players.find(rp => rp && rp.uid === d.uid); 
+            if (rp) {
+                rp.pendingVariant = d.pendingVariant;
+                r.pendingVariant = d.pendingVariant; // Sticky to room
+            }
+        });
+        saveToDisk();
+    });
+
     socket.on('joinRoom', (data, cb) => {
         const room = rooms[data.roomId];
         if (!room) return;
@@ -423,6 +447,21 @@ io.on('connection', (socket) => {
     socket.on('playerAction', (data) => handleAction(data.roomId, data.type, data.amount));
     socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); if(cb) cb({status:'ok'}); saveToDisk(); });
     socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array.from({length:10},()=>null), community:[], phase:PHASES.IDLE, potData:[{amount:0}], dealerIdx:-1, activeIdx:-1 }; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
+    
+    socket.on('adminAddChips', (d) => {
+        const r = rooms[d.roomId];
+        const p = r?.players.find(rp => rp && rp.uid === d.uid);
+        const profile = globalProfiles.find(prof => prof.uid === d.uid);
+        if (p && profile && profile.chips >= d.chips) {
+            p.chips += d.chips;
+            p.buyInOrigin += d.chips;
+            profile.chips -= d.chips;
+            io.emit('profilesUpdate', globalProfiles);
+            io.to(d.roomId).emit('roomUpdate', r);
+            saveToDisk();
+        }
+    });
+
     socket.on('adminEditChips', (d) => {
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) { p.chips = d.chips; io.emit('profilesUpdate', globalProfiles); saveToDisk(); }
