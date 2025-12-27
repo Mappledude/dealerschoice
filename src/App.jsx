@@ -59,10 +59,10 @@ const Seat = ({
             </div>
         </div>
 
-        {/* BET BUBBLE & COLLISION ANIMATION */}
+        {/* BET BUBBLE & COLLISION ANIMATION - High Z-index */}
         {player.currentBet > 0 && (
             <div 
-                className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.4)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[100]`}
+                className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.4)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[250]`}
                 style={{ 
                     top: isCollectingBets ? `${43 - displayPos.y}vh` : '-1.5vw', 
                     left: isCollectingBets ? `${50 - displayPos.x}vw` : '50%',
@@ -392,7 +392,23 @@ const App = () => {
               </div>
             </div>
             
+            {/* HERO perspective locked to bottom center */}
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className="absolute flex flex-col items-center z-50">
+              {/* HERO BET BUBBLE: Positioned higher (above cards) for visibility */}
+              {userSeat?.currentBet > 0 && (
+                <div 
+                  className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-white/20 transition-all duration-[800ms] z-[250]`}
+                  style={{ 
+                    top: isCollectingBets ? `${43 - 98}vh` : '-12vw', // Lifted higher
+                    left: '50%',
+                    transform: `translate(-50%, 0%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
+                    opacity: isCollectingBets ? 0 : 1
+                  }}
+                >
+                  ${userSeat.currentBet}
+                </div>
+              )}
+
               <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mb-2 overflow-visible">
                   {userSeat && !userSeat.isFolded && phase !== PHASES.IDLE && (
                     <div className="relative flex items-center justify-center w-full h-full scale-[1.5]">
