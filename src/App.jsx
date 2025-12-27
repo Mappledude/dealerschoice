@@ -4,10 +4,12 @@ import {
   Trash2, RefreshCcw, Info, TrendingUp, FastForward, 
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
   Zap, Target, DollarSign, User, Lock, DoorOpen, LayoutGrid, ShieldAlert, PlusCircle,
-  Users, Layers, Edit3, ScrollText, ArrowLeft, Key, Save, AlertTriangle, Monitor, Bot
+  Users, Layers, Edit3, ScrollText, ArrowLeft, Key, Save, AlertTriangle, Monitor, Bot,
+  Timer
 } from 'lucide-react';
 import io from 'socket.io-client';
 
+// --- PRODUCTION SOCKET CONFIGURATION ---
 const SOCKET_URL = "https://poker-server-3vin.onrender.com"; 
 const socket = io(SOCKET_URL, { transports: ['websocket'] });
 
@@ -33,7 +35,7 @@ const INITIAL_PLAYERS = Array.from({ length: TOTAL_SEATS }, () => null);
 // --- SEAT COMPONENT ---
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, 
-  isCollectingBets, isActiveTurn, strengthLabel, potTransferring, isHero
+  isCollectingBets, isActiveTurn, strengthLabel, potTransferring, isHero, timeRemaining
 }) => {
     if (!player || !player.hand || !displayPos) return null;
 
@@ -49,6 +51,15 @@ const Seat = ({
         <div className={`flex items-center gap-2 p-[0.6vw] px-[2vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative 
             ${isActiveTurn ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee] scale-105' : 'border-white/10'}
             ${isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : ''}`}>
+            
+            {/* Authorative Turn Timer */}
+            {isActiveTurn && timeRemaining > 0 && (
+                <div className={`absolute -right-12 flex items-center justify-center w-10 h-10 rounded-full border-2 bg-black/80 font-black text-sm z-50 transition-colors
+                    ${timeRemaining <= 10 ? 'border-red-500 text-red-500 animate-pulse' : 'border-cyan-400 text-cyan-400'}`}>
+                    {timeRemaining}
+                </div>
+            )}
+
             <div className="flex flex-col items-center">
                 <div className="flex items-center gap-2">
                     {player?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full shadow-[0_0_0.5vw_red] animate-pulse" />}
@@ -58,13 +69,13 @@ const Seat = ({
             </div>
         </div>
 
-        {/* --- SNUG BET BUBBLES: Positioned tighter to cards --- */}
+        {/* --- PRECISION BET ANCHORING --- */}
         {player.currentBet > 0 && (
             <div 
-                className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[250]`}
+                className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[300]`}
                 style={{ 
-                    // Anchor snugly just "North" of cards
-                    top: isCollectingBets ? `${43 - displayPos.y}vh` : (displayPos.y > 50 ? '-5vw' : '5vw'), 
+                    // SNUG HERO LOGIC: Seat at bottom center (isHero) gets north position just above cards
+                    top: isCollectingBets ? `${43 - displayPos.y}vh` : (isHero ? '-9.5vw' : (displayPos.y > 50 ? '-5vw' : '5vw')), 
                     left: isCollectingBets ? `${50 - displayPos.x}vw` : '50%',
                     transform: `translate(-50%, -100%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
                     opacity: isCollectingBets ? 0 : 1
@@ -137,6 +148,7 @@ const App = () => {
   const [isCollectingBets, setIsCollectingBets] = useState(false);
   const [visiblePotAmount, setVisiblePotAmount] = useState(0);
   const [potTransferring, setPotTransferring] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(30);
 
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 5000, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 10, bb: 20, minBuy: 400, maxBuy: 2000 });
@@ -169,6 +181,7 @@ const App = () => {
         setActiveIdx(data.activeIdx);
         setWinning5Ids(data.winning5Ids || []);
         setWinningPlayerIndices(data.winningPlayerIndices || []);
+        setTimeRemaining(data.timeRemaining || 30);
         
         if (data.phase === PHASES.SHOWDOWN) {
             setPotTransferring(true);
@@ -377,26 +390,34 @@ const App = () => {
               {players.map((p, i) => {
                 if (!p || (userProfile && p.uid === userProfile.uid)) return null;
                 const relativeIdx = heroSeatIdx === -1 ? i : (i - heroSeatIdx + TOTAL_SEATS) % TOTAL_SEATS;
-                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={getCurrentStrength(p)} isCollectingBets={isCollectingBets} potTransferring={potTransferring} isHero={false} />;
+                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[relativeIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={getCurrentStrength(p)} isCollectingBets={isCollectingBets} potTransferring={potTransferring} isHero={false} timeRemaining={timeRemaining} />;
               })}
             </div>
             <div className="absolute inset-0 bg-emerald-950/5 rounded-[40%] border-[1.5vw] border-slate-900 shadow-[inset_0_0_15vw_rgba(0,0,0,0.9)]" />
+            
+            {/* CENTRAL POT CONTAINER */}
             <div className={`absolute top-[43%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center z-30 pointer-events-none`}>
-              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms]`} style={{ transform: `translate(-50%, -50%) ${potTransferring ? 'scale(0.2)' : 'scale(1)'}`, opacity: 1, top: '-4vw' }}>
+              <div className={`absolute left-1/2 -translate-x-1/2 transition-all duration-[800ms] ease-out`} 
+                   style={{ 
+                       transform: `translate(-50%, -50%) ${potTransferring ? 'scale(0.2)' : 'scale(1)'}`, 
+                       opacity: potTransferring ? 0 : 1, 
+                       top: potTransferring ? `${winnerPos.y - 43}vh` : '-4vw',
+                       left: potTransferring ? `${winnerPos.x - 50}vw` : '50%'
+                   }}>
                 <div className="text-[4vw] font-black text-yellow-400 font-mono tracking-tighter shadow-black drop-shadow-2xl">${Number(visiblePotAmount)}</div>
               </div>
               <div className="flex gap-2 scale-[1.7]">
-                  {community.map((c, i) => (<div key={i} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-slate-950 font-black shadow-lg transition-all duration-300 ${Array.isArray(winning5Ids) && winning5Ids.includes(c.id) ? 'ring-4 ring-yellow-400' : ''}`}><span className="text-[0.9vw]">{c.value}</span><span className={`text-[1.8vw] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : ''}`}>{c.suit}</span></div>))}
+                  {community.map((c, i) => (<div key={i} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-slate-950 font-black shadow-lg transition-all duration-300 ${Array.isArray(winning5Ids) && winning5Ids.includes(c.id) ? 'ring-4 ring-yellow-400 z-[300]' : ''}`}><span className="text-[0.9vw]">{c.value}</span><span className={`text-[1.8vw] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : ''}`}>{c.suit}</span></div>))}
               </div>
             </div>
             
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className="absolute flex flex-col items-center z-50">
-              {/* --- SNUG HERO BET BUBBLE: Closer to cards --- */}
+              {/* --- PRECISION HERO BET ANCHORING: Snug just North of cards --- */}
               {userSeat?.currentBet > 0 && (
                 <div 
-                  className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] z-[250]`}
+                  className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.6)] border border-white/20 transition-all duration-[800ms] z-[350]`}
                   style={{ 
-                    top: isCollectingBets ? `${43 - 98}vh` : '-10vw', // Snugger North position
+                    top: isCollectingBets ? `${43 - 98}vh` : '-9.5vw', // Hard-coded snugly just above cards
                     left: '50%',
                     transform: `translate(-50%, 0%) ${isCollectingBets ? 'scale(0.2) rotate(180deg)' : 'scale(1)'}`,
                     opacity: isCollectingBets ? 0 : 1
@@ -419,7 +440,18 @@ const App = () => {
               </div>
               {/* EVALUATION BUBBLE - h-7 */}
               {userSeat && !isShowdown && phase !== PHASES.IDLE && (<div className="z-[5001] h-7 px-3 py-1 bg-purple-600/95 border border-purple-300/30 rounded-full shadow-[0_0_2vw_rgba(147,51,234,0.6)] animate-in fade-in transition-all flex items-center relative -mt-3 mb-1"><span className="text-[10px] font-black text-white uppercase tracking-widest leading-none">{String(getCurrentStrength(userSeat) || "Evaluating...")}</span></div>)}
-              {userSeat && (<div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat.isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}><div className="flex flex-col items-center"><div className="flex items-center gap-2">{userSeat.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat.chips)}</span></div></div>)}
+              <div className={`flex items-center gap-[0.5vw] p-[0.6vw] px-[2.5vw] rounded-full border-2 bg-black/95 backdrop-blur-xl shadow-2xl transition-all duration-300 relative pointer-events-auto z-50 ${userSeat?.isWinner && isShowdown ? (potTransferring ? 'border-yellow-400 scale-125 shadow-[0_0_3vw_#fbbf24]' : 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]') : 'border-white/10'} ${activeIdx === heroSeatIdx ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee]' : ''}`}>
+                  
+                {/* Visual Shot Clock UI for Hero */}
+                {activeIdx === heroSeatIdx && timeRemaining > 0 && (
+                    <div className={`absolute -right-12 flex items-center justify-center w-10 h-10 rounded-full border-2 bg-black/80 font-black text-sm z-50 transition-colors
+                        ${timeRemaining <= 10 ? 'border-red-500 text-red-500 animate-pulse' : 'border-cyan-400 text-cyan-400'}`}>
+                        {timeRemaining}
+                    </div>
+                )}
+
+                <div className="flex flex-col items-center">
+                    <div className="flex items-center gap-2">{userSeat?.isDealer && <div className="w-[0.8vw] h-[0.8vw] bg-red-600 rounded-full animate-pulse" />}<span className="text-[1.2vw] font-black text-white leading-none uppercase tracking-widest">{String(userSeat?.name)}</span></div><span className={`text-[1.3vw] font-mono font-black mt-1 ${userSeat?.isWinner && isShowdown ? 'text-emerald-400' : 'text-emerald-500/80'}`}>${Number(userSeat?.chips)}</span></div></div>
             </div>
         </div>
       </main>
