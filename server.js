@@ -224,6 +224,7 @@ const processShowdown = (roomId) => {
         return;
     }
     
+    // --- MUFLIS LOGIC INVERSION ---
     const isMuflis = room.activeVariant?.id === 'MUFLIS';
     evals.sort((a, b) => isMuflis ? (a.best.power - b.best.power) : (b.best.power - a.best.power));
     
@@ -315,7 +316,6 @@ const runIgnition = (roomId) => {
         MUFLIS: { id: 'MUFLIS', name: 'Muflis', holeCards: 2 } 
     };
     
-    // VARIANT LOCKDOWN
     const selectedId = dealer?.pendingVariant || room.pendingVariant || 'HOLDEM';
     room.activeVariant = variantMap[selectedId];
 
