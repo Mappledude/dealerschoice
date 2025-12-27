@@ -129,30 +129,47 @@ const processShowdown = (roomId) => {
     room.phase = PHASES.SHOWDOWN;
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     
+    // Evaluate hands for all active players
     const evals = activeIndices.map(i => ({ 
         index: i, 
         best: getBestHand(room.players[i].hand, room.community) 
     }));
+    
+    // --- SPLIT POT LOGIC: Identify all winners with identical top power scores ---
     evals.sort((a, b) => b.best.power - a.best.power);
-
-    const winnerData = evals[0];
-    const winner = room.players[winnerData.index];
+    const topPower = evals[0].best.power;
+    const winners = evals.filter(e => e.best.power === topPower);
     
     collectBets(room);
-    const winAmount = room.potData[0].amount;
+    const totalPot = room.potData[0].amount;
+    const share = Math.floor(totalPot / winners.length);
 
-    winner.isWinner = true;
-    winner.chips += winAmount; 
-    room.winning5Ids = winnerData.best.cards.map(c => c.id);
-    room.winningPlayerIndices = [winnerData.index];
-
-    io.to(roomId).emit('roomUpdate', room);
-    io.to(roomId).emit('log', { 
-        name: String(winner.name), 
-        action: `wins $${winAmount} with a ${winnerData.best.name}!`, 
-        type: 'win' 
+    winners.forEach(w => {
+        const p = room.players[w.index];
+        p.isWinner = true;
+        p.chips += share;
     });
 
+    // Pulse cards of the first winner for visual feedback
+    room.winning5Ids = winners[0].best.cards.map(c => c.id);
+    room.winningPlayerIndices = winners.map(w => w.index);
+
+    const winnerNames = winners.map(w => room.players[w.index].name).join(' and ');
+
+    if (winners.length > 1) {
+        io.to(roomId).emit('log', { 
+            action: `Pot Split between ${winnerNames} ($${share} each)!`, 
+            type: 'win' 
+        });
+    } else {
+        io.to(roomId).emit('log', { 
+            name: String(winners[0].best.name), 
+            action: `wins $${totalPot} with a ${winners[0].best.name}!`, 
+            type: 'win' 
+        });
+    }
+
+    io.to(roomId).emit('roomUpdate', room);
     saveToDisk();
 
     setTimeout(() => {
@@ -328,6 +345,7 @@ io.on('connection', (socket) => {
     socket.on('adminForceDeal', (roomId) => runIgnition(roomId));
     socket.on('adminNuclearReset', () => { globalProfiles=[]; rooms={}; io.emit('profilesUpdate',[]); io.emit('lobbyUpdate',[]); saveToDisk(); });
     
+    // --- AUTHORITATIVE WALLET EDITOR ---
     socket.on('adminEditChips', (d) => {
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) {
