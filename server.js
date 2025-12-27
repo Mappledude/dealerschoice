@@ -16,7 +16,7 @@ const io = new Server(httpServer, {
 const DB_PATH = './poker_db.json';
 let globalProfiles = []; 
 let rooms = {}; 
-let roomIntervals = {}; // authorative intervals for countdowns
+let roomIntervals = {}; 
 
 const saveToDisk = () => {
     try {
@@ -119,8 +119,11 @@ const startShotClock = (roomId) => {
     const room = rooms[roomId];
     if (!room || room.activeIdx === -1) return;
 
+    const activePlayer = room.players[room.activeIdx];
     room.timeRemaining = 30;
-    io.to(roomId).emit('log', { action: `30s Clock started for ${room.players[room.activeIdx].name}`, type: 'system' });
+    
+    // Turn Heartbeat Log
+    io.to(roomId).emit('log', { action: `30s Shot Clock reset for ${activePlayer.name}`, type: 'system' });
 
     roomIntervals[roomId] = setInterval(() => {
         const r = rooms[roomId];
@@ -134,12 +137,13 @@ const startShotClock = (roomId) => {
         if (r.timeRemaining <= 0) {
             clearShotClock(roomId);
             const p = r.players[r.activeIdx];
-            io.to(roomId).emit('log', { action: `${p.name} Folded due to Timeout`, type: 'system' });
-            
             const canCheck = r.highestBet === p.currentBet;
-            handleAction(roomId, canCheck ? 'CALL' : 'FOLD', 0);
+            const actionType = canCheck ? 'CALL' : 'FOLD';
+            
+            // --- AUTHORITATIVE AUTO-ACTION BROADCAST ---
+            io.to(roomId).emit('log', { action: `${p.name} timed out and was auto-${canCheck ? 'checked' : 'folded'}`, type: 'system' });
+            handleAction(roomId, actionType, 0);
         } else {
-            // Periodic sync to ensure all clients see same number
             io.to(roomId).emit('roomUpdate', r);
         }
     }, 1000);
@@ -324,8 +328,12 @@ const handleAction = (roomId, type, amount) => {
     const allActed = activeIndices.every(i => room.players[i].hasActed);
     const allMatched = activeIndices.every(i => room.players[i].currentBet === room.highestBet);
 
-    if (activeIndices.length === 1) { processShowdown(roomId); }
-    else if (allActed && allMatched) { advancePhase(roomId); }
+    if (activeIndices.length === 1) { 
+        processShowdown(roomId); 
+    }
+    else if (allActed && allMatched) { 
+        advancePhase(roomId); 
+    }
     else {
         const currentPos = activeIndices.indexOf(room.activeIdx);
         room.activeIdx = activeIndices[(currentPos + 1) % activeIndices.length];
