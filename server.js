@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import fs from 'fs';
+import path from 'path';
 
 const app = express();
 app.use(cors());
@@ -12,8 +13,15 @@ const io = new Server(httpServer, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// --- PERSISTENCE ENGINE ---
-const DB_PATH = './poker_db.json';
+// --- PERSISTENCE ENGINE (v1.2.0 Production) ---
+const DB_DIR = './data';
+const DB_PATH = path.join(DB_DIR, 'poker_db.json');
+
+// Ensure persistent directory exists
+if (!fs.existsSync(DB_DIR)) {
+    fs.mkdirSync(DB_DIR, { recursive: true });
+}
+
 let globalProfiles = []; 
 let rooms = {}; 
 let roomIntervals = {}; 
@@ -34,7 +42,7 @@ const loadFromDisk = () => {
             const data = JSON.parse(raw);
             globalProfiles = data.globalProfiles || [];
             rooms = data.rooms || {};
-            console.log("Database Hydrated from Disk.");
+            console.log("Production Database Hydrated from Eternal Disk.");
         }
     } catch (err) {
         console.error("Hydration Error:", err);
@@ -90,12 +98,7 @@ const rankFiveCardHand = (cards) => {
 
     const power = score * 1e10 + valCounts.reduce((acc, v, i) => acc + (v.rank * Math.pow(100, 4 - i)), 0);
     const cardString = sorted.map(c => c.value).join('-');
-    
-    let handSummary = name;
-    if (score === 1) handSummary = `Pair of ${sorted.find(c => counts[VM[c.value]] === 2).value}'s`;
-    if (score === 6) handSummary = `Full House, ${sorted.find(c => counts[VM[c.value]] === 3).value}'s over ${sorted.find(c => counts[VM[c.value]] === 2).value}'s`;
-
-    return { power, name, summary: handSummary, cardString, cards: sorted };
+    return { power, name, cardString, cards: sorted };
 };
 
 const getBestHand = (holeCards, community) => {
@@ -116,44 +119,43 @@ const getBestHand = (holeCards, community) => {
 const executeBotAction = (roomId) => {
     const room = rooms[roomId];
     if (!room || room.activeIdx === -1) return;
-    const p = room.players[room.activeIdx];
-    if (!p || !p.isBot) return;
+    const bot = room.players[room.activeIdx];
+    if (!bot || !bot.isBot) return;
 
-    // Decision Speed: 1.2 to 1.8 seconds for v1.2.0
     const delay = 1200 + Math.random() * 600;
 
     setTimeout(() => {
         const r = rooms[roomId];
         if (!r || r.activeIdx === -1) return;
-        const bot = r.players[r.activeIdx];
-        if (!bot || !bot.isBot) return;
+        const p = r.players[r.activeIdx];
+        if (!p || !p.isBot) return;
 
-        const best = getBestHand(bot.hand, r.community);
+        const best = getBestHand(p.hand, r.community);
         const power = best ? best.power : 0;
         const isMuflis = r.activeVariant?.id === 'MUFLIS';
-        const callAmt = r.highestBet - bot.currentBet;
+        const callAmt = r.highestBet - p.currentBet;
         const potSize = (r.potData?.[0]?.amount || 0) + r.players.reduce((a, b) => a + (b?.currentBet || 0), 0);
 
         let action = 'CHECK';
         let raiseTo = 0;
 
         if (isMuflis) {
-            // Muflis AI: Monster = High Card. Fold = Sets.
+            // Muflis Strategy: High Card is the Nut. Fold Pairs.
             if (power < 1e10) { 
                 action = 'RAISE';
-                raiseTo = r.highestBet + Math.max(r.bb, Math.floor(potSize * 0.5));
-            } else if (power > 3e10) {
+                raiseTo = r.highestBet + Math.floor(potSize * 0.5);
+            } else if (power > 2e10) {
                 action = callAmt === 0 ? 'CALL' : 'FOLD';
             } else {
                 action = 'CALL';
             }
         } else {
-            // Standard AI: Monster = Sets+
+            // Standard Strategy: Raise 50% pot on Sets+
             if (power >= 3e10) { 
                 action = 'RAISE';
                 raiseTo = r.highestBet + Math.max(r.bb, Math.floor(potSize * 0.5));
-            } else if (power >= 1e10 || Math.random() < 0.1) { // 10% Bluff
-                action = (callAmt > bot.chips * 0.3) ? 'FOLD' : 'CALL';
+            } else if (power >= 1e10 || Math.random() < 0.1) {
+                action = (callAmt > p.chips * 0.3) ? 'FOLD' : 'CALL';
             } else {
                 action = callAmt === 0 ? 'CALL' : 'FOLD';
             }
@@ -239,7 +241,7 @@ const processShowdown = (roomId) => {
         p.isWinner = true;
         p.chips += share;
         
-        // Immediate Global Wallet Sync for Humans
+        // --- AUTHORITATIVE SETTLEMENT ---
         if (!p.isBot) {
             const profile = globalProfiles.find(prof => prof.uid === p.uid);
             if (profile) profile.chips += (p.chips - p.buyInOrigin);
@@ -250,10 +252,9 @@ const processShowdown = (roomId) => {
     room.winning5Ids = winners[0].best.cards.map(c => c.id);
     room.winningPlayerIndices = winners.map(w => w.index);
 
-    // Authoritative Summary Logging
     winners.forEach(w => {
         io.to(roomId).emit('log', { 
-            action: `${room.players[w.index].name} wins $${share} with ${w.best.summary} (${w.best.cardString}).`, 
+            action: `${room.players[w.index].name} wins $${share} with ${w.best.name} (${w.best.cardString}).`, 
             type: 'win' 
         });
     });
@@ -268,11 +269,7 @@ const processShowdown = (roomId) => {
         room.community = [];
         room.winning5Ids = [];
         room.winningPlayerIndices = [];
-        room.players.forEach(p => { 
-            if (p) { 
-                p.hand = []; p.isWinner = false; p.isFolded = false; p.currentBet = 0; p.hasActed = false; p.isAllIn = false;
-            } 
-        });
+        room.players.forEach(p => { if (p) { p.hand = []; p.isWinner = false; p.isFolded = false; p.currentBet = 0; p.hasActed = false; p.isAllIn = false; } });
         const seated = room.players.map((p, i) => p ? i : null).filter(x => x !== null);
         if (seated.length > 0) {
             const dPos = seated.indexOf(room.dealerIdx);
@@ -314,16 +311,15 @@ const runIgnition = (roomId) => {
     if (!room || room.players.filter(Boolean).length < 2) return;
     const dealer = room.players[room.dealerIdx];
     
-    // Dealer Sovereignty Check
+    // --- DEALER SOVEREIGNTY ---
     const variantMap = { 
         HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', holeCards: 2 }, 
         OMAHA: { id: 'OMAHA', name: 'OMAHA', holeCards: 4 }, 
         PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', holeCards: 3 }, 
         MUFLIS: { id: 'MUFLIS', name: 'Muflis', holeCards: 2 } 
     };
-    
-    const selectedId = dealer?.pendingVariant || room.pendingVariant || 'HOLDEM';
-    room.activeVariant = variantMap[selectedId];
+    const targetVariantId = dealer?.pendingVariant || room.pendingVariant || 'HOLDEM';
+    room.activeVariant = variantMap[targetVariantId];
 
     const seated = room.players.map((p, i) => p ? i : null).filter(x => x !== null);
     const dIdx = seated.indexOf(room.dealerIdx);
@@ -392,11 +388,9 @@ const handleAction = (roomId, type, amount) => {
     const allActed = activeIndices.every(i => room.players[i].hasActed || room.players[i].isAllIn);
     const allMatched = activeIndices.every(i => room.players[i].currentBet === room.highestBet || room.players[i].isAllIn);
 
-    if (activeIndices.length === 1) { 
-        processShowdown(roomId); 
-    } else if (allActed && allMatched) { 
-        advancePhase(roomId); 
-    } else {
+    if (activeIndices.length === 1) { processShowdown(roomId); }
+    else if (allActed && allMatched) { advancePhase(roomId); }
+    else {
         const currentPos = activeIndices.indexOf(room.activeIdx);
         room.activeIdx = activeIndices[(currentPos + 1) % activeIndices.length];
         io.to(roomId).emit('roomUpdate', room);
@@ -416,14 +410,12 @@ io.on('connection', (socket) => {
 
     socket.on('updatePlayerSettings', (d) => { 
         const p = globalProfiles.find(p => p.uid === d.uid);
-        if (p) {
-            p.pendingVariant = d.pendingVariant;
-        }
+        if (p) p.pendingVariant = d.pendingVariant;
         Object.values(rooms).forEach(r => { 
             const rp = r.players.find(rp => rp && rp.uid === d.uid); 
             if (rp) {
                 rp.pendingVariant = d.pendingVariant;
-                r.pendingVariant = d.pendingVariant; // Sticky to room
+                if (rp.isDealer) r.pendingVariant = d.pendingVariant;
             }
         });
         saveToDisk();
@@ -444,10 +436,6 @@ io.on('connection', (socket) => {
         if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) setTimeout(() => runIgnition(data.roomId), 3000);
     });
 
-    socket.on('playerAction', (data) => handleAction(data.roomId, data.type, data.amount));
-    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); if(cb) cb({status:'ok'}); saveToDisk(); });
-    socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array.from({length:10},()=>null), community:[], phase:PHASES.IDLE, potData:[{amount:0}], dealerIdx:-1, activeIdx:-1 }; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
-    
     socket.on('adminAddChips', (d) => {
         const r = rooms[d.roomId];
         const p = r?.players.find(rp => rp && rp.uid === d.uid);
@@ -462,11 +450,9 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('adminEditChips', (d) => {
-        const p = globalProfiles.find(p => p.uid === d.uid);
-        if (p) { p.chips = d.chips; io.emit('profilesUpdate', globalProfiles); saveToDisk(); }
-    });
-
+    socket.on('playerAction', (data) => handleAction(data.roomId, data.type, data.amount));
+    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); if (cb) cb({status:'ok'}); saveToDisk(); });
+    socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array.from({length:10},()=>null), community:[], phase:PHASES.IDLE, potData:[{amount:0}], dealerIdx:-1, activeIdx:-1 }; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
     socket.on('adminAddBot', (data) => {
         const room = rooms[data.roomId];
         if (!room) return;
@@ -474,7 +460,7 @@ io.on('connection', (socket) => {
         const botProfile = { name: "BOT_"+botId.toUpperCase(), uid: botId, chips: 5000, isBot: true };
         const slot = room.players.findIndex(p => p === null);
         if (slot !== -1) {
-            room.players[slot] = { ...botProfile, buyInOrigin: 5000, pendingVariant: 'HOLDEM', currentBet: 0, hand: [], isWinner: false, isFolded: false, hasActed: false, socketId: 'bot-internal' };
+            room.players[slot] = { ...botProfile, buyInOrigin: 5000, pendingVariant: 'HOLDEM', currentBet: 0, hand: [], isWinner: false, isFolded: false, hasActed: false, socketId: 'bot' };
             io.to(data.roomId).emit('roomUpdate', room);
             if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) runIgnition(data.roomId);
             saveToDisk();
@@ -502,4 +488,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative Persistence Engine: ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Authoritative stable engine: ${PORT}`));
