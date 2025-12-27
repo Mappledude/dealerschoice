@@ -163,6 +163,7 @@ const processShowdown = (roomId) => {
     io.to(roomId).emit('roomUpdate', room);
     saveToDisk();
 
+    // 6 Second Reveal for premium animations
     setTimeout(() => {
         if (!rooms[roomId]) return;
         room.phase = PHASES.IDLE;
@@ -323,8 +324,8 @@ io.on('connection', (socket) => {
             p.pendingVariant = d.pendingVariant;
             io.emit('log', { action: `${p.name} pre-selected ${d.pendingVariant}`, type: 'system' });
         }
-        Object.values(rooms).forEach(r => { 
-            const rp = r.players.find(rp => rp && rp.uid === d.uid); 
+        Object.values(rooms).forEach(room => { 
+            const rp = room.players.find(rp => rp && rp.uid === d.uid); 
             if (rp) rp.pendingVariant = d.pendingVariant; 
         });
         saveToDisk();
