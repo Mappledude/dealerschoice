@@ -20,7 +20,6 @@ const SUITS = ['♠', '♣', '♥', '♦'];
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 
 // --- AUTHORITATIVE POKER EVALUATOR ---
-
 const getCombinations = (arr, k) => {
     const fn = (n, src, got, all) => {
         if (n === 0) { all.push(got); return; }
@@ -38,17 +37,13 @@ const rankFiveCardHand = (cards) => {
     const ranks = cards.map(c => VM[c.value]).sort((a, b) => b - a);
     const suits = cards.map(c => c.suit);
     const isFlush = new Set(suits).size === 1;
-    
     let isStraight = true;
     for (let i = 0; i < 4; i++) if (ranks[i] !== ranks[i + 1] + 1) isStraight = false;
-    // Ace-low straight check
     if (!isStraight && JSON.stringify(ranks) === JSON.stringify([14, 5, 4, 3, 2])) isStraight = true;
 
     const counts = {}; 
     ranks.forEach(r => counts[r] = (counts[r] || 0) + 1);
-    const valCounts = Object.entries(counts)
-        .map(([rank, count]) => ({ rank: parseInt(rank), count }))
-        .sort((a, b) => b.count - a.count || b.rank - a.rank);
+    const valCounts = Object.entries(counts).map(([rank, count]) => ({ rank: parseInt(rank), count })).sort((a, b) => b.count - a.count || b.rank - a.rank);
 
     let score = 0, name = "High Card";
     if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
@@ -60,7 +55,6 @@ const rankFiveCardHand = (cards) => {
     else if (valCounts[0].count === 2 && valCounts[1].count === 2) { score = 2; name = "Two Pair"; }
     else if (valCounts[0].count === 2) { score = 1; name = "Pair"; }
 
-    // Tie-breaker value using base-100 weighting
     const power = score * 1e10 + valCounts.reduce((acc, v, i) => acc + (v.rank * Math.pow(100, 4 - i)), 0);
     return { power, name, cards };
 };
@@ -78,16 +72,9 @@ const getBestHand = (holeCards, community) => {
 };
 
 // --- GAME LOGIC HELPERS ---
-
 const collectBets = (room) => {
     let streetPot = 0;
-    room.players.forEach(p => {
-        if (p) {
-            streetPot += p.currentBet;
-            p.currentBet = 0;
-            p.hasActed = false; 
-        }
-    });
+    room.players.forEach(p => { if (p) { streetPot += p.currentBet; p.currentBet = 0; p.hasActed = false; } });
     if (!room.potData) room.potData = [{ label: 'MAIN', amount: 0 }];
     room.potData[0].amount += streetPot;
     room.highestBet = 0;
@@ -97,34 +84,19 @@ const collectBets = (room) => {
 const processShowdown = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
-
     room.phase = PHASES.SHOWDOWN;
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
-    
-    // Combinatorial analysis for all active players
-    const evals = activeIndices.map(i => ({ 
-        index: i, 
-        best: getBestHand(room.players[i].hand, room.community) 
-    }));
+    const evals = activeIndices.map(i => ({ index: i, best: getBestHand(room.players[i].hand, room.community) }));
     evals.sort((a, b) => b.best.power - a.best.power);
-
     const winnerData = evals[0];
     const winner = room.players[winnerData.index];
     const winAmount = room.potData[0].amount;
-
     winner.isWinner = true;
-    winner.chips += winAmount; 
+    winner.chips += winAmount;
     room.winning5Ids = winnerData.best.cards.map(c => c.id);
     room.winningPlayerIndices = [winnerData.index];
-
     io.to(roomId).emit('roomUpdate', room);
-    io.to(roomId).emit('log', { 
-        name: String(winner.name), 
-        action: `wins $${winAmount} with ${winnerData.best.name}!`, 
-        type: 'win' 
-    });
-
-    // Auto-Restart Hand Cycle
+    io.to(roomId).emit('log', { name: String(winner.name), action: `wins $${winAmount} with ${winnerData.best.name}!`, type: 'win' });
     setTimeout(() => {
         if (!rooms[roomId]) return;
         room.phase = PHASES.IDLE;
@@ -132,11 +104,9 @@ const processShowdown = (roomId) => {
         room.winning5Ids = [];
         room.winningPlayerIndices = [];
         room.players.forEach(p => { if (p) { p.hand = []; p.isWinner = false; p.isFolded = false; p.currentBet = 0; p.hasActed = false; } });
-        
         const seated = room.players.map((p, i) => p ? i : null).filter(x => x !== null);
         const currentDealerPos = seated.indexOf(room.dealerIdx);
         room.dealerIdx = seated[(currentDealerPos + 1) % seated.length];
-        
         io.to(roomId).emit('roomUpdate', room);
         setTimeout(() => runIgnition(roomId), 3000);
     }, 6000);
@@ -168,8 +138,8 @@ const advancePhase = (roomId) => {
 const runIgnition = (roomId) => {
     const room = rooms[roomId];
     if (!room || room.players.filter(Boolean).length < 2) return;
-    
-    // OBEY DEALER'S CHOICE
+
+    // --- VARIANT FALLBACK: Hard enforcement of Dealer's Choice or default to Hold'em ---
     const dealer = room.players[room.dealerIdx];
     const variantId = dealer?.pendingVariant || 'HOLDEM';
     const variantMap = { 
@@ -178,7 +148,7 @@ const runIgnition = (roomId) => {
         PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', holeCards: 3 }, 
         MUFLIS: { id: 'MUFLIS', name: 'Muflis', holeCards: 2 } 
     };
-    room.activeVariant = variantMap[variantId];
+    room.activeVariant = variantMap[variantId] || variantMap['HOLDEM'];
 
     const seated = room.players.map((p, i) => p ? i : null).filter(x => x !== null);
     const dIdx = seated.indexOf(room.dealerIdx);
@@ -188,7 +158,8 @@ const runIgnition = (roomId) => {
 
     const SB_VAL = room.sb || 10;
     const BB_VAL = room.bb || 20;
-    let deck = shuffle(VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))));
+    const shuffleArray = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+    let deck = shuffleArray(VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))));
     room.deck = deck;
 
     room.players = room.players.map((p, i) => {
@@ -204,6 +175,8 @@ const runIgnition = (roomId) => {
     room.lastRaiseAmt = BB_VAL;
     room.community = [];
     room.potData = [{ label: 'MAIN', amount: 0 }];
+    
+    // --- BROADCAST CHECK: Immediate authority emission ---
     io.to(roomId).emit('roomUpdate', room);
     io.to(roomId).emit('log', { action: `Dealer ${dealer.name} chose ${room.activeVariant.name}`, type: 'system' });
 };
@@ -232,11 +205,7 @@ io.on('connection', (socket) => {
         }
         io.to(roomId).emit('roomUpdate', room);
         if (callback) callback({ status: 'ok' });
-        // AUTO-DEAL TRIGGER
-        if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) { 
-            io.to(roomId).emit('log', { action: "Players Ready (Dealing in 3s...)", type: 'system' });
-            setTimeout(() => runIgnition(roomId), 3000); 
-        }
+        if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) { setTimeout(() => runIgnition(roomId), 2000); }
     });
 
     socket.on('playerAction', (data) => {
@@ -245,32 +214,15 @@ io.on('connection', (socket) => {
         if (!room || room.activeIdx === -1) return;
         const player = room.players[room.activeIdx];
         player.hasActed = true;
-
         if (type === 'FOLD') { player.isFolded = true; }
-        else if (type === 'CALL') {
-            const diff = room.highestBet - player.currentBet;
-            player.chips -= diff;
-            player.currentBet = room.highestBet;
-        }
-        else if (type === 'RAISE') {
-            const diff = amount - player.currentBet;
-            player.chips -= diff;
-            player.currentBet = amount;
-            room.highestBet = amount;
-            room.players.forEach(p => { if (p && p.uid !== player.uid) p.hasActed = false; });
-        }
-
+        else if (type === 'CALL') { const diff = room.highestBet - player.currentBet; player.chips -= diff; player.currentBet = room.highestBet; }
+        else if (type === 'RAISE') { const diff = amount - player.currentBet; player.chips -= diff; player.currentBet = amount; room.highestBet = amount; room.players.forEach(p => { if (p && p.uid !== player.uid) p.hasActed = false; }); }
         const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
         const allActed = activeIndices.every(i => room.players[i].hasActed);
         const allMatched = activeIndices.every(i => room.players[i].currentBet === room.highestBet);
-
         if (activeIndices.length === 1) { processShowdown(roomId); }
         else if (allActed && allMatched) { advancePhase(roomId); }
-        else {
-            const currentPos = activeIndices.indexOf(room.activeIdx);
-            room.activeIdx = activeIndices[(currentPos + 1) % activeIndices.length];
-            io.to(roomId).emit('roomUpdate', room);
-        }
+        else { const currentPos = activeIndices.indexOf(room.activeIdx); room.activeIdx = activeIndices[(currentPos + 1) % activeIndices.length]; io.to(roomId).emit('roomUpdate', room); }
     });
 
     socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); cb({status:'ok'}); });
@@ -287,4 +239,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative Backend Running`));
+httpServer.listen(PORT, () => console.log(`Poker Backend Authoritative Engine Ready`));
