@@ -47,7 +47,7 @@ const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'
 const SUITS = ['♠', '♣', '♥', '♦'];
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 
-// --- AUTHORITATIVE POKER EVALUATOR (21-SUBSET GENERATOR) ---
+// --- AUTHORITATIVE POKER EVALUATOR ---
 
 const getCombinations = (arr, k) => {
     const fn = (n, src, got, all) => {
@@ -165,7 +165,7 @@ const processShowdown = (roomId) => {
         return;
     }
     
-    // --- MUFLIS LOGIC VERIFICATION: Lowest power score wins ---
+    // --- MUFLIS LOGIC ---
     const isMuflis = room.activeVariant?.id === 'MUFLIS';
     evals.sort((a, b) => isMuflis ? (a.best.power - b.best.power) : (b.best.power - a.best.power));
     
@@ -252,31 +252,22 @@ const runIgnition = (roomId) => {
     const sbIdx = seated[(dIdx + 1) % seated.length];
     const bbIdx = seated[(dIdx + 2) % seated.length];
     room.activeIdx = seated[(seated.indexOf(bbIdx) + 1) % seated.length];
-    
     let deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s })));
     for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
     room.deck = deck;
-    
-    // --- DEAL SYNCHRONIZATION: Complete hand assignment for ALL players before broadcasting ---
     room.players = room.players.map((p, i) => {
         if (!p) return null;
         let hand = [];
-        for (let j = 0; j < room.activeVariant.holeCards; j++) {
-            const card = room.deck.pop();
-            if (card) hand.push(card);
-        }
+        for (let j = 0; j < room.activeVariant.holeCards; j++) hand.push(room.deck.pop());
         let bet = (i === sbIdx) ? room.sb : (i === bbIdx) ? room.bb : 0;
         return { ...p, hand, chips: p.chips - bet, buyInOrigin: p.chips, currentBet: bet, isFolded: false, isWinner: false, hasActed: false, isDealer: (i === room.dealerIdx) };
     });
-
     room.phase = PHASES.PRE_FLOP;
     room.highestBet = room.bb;
     room.community = [];
     room.potData = [{ label: 'MAIN', amount: 0 }];
-    
     io.to(roomId).emit('roomUpdate', room);
     startShotClock(roomId);
-    saveToDisk();
 };
 
 const handleAction = (roomId, type, amount) => {
@@ -330,43 +321,17 @@ io.on('connection', (socket) => {
             if (room.dealerIdx === -1) room.dealerIdx = slot;
         }
         io.to(data.roomId).emit('roomUpdate', room);
-        if (cb) cb({ status: 'ok' });
+        if(cb) cb({ status: 'ok' });
         if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) setTimeout(() => runIgnition(data.roomId), 3000);
     });
 
     socket.on('playerAction', (data) => handleAction(data.roomId, data.type, data.amount));
-    
-    // --- ADMIN RE-INTEGRATION ---
-    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); if(cb) cb({status:'ok'}); saveToDisk(); });
+    socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); io.emit('profilesUpdate', globalProfiles); cb({status:'ok'}); saveToDisk(); });
     socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array.from({length:10},()=>null), community:[], phase:PHASES.IDLE, potData:[{amount:0}], dealerIdx:-1, activeIdx:-1 }; io.emit('lobbyUpdate', Object.values(rooms)); saveToDisk(); });
-    
     socket.on('adminEditChips', (d) => {
         const p = globalProfiles.find(p => p.uid === d.uid);
         if (p) { p.chips = d.chips; io.emit('profilesUpdate', globalProfiles); saveToDisk(); }
     });
-
-    // --- BOT ACTION FIX: Initialize hand correctly ---
-    socket.on('adminAddBot', (roomId) => {
-        const room = rooms[roomId];
-        if (!room) return;
-        const botId = 'bot_' + Math.random().toString(36).substr(2, 5);
-        const botProfile = { name: "BOT_"+botId.toUpperCase(), uid: botId, chips: 5000, isBot: true };
-        const slot = room.players.findIndex(p => p === null);
-        if (slot !== -1) {
-            room.players[slot] = { ...botProfile, buyInOrigin: 5000, pendingVariant: 'HOLDEM', currentBet: 0, hand: [], isWinner: false, isFolded: false, hasActed: false, socketId: 'internal' };
-            io.to(roomId).emit('roomUpdate', room);
-            if (room.players.filter(Boolean).length >= 2 && room.phase === PHASES.IDLE) runIgnition(roomId);
-            saveToDisk();
-        }
-    });
-
-    socket.on('adminDeletePlayer', (uid) => {
-        globalProfiles = globalProfiles.filter(p => p.uid !== uid);
-        io.emit('profilesUpdate', globalProfiles);
-        saveToDisk();
-    });
-
-    socket.on('adminNuclearReset', () => { globalProfiles=[]; rooms={}; io.emit('profilesUpdate',[]); io.emit('lobbyUpdate',[]); saveToDisk(); });
 
     socket.on('disconnecting', () => {
         for (const roomId of socket.rooms) {
@@ -375,7 +340,6 @@ io.on('connection', (socket) => {
                 const playerIdx = room.players.findIndex(p => p && p.socketId === socket.id);
                 const player = room.players[playerIdx];
                 if (player) {
-                    // --- PERSISTENT SETTLEMENT ---
                     const profile = globalProfiles.find(p => p.uid === player.uid);
                     if (profile) { profile.chips += (player.chips - player.buyInOrigin); io.emit('profilesUpdate', globalProfiles); }
                     room.players[playerIdx] = null;
@@ -389,4 +353,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative Persistence Engine: ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Authoritative stable engine: ${PORT}`));
