@@ -59,7 +59,7 @@ const Seat = ({
             </div>
         </div>
 
-        {/* BET BUBBLE & COLLISION ANIMATION */}
+        {/* GOLD BET BUBBLE & COLLISION ANIMATION */}
         {player.currentBet > 0 && (
             <div 
                 className={`absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[1vw] px-[1.2vw] py-[0.3vw] rounded-full shadow-[0_0_20px_rgba(251,191,36,0.4)] border border-white/20 transition-all duration-[800ms] ease-in-out z-[100]`}
@@ -148,7 +148,7 @@ const App = () => {
     socket.on('roomUpdate', (data) => {
         if (!data?.players) return;
         
-        // COLLISION ANIMATION LOGIC
+        // COLLISION ANIMATION LOGIC: Trigger kinetic movement if street changed
         const isPhaseChanging = data.phase !== phase && phase !== PHASES.IDLE;
         if (isPhaseChanging) {
             setIsCollectingBets(true);
@@ -317,7 +317,7 @@ const App = () => {
                                     )}
                                 </td>
                                 <td className="p-6 text-right flex justify-end gap-2">
-                                    <button onClick={() => { setEditingPlayerUid(p.uid); setEditBalance(p.chips); }} className="p-2 text-cyan-400 hover:bg-cyan-600/20 rounded-lg"><Edit3 size={14}/></button>
+                                    <button onClick={() => { setEditingPlayerUid(p.uid); setEditBalance(p.chips); }} className="p-2 text-cyan-400 hover:bg-cyan-600/20 rounded-lg" title="Edit Wallet"><Edit3 size={14}/></button>
                                     <button onClick={() => socket.emit('adminDeletePlayer', p.uid)} className="p-2 text-red-500 hover:bg-red-600/20 rounded-lg"><Trash2 size={14}/></button>
                                 </td>
                             </tr>))}
