@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import io from 'socket.io-client';
 
+// --- PRODUCTION SOCKET CONFIGURATION ---
 const SOCKET_URL = "https://poker-server-3vin.onrender.com"; 
 const socket = io(SOCKET_URL, { transports: ['websocket'] });
 
@@ -35,6 +36,7 @@ const Seat = ({
   player, displayPos, phase, winning5Ids, 
   potTransferring, isActiveTurn, strengthLabel
 }) => {
+    // CRITICAL VISIBILITY CHECK: Prevents crash and ensures cards render post-IDLE
     if (!player || !player.hand || !displayPos) return null;
 
     const isShowdown = phase === PHASES.SHOWDOWN;
@@ -145,8 +147,8 @@ const App = () => {
         }
     });
 
-    socket.on('lobbyUpdate', (list) => setActiveTables(Array.isArray(list) ? list : []));
-    socket.on('profilesUpdate', (list) => setAllProfiles(Array.isArray(list) ? list : []));
+    socket.on('lobbyUpdate', (list) => setActiveTables(list));
+    socket.on('profilesUpdate', (list) => setAllProfiles(list));
     socket.on('loginSuccess', (profile) => { setUserProfile(profile); setCurrentView(VIEWS.LOBBY); });
     socket.on('log', (data) => {
         const logEntry = { id: Math.random(), time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), ...data };
@@ -169,7 +171,6 @@ const App = () => {
   // Authoritative Real-Time Hand Evaluation for HUD
   const getCurrentStrength = useCallback((player) => {
     if (!player || !player.hand || player.hand.length === 0 || community.length < 3) return null;
-    
     const VM = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
     const getCombos = (arr, k) => {
         const fn = (n, src, got, all) => { if (n === 0) { all.push(got); return; } for (let j = 0; j < src.length; j++) { fn(n - 1, src.slice(j + 1), got.concat([src[j]]), all); } };
@@ -194,14 +195,10 @@ const App = () => {
         if(vc[0]===2) return { p: 1, n: "Pair" };
         return { p: 0, n: "High Card" };
     };
-
     const allCards = [...player.hand, ...community];
     const combos = getCombos(allCards, 5);
     let best = { p: -1, n: "" };
-    combos.forEach(c => {
-        const res = rankHand(c);
-        if (res.p > best.p) best = res;
-    });
+    combos.forEach(c => { const res = rankHand(c); if (res.p > best.p) best = res; });
     return best.n;
   }, [community]);
 
@@ -226,9 +223,7 @@ const App = () => {
 
   const handleVariantChange = (vid) => {
       setPendingVariantId(vid);
-      if (userProfile) {
-          socket.emit('updatePlayerSettings', { uid: userProfile.uid, pendingVariant: vid });
-      }
+      if (userProfile) { socket.emit('updatePlayerSettings', { uid: userProfile.uid, pendingVariant: vid }); }
   };
 
   const winnerIdx = useMemo(() => (winningPlayerIndices && winningPlayerIndices[0]) || -1, [winningPlayerIndices]);
@@ -238,7 +233,6 @@ const App = () => {
     return DISPLAY_POSITIONS[relativeIdx];
   }, [winnerIdx, heroSeatIdx]);
 
-  // --- VIEWS ---
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center text-white font-sans">
         <div className="w-[30vw] min-w-[380px] p-12 rounded-[2vw] bg-black/60 border border-white/10 backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-10">
@@ -252,9 +246,7 @@ const App = () => {
   if (currentView === VIEWS.ADMIN) return (
     <div className="h-screen bg-[#06080c] flex relative overflow-hidden text-white font-sans">
         <aside className="w-72 bg-[#0f172a] border-r border-white/10 flex flex-col z-[100]">
-            <div className="p-8 border-b border-white/5 mb-8 text-[#fbbf24] flex items-center gap-3">
-                <ShieldAlert size={20} /><span className="font-black uppercase tracking-widest text-sm">Super Admin</span>
-            </div>
+            <div className="p-8 border-b border-white/5 mb-8 text-[#fbbf24] flex items-center gap-3"><ShieldAlert size={20} /><span className="font-black uppercase tracking-widest text-sm">Super Admin</span></div>
             <nav className="flex-1 px-4 flex flex-col gap-2">
                 <button onClick={() => setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black' : 'text-white/40 hover:bg-white/5'}`}><Users size={18}/> Registry</button>
                 <button onClick={() => setAdminTab(ADMIN_TABS.TABLES)} className={`flex items-center gap-4 p-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black' : 'text-white/40 hover:bg-white/5'}`}><Layers size={18}/> Control</button>
@@ -262,28 +254,10 @@ const App = () => {
             <div className="p-8 mt-auto border-t border-white/5"><button onClick={() => setCurrentView(VIEWS.LOGIN)} className="flex items-center gap-4 text-white/40 hover:text-white font-black text-[10px] uppercase tracking-widest transition-colors"><ArrowLeft size={16}/> Logout</button></div>
         </aside>
         <main className="flex-1 flex flex-col p-12 overflow-y-auto relative z-10">
-            {adminTab === ADMIN_TABS.PLAYERS && (<div className="flex flex-col gap-8 animate-in fade-in">
-                <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Identity Registry</h2><button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl transition-all hover:scale-105 active:scale-95"><PlusCircle size={18}/> New Profile</button></div>
-                <div className="bg-white/5 border border-white/10 rounded-[2vw] overflow-hidden">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-white/5 border-b border-white/10">
-                            <tr className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                                <th className="p-6">Identification</th>
-                                <th className="p-6 text-right">Utility</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {allProfiles?.map((p, i) => (<tr key={i} className="border-b border-white/5 transition-colors">
-                                <td className="p-6 font-black uppercase text-sm">{String(p.name)} <span className="text-[8px] opacity-20 block">UID: {String(p.uid)}</span></td>
-                                <td className="p-6 text-right"><button onClick={() => socket.emit('adminDeletePlayer', p.uid)} className="p-2 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all"><Trash2 size={14}/></button></td>
-                            </tr>))}
-                        </tbody>
-                    </table>
-                </div>
+            {adminTab === ADMIN_TABS.PLAYERS && (<div className="flex flex-col gap-8 animate-in fade-in"><div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Identity Registry</h2><button onClick={() => setIsAddingPlayer(true)} className="flex items-center gap-3 p-4 px-8 bg-[#fbbf24] text-black rounded-2xl font-black uppercase text-xs shadow-xl transition-all hover:scale-105 active:scale-95"><PlusCircle size={18}/> New Profile</button></div>
+                <div className="bg-white/5 border border-white/10 rounded-[2vw] overflow-hidden"><table className="w-full text-left border-collapse"><thead className="bg-white/5 border-b border-white/10"><tr className="text-[10px] font-black uppercase tracking-widest text-white/40"><th className="p-6">Identification</th><th className="p-6 text-right">Utility</th></tr></thead><tbody>{allProfiles?.map((p, i) => (<tr key={i} className="border-b border-white/5 transition-colors"><td className="p-6 font-black uppercase text-sm">{String(p.name)} <span className="text-[8px] opacity-20 block">UID: {String(p.uid)}</span></td><td className="p-6 text-right"><button onClick={() => socket.emit('adminDeletePlayer', p.uid)} className="p-2 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all"><Trash2 size={14}/></button></td></tr>))}</tbody></table></div>
             </div>)}
-
             {isAddingPlayer && (<div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"><div className="w-[25vw] min-w-[320px] bg-slate-900 border border-white/10 rounded-[1.5vw] p-8 shadow-2xl flex flex-col gap-6 text-white"><h3 className="text-xl font-black uppercase tracking-widest flex items-center gap-3"><UserPlus size={20} className="text-indigo-400"/> Provision Profile</h3><div className="flex flex-col gap-4 text-slate-950"><input value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="w-full bg-white p-4 rounded-xl text-xs font-black uppercase outline-none"/><input type="number" value={newPlayer.chips} onChange={e => setNewPlayer({...newPlayer, chips: Number(e.target.value)})} placeholder="CHIPS" className="w-full bg-white p-4 rounded-xl text-xs font-black outline-none"/><input value={newPlayer.password} onChange={e => setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASSCODE" className="w-full bg-white p-4 rounded-xl text-xs font-black outline-none"/></div><div className="flex gap-4"><button onClick={() => setIsAddingPlayer(false)} className="flex-1 p-4 rounded-xl bg-white/5 font-black uppercase text-[10px]">Cancel</button><button onClick={() => { const uid = Math.random().toString(36).substr(2, 9); socket.emit('adminCreatePlayer', {...newPlayer, uid, id: uid}, () => setIsAddingPlayer(false)); }} className="flex-2 p-4 rounded-xl bg-indigo-600 font-black uppercase text-[10px] tracking-widest">Confirm</button></div></div></div>)}
-
             {adminTab === ADMIN_TABS.TABLES && (
                 <div className="flex flex-col gap-8 animate-in fade-in">
                     <div className="flex items-center justify-between border-b border-white/10 pb-6"><h2 className="text-2xl font-black uppercase tracking-widest text-white">Room Control</h2><button onClick={() => { if(window.confirm("HARD RESET ALL SERVER DATA?")) socket.emit('adminNuclearReset'); }} className="p-4 px-8 bg-red-600 border border-red-500 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all">Nuclear Reset</button></div>
