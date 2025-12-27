@@ -60,7 +60,6 @@ const rankFiveCardHand = (cards) => {
     else if (valCounts[0].count === 2 && valCounts[1].count === 2) { score = 2; name = "Two Pair"; }
     else if (valCounts[0].count === 2) { score = 1; name = "Pair"; }
 
-    // Tie-breaker value using base-100 to prioritize main set then kickers
     const power = score * 1e10 + valCounts.reduce((acc, v, i) => acc + (v.rank * Math.pow(100, 4 - i)), 0);
     return { power, name, cards };
 };
@@ -88,9 +87,10 @@ const collectBets = (room) => {
             p.hasActed = false; 
         }
     });
-    if (!room.potData) room.potData = [{ amount: 0 }];
+    if (!room.potData) room.potData = [{ label: 'MAIN', amount: 0 }];
     room.potData[0].amount += streetPot;
     room.highestBet = 0;
+    room.lastRaiseAmt = room.bb || 20;
 };
 
 const processShowdown = (roomId) => {
@@ -100,7 +100,6 @@ const processShowdown = (roomId) => {
     room.phase = PHASES.SHOWDOWN;
     const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     
-    // Evaluate every active player's hand combinatorialy
     const evals = activeIndices.map(i => ({ 
         index: i, 
         best: getBestHand(room.players[i].hand, room.community) 
@@ -112,7 +111,7 @@ const processShowdown = (roomId) => {
     const winAmount = room.potData[0].amount;
 
     winner.isWinner = true;
-    winner.chips += winAmount;
+    winner.chips += winAmount; 
     room.winning5Ids = winnerData.best.cards.map(c => c.id);
     room.winningPlayerIndices = [winnerData.index];
 
@@ -123,7 +122,6 @@ const processShowdown = (roomId) => {
         type: 'win' 
     });
 
-    // Reset Hand Cycle
     setTimeout(() => {
         if (!rooms[roomId]) return;
         room.phase = PHASES.IDLE;
@@ -139,11 +137,33 @@ const processShowdown = (roomId) => {
     }, 6000);
 };
 
+const advancePhase = (roomId) => {
+    const room = rooms[roomId];
+    if (!room) return;
+    collectBets(room);
+    if (room.phase === PHASES.PRE_FLOP) {
+        room.phase = PHASES.FLOP;
+        room.community = [room.deck.pop(), room.deck.pop(), room.deck.pop()];
+    } else if (room.phase === PHASES.FLOP) {
+        room.phase = PHASES.TURN;
+        room.community.push(room.deck.pop());
+    } else if (room.phase === PHASES.TURN) {
+        room.phase = PHASES.RIVER;
+        room.community.push(room.deck.pop());
+    } else {
+        processShowdown(roomId);
+        return;
+    }
+    const activeIndices = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
+    const dealerPos = activeIndices.indexOf(room.dealerIdx);
+    room.activeIdx = activeIndices[(dealerPos + 1) % activeIndices.length];
+    io.to(roomId).emit('roomUpdate', room);
+};
+
 const runIgnition = (roomId) => {
     const room = rooms[roomId];
     if (!room || room.players.filter(Boolean).length < 2) return;
-
-    // Apply Dealer's Choice Variant
+    
     const dealer = room.players[room.dealerIdx];
     const variantId = dealer?.pendingVariant || 'HOLDEM';
     const variantMap = { 
@@ -175,12 +195,14 @@ const runIgnition = (roomId) => {
 
     room.phase = PHASES.PRE_FLOP;
     room.highestBet = BB_VAL;
+    room.lastRaiseAmt = BB_VAL;
     room.community = [];
     room.potData = [{ label: 'MAIN', amount: 0 }];
     io.to(roomId).emit('roomUpdate', room);
+    io.to(roomId).emit('log', { action: `Dealer ${dealer.name} chose ${room.activeVariant.name}`, type: 'system' });
 };
 
-// --- SOCKET LOGIC ---
+// --- SOCKET HANDLERS ---
 io.on('connection', (socket) => {
     socket.emit('profilesUpdate', globalProfiles);
     socket.emit('lobbyUpdate', Object.values(rooms));
@@ -233,28 +255,8 @@ io.on('connection', (socket) => {
         const allMatched = activeIndices.every(i => room.players[i].currentBet === room.highestBet);
 
         if (activeIndices.length === 1) { processShowdown(roomId); }
-        else if (allActed && allMatched) {
-            // Logic to advance streets FLOP -> TURN -> RIVER
-            if (room.phase === PHASES.PRE_FLOP) {
-                collectBets(room);
-                room.phase = PHASES.FLOP;
-                room.community = [room.deck.pop(), room.deck.pop(), room.deck.pop()];
-            } else if (room.phase === PHASES.FLOP) {
-                collectBets(room);
-                room.phase = PHASES.TURN;
-                room.community.push(room.deck.pop());
-            } else if (room.phase === PHASES.TURN) {
-                collectBets(room);
-                room.phase = PHASES.RIVER;
-                room.community.push(room.deck.pop());
-            } else {
-                processShowdown(roomId);
-                return;
-            }
-            const dealerPos = activeIndices.indexOf(room.dealerIdx);
-            room.activeIdx = activeIndices[(dealerPos + 1) % activeIndices.length];
-            io.to(roomId).emit('roomUpdate', room);
-        } else {
+        else if (allActed && allMatched) { advancePhase(roomId); }
+        else {
             const currentPos = activeIndices.indexOf(room.activeIdx);
             room.activeIdx = activeIndices[(currentPos + 1) % activeIndices.length];
             io.to(roomId).emit('roomUpdate', room);
@@ -275,4 +277,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`Authoritative Backend Running: ${PORT}`));
+httpServer.listen(PORT, () => console.log(`Authoritative Backend Running`));
