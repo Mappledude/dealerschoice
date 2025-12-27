@@ -89,8 +89,7 @@ const rankFiveCardHand = (cards) => {
     else if (valCounts[0].count === 2) { score = 1; name = "Pair"; }
 
     const power = score * 1e10 + valCounts.reduce((acc, v, i) => acc + (v.rank * Math.pow(100, 4 - i)), 0);
-    const cardString = sorted.map(c => c.value).join('-');
-    return { power, name: `${name} (${cardString})`, cards: sorted };
+    return { power, name: `${name}`, cards: sorted };
 };
 
 const getBestHand = (holeCards, community) => {
@@ -156,7 +155,7 @@ const processShowdown = (roomId) => {
     const evals = activeIndices.map(i => ({ 
         index: i, 
         best: getBestHand(room.players[i].hand, room.community) 
-    })).filter(e => e.best !== null); // --- CRITICAL FIX: Ignore players without valid hands ---
+    })).filter(e => e.best !== null);
     
     // --- SHOWDOWN SAFETY CHECK ---
     if (!evals || evals.length === 0) {
@@ -165,7 +164,7 @@ const processShowdown = (roomId) => {
         return;
     }
     
-    // --- MUFLIS LOGIC: Invert for lowest power ---
+    // --- MUFLIS LOGIC ---
     const isMuflis = room.activeVariant?.id === 'MUFLIS';
     evals.sort((a, b) => isMuflis ? (a.best.power - b.best.power) : (b.best.power - a.best.power));
     
@@ -184,7 +183,6 @@ const processShowdown = (roomId) => {
 
     room.winning5Ids = winners[0].best.cards.map(c => c.id);
     room.winningPlayerIndices = winners.map(w => w.index);
-    const winnerNames = winners.map(w => room.players[w.index].name).join(' and ');
 
     io.to(roomId).emit('log', { 
         action: winners.length > 1 ? `Pot Split ($${share} each)!` : `${room.players[winners[0].index].name} wins $${totalPot} with ${winners[0].best.name}!`, 
@@ -216,15 +214,16 @@ const advancePhase = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
     collectBets(room);
+    const deck = room.deck;
     if (room.phase === PHASES.PRE_FLOP) {
         room.phase = PHASES.FLOP;
-        room.community = [room.deck.pop(), room.deck.pop(), room.deck.pop()];
+        room.community = [deck.pop(), deck.pop(), deck.pop()];
     } else if (room.phase === PHASES.FLOP) {
         room.phase = PHASES.TURN;
-        room.community.push(room.deck.pop());
+        room.community.push(deck.pop());
     } else if (room.phase === PHASES.TURN) {
         room.phase = PHASES.RIVER;
-        room.community.push(room.deck.pop());
+        room.community.push(deck.pop());
     } else {
         processShowdown(roomId);
         return;
