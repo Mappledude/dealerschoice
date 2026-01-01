@@ -21,7 +21,7 @@ if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 let globalProfiles = []; 
 let rooms = {}; 
 let roomIntervals = {};
-let rebuyIntervals = {}; // Track the 15s kick timer
+let rebuyIntervals = {};
 
 const saveToDisk = () => {
     try {
@@ -37,7 +37,7 @@ const loadFromDisk = () => {
             globalProfiles = data.globalProfiles || [];
             rooms = data.rooms || {};
         }
-    } catch (err) { console.log("Fresh DB Init"); }
+    } catch (err) { console.log("Initializing fresh database..."); }
 };
 loadFromDisk();
 
@@ -113,9 +113,9 @@ const getBestHand = (hole, comm, variantId) => {
 };
 
 const startShotClock = (roomId) => {
-    clearInterval(roomIntervals[roomId]);
     const room = rooms[roomId];
     if (!room || room.activeIdx === -1) return;
+    clearInterval(roomIntervals[roomId]);
     
     const p = room.players[room.activeIdx];
     if (!p) return;
@@ -283,12 +283,7 @@ const processShowdown = (roomId) => {
         r.players.forEach((p, i) => { 
             if (p) { 
                 p.hand = []; p.isWinner = false; p.isFolded = false; p.currentBet = 0; p.hasActed = false; p.strength = ""; p.isSittingOut = false; 
-                // Bust logic
-                if (p.chips <= 0) {
-                    p.isBust = true;
-                    p.rebuyTimeRemaining = 15;
-                    startRebuyTimer(roomId, i);
-                }
+                if (p.chips <= 0) { p.isBust = true; p.rebuyTimeRemaining = 15; startRebuyTimer(roomId, i); }
             }
         });
         const seated = r.players.map((p, i) => (p && p.chips > 0) ? i : null).filter(x => x !== null);
@@ -310,7 +305,8 @@ const startRebuyTimer = (roomId, seatIdx) => {
         r.players[seatIdx].rebuyTimeRemaining--;
         if (r.players[seatIdx].rebuyTimeRemaining <= 0) {
             clearInterval(rebuyIntervals[key]);
-            io.to(roomId).emit('log', { name: "ARENA", action: `${r.players[seatIdx].name} failed to rebuy and was removed.`, type: 'system' });
+            const p = r.players[seatIdx];
+            io.to(roomId).emit('log', { name: "ARENA", action: `${p.name} timed out and was removed.`, type: 'system' });
             r.players[seatIdx] = null;
             io.to(roomId).emit('roomUpdate', r);
             io.emit('lobbyUpdate', Object.values(rooms));
@@ -368,6 +364,10 @@ io.on('connection', (socket) => {
     });
     socket.on('getInitialData', () => { socket.emit('initialDataResponse', { profiles: globalProfiles, rooms: Object.values(rooms) }); });
     socket.on('adminCreatePlayer', (d, cb) => { globalProfiles.push(d); saveToDisk(); io.emit('profilesUpdate', globalProfiles); if (cb) cb(); });
+    socket.on('adminDeletePlayer', (uid) => { globalProfiles = globalProfiles.filter(p => p.uid !== uid); saveToDisk(); io.emit('profilesUpdate', globalProfiles); });
+    socket.on('adminEditChips', (d) => { const p = globalProfiles.find(x => x.uid === d.uid); if (p) { p.chips = d.chips; saveToDisk(); io.emit('profilesUpdate', globalProfiles); } });
+    socket.on('adminCreateRoom', (d) => { rooms[d.id] = { ...d, players: Array(10).fill(null), community: [], phase: PHASES.IDLE, potData: [{ amount: 0 }], dealerIdx: -1, activeIdx: -1 }; saveToDisk(); io.emit('lobbyUpdate', Object.values(rooms)); });
+    socket.on('adminDeleteRoom', (id) => { delete rooms[id]; saveToDisk(); io.emit('lobbyUpdate', Object.values(rooms)); });
     socket.on('adminAddChips', (d) => {
         const r = rooms[d.roomId];
         const rp = r?.players.find(x => x && x.uid === d.uid);
@@ -400,8 +400,8 @@ io.on('connection', (socket) => {
             if (room) {
                 const idx = room.players.findIndex(p => p?.socketId === socket.id);
                 if (idx !== -1) {
-                    const p = room.players[idx];
                     if (room.activeIdx === idx && room.phase !== PHASES.IDLE) handleAction(roomId, 'FOLD', 0);
+                    const p = room.players[idx];
                     const prof = globalProfiles.find(x => x.uid === p.uid);
                     if (prof) { prof.chips += (p.chips - p.buyInOrigin); saveToDisk(); io.emit('profilesUpdate', globalProfiles); }
                     room.players[idx] = null;
