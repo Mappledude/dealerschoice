@@ -33,41 +33,51 @@ const VARIANTS = {
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
-const Seat = ({ player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, strengthLabel, potTransferring, timeRemaining }) => {
+const Seat = ({ player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, strengthLabel, potTransferring, timeRemaining, isHero }) => {
     if (!player || !displayPos) return null;
     const isShowdown = phase === PHASES.SHOWDOWN;
 
     return (
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col-reverse items-center z-20 transition-all duration-500 ${player.isFolded ? 'opacity-20 grayscale' : 'opacity-100'}`}>
+            {/* 1. Player Info Bubble (Bottom-most in flex-col-reverse) */}
             <div className={`flex items-center gap-2 p-[0.6vw] px-[2vw] rounded-full border-2 bg-black/95 backdrop-blur-xl transition-all ${isActiveTurn ? 'border-cyan-400 shadow-[0_0_1.5vw_#22d3ee] scale-105' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 scale-110 shadow-[0_0_2vw_#fbbf24]' : ''}`}>
                 {isActiveTurn && timeRemaining > 0 && (
-                    <div className="absolute -right-12 flex items-center justify-center w-10 h-10 rounded-full border-2 border-cyan-400 bg-black/80 font-black text-cyan-400 text-sm">{timeRemaining}</div>
+                    <div className="absolute -right-12 flex items-center justify-center w-10 h-10 rounded-full border-2 border-cyan-400 bg-black/80 font-black text-cyan-400 text-sm">{String(timeRemaining)}</div>
                 )}
                 <div className="flex flex-col items-center">
                     <span className="text-[1vw] font-black text-white uppercase">{String(player.name)}</span>
                     <span className="text-[1.1vw] font-mono font-black text-emerald-500/80">${Number(player.chips).toLocaleString()}</span>
                 </div>
             </div>
+
+            {/* 2. Current Bet Indicator */}
             {player.currentBet > 0 && (
                 <div className="absolute bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black text-[0.9vw] px-4 py-1 rounded-full shadow-lg transition-all duration-500"
                     style={{ top: isCollectingBets ? `-10vh` : '-5vw', left: '50%', transform: 'translate(-50%, -100%)', opacity: isCollectingBets ? 0 : 1 }}>
-                    ${player.currentBet}
+                    ${String(player.currentBet)}
                 </div>
             )}
+
+            {/* 3. Hand Strength Indicator (Purple Bubble) */}
+            {strengthLabel && !player.isFolded && (isHero || isShowdown) && phase !== PHASES.IDLE && (
+                <div className="h-6 px-3 bg-purple-600 border border-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] mb-2 flex items-center animate-in fade-in zoom-in-95 duration-300">
+                    <span className="text-[9px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
+                </div>
+            )}
+
+            {/* 4. Player Cards (Top-most in flex-col-reverse) */}
             {player.hand && Array.isArray(player.hand) && !player.isFolded && (
                 <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mb-4 overflow-visible">
                     {player.hand.map((c, ci) => (
-                        <div key={c.id || ci} className={`w-[2.5vw] h-[3.5vw] rounded-[0.4vw] flex flex-col items-start p-[0.2vw] border shadow-lg absolute transition-all duration-300 ${isShowdown || player.isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30' : 'border-white/20'}`} style={{ transform: `translateX(${(ci - (player.hand.length - 1) / 2) * 2.5}vw) rotate(${(ci - (player.hand.length - 1) / 2) * 10}deg) scale(1.5)`, transformOrigin: 'bottom center' }}>
-                            {(isShowdown || player.isHero) && (
-                                <><span className="text-[0.8vw] font-black leading-none">{c.value}</span><span className={`text-[1.2vw] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span></>
+                        <div key={c.id || ci} className={`w-[2.5vw] h-[3.5vw] rounded-[0.4vw] flex flex-col items-start p-[0.2vw] border shadow-lg absolute transition-all duration-300 ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30' : 'border-white/20'}`} style={{ transform: `translateX(${(ci - (player.hand.length - 1) / 2) * 2.5}vw) rotate(${(ci - (player.hand.length - 1) / 2) * 10}deg) scale(1.5)`, transformOrigin: 'bottom center' }}>
+                            {(isShowdown || isHero) && (
+                                <>
+                                    <span className="text-[0.8vw] font-black leading-none">{String(c.value)}</span>
+                                    <span className={`text-[1.2vw] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                </>
                             )}
                         </div>
                     ))}
-                </div>
-            )}
-            {strengthLabel && !player.isFolded && (player.isHero || isShowdown) && (
-                <div className="h-7 px-3 bg-purple-600 border border-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] mb-2 flex items-center animate-in fade-in">
-                    <span className="text-[9px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
                 </div>
             )}
         </div>
@@ -104,22 +114,34 @@ const App = () => {
         if (d.phase !== phase && phase !== PHASES.IDLE) { setIsCollectingBets(true); setTimeout(() => setIsCollectingBets(false), 800); }
         setPlayers(() => { const next = [...INITIAL_PLAYERS]; d.players?.forEach((p, i) => { if (p) next[i] = p; }); return next; });
         setPhase(d.phase); setCommunity(d.community || []); setActiveVariant(d.activeVariant || VARIANTS.HOLDEM);
-        setHighestBet(d.highestBet || 0); setActiveIdx(d.activeIdx ?? -1); setWinning5Ids(d.winning5Ids || []);
-        setPotAmount(d.potData?.[0]?.amount || 0); setTimeRemaining(d.timeRemaining || 30);
+        setHighestBet(Number(d.highestBet) || 0); setActiveIdx(d.activeIdx ?? -1); setWinning5Ids(d.winning5Ids || []);
+        setPotAmount(Number(d.potData?.[0]?.amount) || 0); setTimeRemaining(Number(d.timeRemaining) || 30);
     });
     socket.on('lobbyUpdate', (list) => setActiveTables(list || []));
     socket.on('profilesUpdate', (list) => setAllProfiles(list || []));
     socket.on('initialDataResponse', (d) => { setAllProfiles(d.profiles || []); setActiveTables(d.rooms || []); });
     socket.on('loginSuccess', (p) => { setUserProfile(p); setPendingVariantId(p.pendingVariant || 'HOLDEM'); setCurrentView(VIEWS.LOBBY); socket.emit('getInitialData'); });
     socket.on('log', (d) => setLogs(prev => [{ id: Math.random(), ...d }, ...prev].slice(0, 50)));
-    return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('loginSuccess'); };
+    return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('loginSuccess'); socket.off('log'); };
   }, [phase]);
 
   const heroIdx = useMemo(() => userProfile ? players.findIndex(p => p && p.uid === userProfile.uid) : -1, [players, userProfile]);
   const heroPlayer = heroIdx !== -1 ? players[heroIdx] : null;
 
-  const handleAction = (type, amt = 0) => socket.emit('playerAction', { roomId: selectedTableForJoin?.id || activeTables[0]?.id, type, amount: amt });
-  const handleLogin = () => { if (passwordInput === 'pass') { socket.emit('getInitialData'); setCurrentView(VIEWS.ADMIN); } else socket.emit('playerLogin', { password: passwordInput }); };
+  const handleAction = (type, amt = 0) => {
+      const roomId = selectedTableForJoin?.id || (activeTables.length > 0 ? activeTables[0].id : null);
+      if (!roomId) return;
+      socket.emit('playerAction', { roomId, type, amount: Number(amt) });
+  };
+
+  const handleLogin = () => { 
+      if (passwordInput === 'pass') { 
+          socket.emit('getInitialData'); 
+          setCurrentView(VIEWS.ADMIN); 
+      } else {
+          socket.emit('playerLogin', { password: passwordInput }); 
+      }
+  };
 
   const joinRoom = () => {
     if (!selectedTableForJoin || !userProfile) return;
@@ -152,10 +174,10 @@ const App = () => {
         <main className="flex-1 p-12 overflow-y-auto">
             {adminTab === ADMIN_TABS.PLAYERS ? (
                 <div className="flex flex-col gap-8">
-                    <div className="flex justify-between items-center"><h3>PLAYER REGISTRY</h3></div>
+                    <h3>PLAYER REGISTRY</h3>
                     <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-3 gap-4">
-                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-4 rounded-xl border border-white/10"/>
-                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-4 rounded-xl border border-white/10"/>
+                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-4 rounded-xl border border-white/10 uppercase"/>
+                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-4 rounded-xl border border-white/10 uppercase"/>
                         <button onClick={()=>socket.emit('adminCreatePlayer', {...newPlayer, uid: Math.random().toString(36).slice(2)})} className="bg-[#fbbf24] text-black rounded-xl">CREATE</button>
                     </div>
                     <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
@@ -175,7 +197,7 @@ const App = () => {
                 <div className="flex flex-col gap-8">
                     <h3>ROOM CONTROL</h3>
                     <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-2 gap-4">
-                        <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ROOM NAME" className="bg-black/40 p-4 rounded-xl border border-white/10"/>
+                        <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ROOM NAME" className="bg-black/40 p-4 rounded-xl border border-white/10 uppercase"/>
                         <div className="grid grid-cols-2 gap-2"><input placeholder="SB" type="number" onChange={e=>setNewTable({...newTable, sb: Number(e.target.value)})}/><input placeholder="BB" type="number" onChange={e=>setNewTable({...newTable, bb: Number(e.target.value)})}/></div>
                         <div className="grid grid-cols-2 gap-2"><input placeholder="MIN" type="number" onChange={e=>setNewTable({...newTable, minBuy: Number(e.target.value)})}/><input placeholder="MAX" type="number" onChange={e=>setNewTable({...newTable, maxBuy: Number(e.target.value)})}/></div>
                         <button onClick={()=>socket.emit('adminCreateRoom', {...newTable, id: 'room_'+Math.random()})} className="bg-emerald-600 rounded-xl">SPAWN ROOM</button>
@@ -208,15 +230,26 @@ const App = () => {
         )}
         <header className="h-20 border-b border-white/10 flex items-center justify-between px-12 bg-black/40">
             <h2 className="tracking-widest">ARENA LOBBY</h2>
-            <div className="flex items-center gap-6"><span className="text-emerald-400 font-mono">${Number(userProfile?.chips).toLocaleString()}</span><button onClick={()=>setCurrentView(VIEWS.LOGIN)}><LogOut size={20}/></button></div>
+            <div className="flex items-center gap-8">
+                <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-white/40">PLAYER: {String(userProfile?.name)}</span>
+                    <span className="text-emerald-400 font-mono text-xl">${Number(userProfile?.chips).toLocaleString()}</span>
+                </div>
+                <button onClick={()=>setCurrentView(VIEWS.LOGIN)} className="text-red-500"><LogOut size={24}/></button>
+            </div>
         </header>
         <main className="flex-1 p-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
             {activeTables.map((t) => (
-                <div key={t.id} className="p-10 bg-white/5 border border-white/5 rounded-[3vw] flex flex-col gap-8">
+                <div key={t.id} className="p-10 bg-white/5 border border-white/5 rounded-[3vw] flex flex-col gap-8 shadow-xl">
                     <h3 className="text-2xl tracking-widest">{String(t.name)}</h3>
-                    <div className="text-[10px] text-white/40">PLAYERS: {t.players.filter(p => p).map(p => String(p.name)).join(', ') || 'NONE'}</div>
-                    <div className="bg-black/60 p-6 rounded-2xl flex justify-between items-center"><span className="text-[10px]">STAKES</span><span className="text-[#fbbf24]">${t.sb}/${t.bb} | MAX ${t.maxBuy}</span></div>
-                    <button onClick={()=>setSelectedTableForJoin(t)} className="w-full p-8 bg-emerald-600 rounded-3xl">JOIN ARENA</button>
+                    <div className="text-[10px] text-white/40 h-8">
+                        SEATED: {t.players?.filter(p => p).map(p => String(p.name)).join(', ') || 'EMPTY'}
+                    </div>
+                    <div className="bg-black/60 p-6 rounded-2xl flex justify-between items-center">
+                        <span className="text-[10px]">STAKES</span>
+                        <span className="text-[#fbbf24] text-lg">${t.sb}/${t.bb}</span>
+                    </div>
+                    <button onClick={()=>setSelectedTableForJoin(t)} className="w-full p-8 bg-emerald-600 rounded-3xl tracking-widest hover:brightness-110 transition-all">JOIN ARENA</button>
                 </div>
             ))}
         </main>
@@ -226,16 +259,16 @@ const App = () => {
   return (
     <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase">
       <header className="absolute top-0 left-0 right-0 h-16 bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-8 z-[80]">
-        <div className="bg-white/5 px-6 py-2 rounded-2xl"><span className="text-[#fbbf24] text-[10px]">GAME:</span><span className="text-white ml-2">{String(activeVariant.name)}</span></div>
+        <div className="bg-white/5 px-6 py-2 rounded-2xl border border-white/5"><span className="text-[#fbbf24] text-[10px]">VARIANT:</span><span className="text-white ml-2 text-xs">{String(activeVariant.name)}</span></div>
         <div className="bg-white/5 border border-white/10 px-6 py-2 rounded-2xl flex items-center gap-4">
-            <span className="text-white/40 text-[9px]">NEXT DEAL:</span>
-            <select value={pendingVariantId} onChange={(e) => {setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value})}} className="bg-transparent text-[#fbbf24] outline-none">
+            <span className="text-white/40 text-[9px]">DEALER CHOICE:</span>
+            <select value={pendingVariantId} onChange={(e) => {setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value})}} className="bg-transparent text-[#fbbf24] outline-none text-xs cursor-pointer">
                 {Object.entries(VARIANTS).map(([k,v])=><option key={k} value={k} className="bg-slate-900">{String(v.name)}</option>)}
             </select>
         </div>
         <div className="flex gap-4">
-            <button onClick={()=>socket.emit('adminAddBot', {roomId: selectedTableForJoin?.id || activeTables[0]?.id})} className="text-indigo-400 p-2 bg-white/5 rounded-lg"><Bot size={18}/></button>
-            <button onClick={() => setCurrentView(VIEWS.LOBBY)} className="text-red-500 p-2 bg-white/5 rounded-lg"><LogOut size={18}/></button>
+            <button onClick={()=>socket.emit('adminAddBot', {roomId: currentRoomId || (activeTables[0]?.id)})} className="text-indigo-400 p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-indigo-400/10"><Bot size={18}/></button>
+            <button onClick={() => setCurrentView(VIEWS.LOBBY)} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-red-500/10"><LogOut size={18}/></button>
         </div>
       </header>
 
@@ -245,48 +278,53 @@ const App = () => {
               {players.map((p, i) => {
                 if (!p || p.uid === userProfile?.uid) return null;
                 const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS;
-                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={p.strength} isCollectingBets={isCollectingBets} timeRemaining={timeRemaining} />;
+                return <Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={p.strength} isCollectingBets={isCollectingBets} timeRemaining={timeRemaining} isHero={false} />;
               })}
             </div>
-            <div className="absolute inset-0 bg-emerald-950/10 rounded-[40%] border-[1.5vw] border-slate-900" />
+            <div className="absolute inset-0 bg-emerald-950/10 rounded-[40%] border-[1.5vw] border-slate-900 shadow-inner" />
             <div className="absolute top-[43%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none">
-              <div className="text-[4vw] font-black text-yellow-400 font-mono">${Number(potAmount).toLocaleString()}</div>
+              <div className="text-[4vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-2xl animate-in zoom-in duration-500">${Number(potAmount).toLocaleString()}</div>
               <div className="flex gap-2 scale-[1.7] mt-4">
                   {community.map((c, j) => (
-                    <div key={c.id || j} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-black ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30' : 'border-white/20'}`}>
+                    <div key={c.id || j} className={`w-[3vw] h-[4.2vw] rounded-[0.4vw] border bg-white flex flex-col items-center justify-center text-black ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30' : 'border-white/20 shadow-md'}`}>
                         <span className="text-[0.9vw] font-black">{String(c.value)}</span><span className={`text-[1.8vw] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
                     </div>
                   ))}
               </div>
             </div>
             <div style={{ left: '50%', top: '98%', transform: 'translate(-50%, -100%)' }} className="absolute flex flex-col items-center z-50">
-              {heroPlayer && <Seat player={heroPlayer} displayPos={{x: 50, y: 100}} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === heroIdx} strengthLabel={heroPlayer.strength} timeRemaining={timeRemaining} />}
+              {heroPlayer && <Seat player={heroPlayer} displayPos={{x: 50, y: 100}} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === heroIdx} strengthLabel={heroPlayer.strength} timeRemaining={timeRemaining} isHero={true} />}
             </div>
         </div>
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 h-[200px] bg-black/60 border-t border-white/10 flex">
+      <footer className="fixed bottom-0 left-0 right-0 h-[200px] bg-black/80 backdrop-blur-3xl border-t border-white/10 flex">
         <div className="w-1/3 border-r border-white/10 p-6 flex flex-col overflow-hidden text-[10px] font-mono">
-            <div className="text-white/40 mb-4 flex items-center gap-2"><Info size={14}/> FEED</div>
-            <div className="flex-1 space-y-1 overflow-y-auto">
-                {logs.map(l => <div key={l.id}><span className="text-white/20">[{String(l.time)}]</span> <span className="text-[#fbbf24]">{String(l.name)}</span>: {String(l.action)}</div>)}
+            <div className="text-white/40 mb-4 flex items-center gap-2"><Info size={14}/> LIVE ARENA FEED</div>
+            <div className="flex-1 space-y-1 overflow-y-auto scrollbar-hide">
+                {logs.map(l => <div key={l.id} className="animate-in slide-in-from-left duration-300"><span className="text-white/20">[{String(l.time)}]</span> <span className="text-[#fbbf24]">{String(l.name)}</span>: {String(l.action)}</div>)}
             </div>
         </div>
-        <div className="flex-1 flex flex-col justify-center px-20">
+        <div className="flex-1 flex flex-col justify-center px-20 relative">
           {activeIdx === heroIdx && phase !== PHASES.SHOWDOWN && phase !== PHASES.IDLE && heroPlayer ? (
-            <div className="flex flex-col gap-6 animate-in slide-in-from-bottom-4 items-center">
+            <div className="flex flex-col gap-6 animate-in slide-in-from-bottom duration-500 items-center">
                 <div className="flex gap-4">
-                    <button onClick={()=>handleAction('RAISE', highestBet + 100)} className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-[10px]">1/2 POT</button>
-                    <button onClick={()=>handleAction('RAISE', highestBet + 200)} className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-[10px]">POT</button>
+                    <button onClick={()=>handleAction('RAISE', highestBet + 100)} className="px-8 py-2 bg-white/5 border border-white/10 rounded-full text-[10px] hover:bg-white/10">1/2 POT</button>
+                    <button onClick={()=>handleAction('RAISE', highestBet + 200)} className="px-8 py-2 bg-white/5 border border-white/10 rounded-full text-[10px] hover:bg-white/10">POT</button>
+                    <button onClick={()=>handleAction('RAISE', heroPlayer.chips + heroPlayer.currentBet)} className="px-8 py-2 bg-red-900/20 border border-red-500/50 rounded-full text-[10px] text-red-500 hover:bg-red-500/20">ALL-IN</button>
                 </div>
                 <div className="flex gap-8">
-                    <button onClick={()=>handleAction('FOLD')} className="w-32 h-14 bg-red-950/40 border border-red-500/50 rounded-full">FOLD</button>
-                    <button onClick={()=>handleAction('CALL')} className="w-48 h-14 bg-blue-950/40 border border-blue-500/50 rounded-full text-xl">{highestBet > heroPlayer.currentBet ? `CALL $${highestBet - heroPlayer.currentBet}` : 'CHECK'}</button>
-                    <button onClick={()=>handleAction('RAISE', highestBet + 100)} className="w-32 h-14 bg-emerald-950/40 border border-emerald-500/50 rounded-full flex items-center justify-center"><Zap size={18}/>RAISE</button>
+                    <button onClick={()=>handleAction('FOLD')} className="w-32 h-14 bg-red-950/60 border border-red-500/50 rounded-full tracking-widest hover:brightness-125 transition-all">FOLD</button>
+                    <button onClick={()=>handleAction('CALL')} className="w-56 h-14 bg-blue-950/60 border border-blue-500/50 rounded-full text-xl tracking-widest hover:brightness-125 transition-all">
+                        {highestBet > heroPlayer.currentBet ? `CALL $${highestBet - heroPlayer.currentBet}` : 'CHECK'}
+                    </button>
+                    <button onClick={()=>handleAction('RAISE', highestBet + 100)} className="w-32 h-14 bg-emerald-950/60 border border-emerald-500/50 rounded-full flex items-center justify-center hover:brightness-125 transition-all"><Zap size={18} className="mr-2"/>RAISE</button>
                 </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-4 animate-pulse"><Target size={48} className="text-white/20"/><span className="text-[#fbbf24] tracking-widest">{phase === PHASES.IDLE ? "WAITING FOR DEAL" : (phase === PHASES.SHOWDOWN ? "SHOWDOWN" : "OPPONENT TURN")}</span></div>
+            <div className="flex flex-col items-center gap-4 animate-pulse"><Target size={48} className="text-white/20"/><span className="text-[#fbbf24] tracking-widest text-lg">
+                {phase === PHASES.IDLE ? "WAITING FOR NEW DEAL" : (phase === PHASES.SHOWDOWN ? "SHOWDOWN REVEAL" : "WAITING FOR OPPONENT...")}
+            </span></div>
           )}
         </div>
       </footer>
