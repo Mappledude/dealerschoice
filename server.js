@@ -239,17 +239,13 @@ const processShowdown = (roomId) => {
     }));
 
     if (room.activeVariant?.id === 'HILOW') {
-        // Evaluate for High (Descending Power)
         evals.sort((a, b) => b.res.power - a.res.power);
         const highWinners = evals.filter(e => e.res.power === evals[0].res.power);
-        
-        // Evaluate for Low (Ascending Power)
         const lowEvals = [...evals].sort((a, b) => a.res.power - b.res.power);
         const lowWinners = lowEvals.filter(e => e.res.power === lowEvals[0].res.power);
 
         const highHalf = Math.floor(totalPot / 2);
         const lowHalf = totalPot - highHalf;
-
         const highShare = Math.floor(highHalf / highWinners.length);
         const lowShare = Math.floor(lowHalf / lowWinners.length);
 
@@ -267,10 +263,7 @@ const processShowdown = (roomId) => {
             room.hiLowAwards.low.push({ i: w.i, amount: lowShare });
         });
 
-        // Winning IDs for highlighting (use High hand)
         room.winning5Ids = highWinners[0].res.cards.map(c => c.id);
-
-        // Advanced Logging
         const highNames = highWinners.map(w => room.players[w.i].name).join(', ');
         const lowNames = lowWinners.map(w => room.players[w.i].name).join(', ');
         io.to(roomId).emit('log', { 
