@@ -87,7 +87,6 @@ const getBestHand = (hole, comm, variantId) => {
         const all = []; fn(k, arr, [], all); return all;
     };
     let best = null;
-    // Hi-Low with 4 cards now follows Omaha rules (2 from hand, 3 from board)
     if (variantId === 'OMAHA' || variantId === 'HILOW') {
         if (comm.length < 3) return null;
         combinations(hole, 2).forEach(h => { 
@@ -102,6 +101,15 @@ const getBestHand = (hole, comm, variantId) => {
         combinations(full, 5).forEach(c => { const res = rankHand(c); if (!best || res.power > best.power) best = res; });
     }
     return best;
+};
+
+const updateStrengths = (room) => {
+    room.players.forEach(p => {
+        if (p && p.hand && p.hand.length > 0) {
+            const best = getBestHand(p.hand, room.community, room.activeVariant?.id);
+            p.strength = best ? best.name : "High Card";
+        }
+    });
 };
 
 const startShotClock = (roomId) => {
@@ -145,7 +153,7 @@ const handleAction = (roomId, type, amount) => {
     if (!p) return;
 
     p.hasActed = true;
-    p.lastAction = type; // Track for UI display
+    p.lastAction = type;
     if (type === 'FOLD') { 
         p.isFolded = true; 
         io.to(roomId).emit('log', { name: p.name, action: "folded their hand", type: 'fold' });
@@ -202,6 +210,8 @@ const advancePhase = (roomId) => {
     }
     else { processShowdown(roomId); return; }
     
+    updateStrengths(room);
+
     const active = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     if (active.filter(i => room.players[i].chips > 0).length <= 1) {
         io.to(roomId).emit('roomUpdate', room);
@@ -319,7 +329,6 @@ const runIgnition = (roomId) => {
     
     if (!room.players[room.dealerIdx]) room.dealerIdx = seated[0];
     const dealer = room.players[room.dealerIdx];
-    // Hi-Low updated to 4 cards
     const holeCardsMap = { HOLDEM: 2, OMAHA: 4, PINEAPPLE: 3, MUFLIS: 2, HILOW: 4 };
     const variantNames = { HOLDEM: "Hold'em", OMAHA: "OMAHA", PINEAPPLE: "Pineapple", MUFLIS: "Muflis", HILOW: "Hi-Low" };
     const vId = dealer.pendingVariant || 'HOLDEM';
@@ -348,6 +357,7 @@ const runIgnition = (roomId) => {
         p.hand = Array.from({ length: room.activeVariant.holeCards }, () => room.deck.pop()); 
         const bet = (i === sbIdx) ? Math.min(p.chips, room.sb) : (i === bbIdx) ? Math.min(p.chips, room.bb) : 0;
         p.chips -= bet; p.currentBet = bet; p.isFolded = false; p.isWinner = false; p.hasActed = false; p.isDealer = (i === room.dealerIdx); p.isSittingOut = false; p.isBust = false; p.lastAction = null;
+        p.strength = "High Card";
     });
 
     room.phase = PHASES.PRE_FLOP; 
