@@ -30,11 +30,12 @@ const BET_OFFSETS = [
 ];
 
 const VARIANTS = { 
-  HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em' }, 
-  OMAHA: { id: 'OMAHA', name: 'OMAHA' }, 
-  PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple' }, 
-  MUFLIS: { id: 'Muflis', name: 'Muflis' },
-  HILOW: { id: 'HILOW', name: 'Hi-Low Split' } 
+  HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', desc: '2 Hole Cards' }, 
+  OMAHA: { id: 'OMAHA', name: 'OMAHA', desc: '4 Hole Cards (Use 2)' }, 
+  PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', desc: '3 Hole Cards' }, 
+  MUFLIS: { id: 'MUFLIS', name: 'Muflis', desc: 'Low Hand Wins' },
+  HILOW: { id: 'HILOW', name: 'Hi-Low Split', desc: '4 Hole Cards' },
+  REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', desc: '4 Hole Cards (Joker logic)' }
 };
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
@@ -119,9 +120,16 @@ const Seat = ({
             </div>
 
             {player.hand && Array.isArray(player.hand) && !player.isFolded && (
-                <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible translate-y-[55px]">
+                <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible">
                     {player.hand.map((c, ci) => (
-                        <div key={c.id || ci} className={`w-[5.5vw] md:w-[3vw] h-[8vw] md:h-[5vw] rounded-[4px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} style={{ transform: `translateX(${(ci - (player.hand.length - 1) / 2) * 20}px) rotate(${(ci - (player.hand.length - 1) / 2) * 8}deg) scale(${1.4 * currentCardScale})`, transformOrigin: 'bottom center' }}>
+                        <div key={c.id || ci} 
+                            className={`w-[5.5vw] md:w-[3vw] h-[8vw] md:h-[5vw] rounded-[4px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
+                            style={{ 
+                                // Dynamic spread logic for 2, 3, or 4 cards
+                                transform: `translateX(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 1.5 : 2.5)}vw) rotate(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 5 : 8)}deg) scale(${1.5 * currentCardScale})`, 
+                                transformOrigin: 'bottom center', 
+                                top: player.hand.length > 2 ? '25px' : '45px' 
+                            }}>
                             {(isShowdown || isHero) && (
                                 <><span className="text-[10px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[12px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></>
                             )}
@@ -130,7 +138,7 @@ const Seat = ({
                     ))}
                     
                     {strengthLabel && !player.isFolded && (isHero || isShowdown) && phase !== PHASES.IDLE && (
-                        <div className="absolute -bottom-12 z-[120] whitespace-nowrap bg-purple-600/90 backdrop-blur-md px-3 py-1 rounded-full border border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-in fade-in zoom-in" style={{ transform: `translate(0px, -60px)`, bottom: '0px' }}>
+                        <div className="absolute -bottom-12 z-[120] whitespace-nowrap bg-purple-600/90 backdrop-blur-md px-3 py-1 rounded-full border border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-in fade-in zoom-in h-7 flex items-center justify-center" style={{ transform: `translate(0px, 0px)`, bottom: '-10px' }}>
                              <span className="text-[9px] md:text-[11px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
                         </div>
                     )}
@@ -170,6 +178,7 @@ const App = () => {
   const [showdownWinners, setShowdownWinners] = useState(null);
   const [hiLowAwards, setHiLowAwards] = useState(null);
   const [nuclearConfirm, setNuclearConfirm] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const [headerHeight, setHeaderHeight] = useState(64); 
   const [footerHeight, setFooterHeight] = useState(200); 
@@ -177,14 +186,33 @@ const App = () => {
   const [heroCardScale, setHeroCardScale] = useState(1.2);
   const [showLayoutControls, setShowLayoutControls] = useState(false);
 
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const totalDisplayPot = useMemo(() => {
     const currentBetsSum = players.reduce((acc, p) => acc + (p?.currentBet || 0), 0);
     return potAmount + currentBetsSum;
   }, [potAmount, players]);
 
+  // Robust Hero detection logic fixed for "cannot see cards" bug
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
-    return players.findIndex(p => p && p.uid === userProfile.uid);
+    return players.findIndex(p => {
+        if (!p) return false;
+        
+        // Match by unique UID (Priority 1)
+        if (userProfile.uid && p.uid && userProfile.uid === p.uid) return true;
+        
+        // Match by Name + Password combo (Priority 2)
+        if (p.name === userProfile.name && p.password === userProfile.password) return true;
+        
+        // Match by Name only (Priority 3 - fallback)
+        if (p.name === userProfile.name) return true;
+
+        return false;
+    });
   }, [players, userProfile]);
 
   const heroPlayerObj = useMemo(() => {
@@ -271,7 +299,17 @@ const App = () => {
             return next; 
         });
 
-        setPhase(d.phase); setCommunity(d.community || []); setActiveVariant(d.activeVariant || VARIANTS.HOLDEM);
+        setPhase(d.phase); setCommunity(d.community || []); 
+        
+        // Correctly handle variation mapping from server
+        let resolvedVariant = VARIANTS.HOLDEM;
+        const sVariant = d.activeVariant;
+        if (sVariant) {
+            const vId = typeof sVariant === 'string' ? sVariant : sVariant.id;
+            resolvedVariant = VARIANTS[vId] || { id: vId, name: typeof sVariant === 'string' ? vId : sVariant.name };
+        }
+        setActiveVariant(resolvedVariant);
+
         setHighestBet(Number(d.highestBet) || 0); setActiveIdx(d.activeIdx ?? -1); setWinning5Ids(d.winning5Ids || []);
         setPotAmount(currentPotValue); setTimeRemaining(Number(d.timeRemaining) || 30);
 
@@ -434,7 +472,7 @@ const App = () => {
         <div className="flex items-center gap-2">
             <div className="bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 shadow-inner truncate font-black uppercase">
                 <span className="text-[#fbbf24] text-[8px] md:text-[10px] tracking-widest font-black">ARENA:</span>
-                <span className="text-white ml-2 text-[10px] md:text-xs font-black">{String(activeVariant.name)}</span>
+                <span className="text-white ml-2 text-[10px] md:text-xs font-black">{activeVariant?.name || "Hold'em"}</span>
             </div>
             <button onClick={() => setShowLayoutControls(!showLayoutControls)} className={`p-2 rounded-lg transition-all font-black uppercase ${showLayoutControls ? 'bg-[#fbbf24] text-black shadow-[0_0_15px_#fbbf24]' : 'bg-white/5 text-white/40'}`}>
                 <Sliders size={18}/>
@@ -467,11 +505,18 @@ const App = () => {
 
         <div className="bg-white/5 border border-white/10 px-4 py-1.5 rounded-xl flex items-center gap-4 shadow-inner font-black uppercase">
             <span className="hidden sm:inline text-white/40 text-[9px] tracking-widest uppercase font-black">DEALER CHOICE:</span>
-            <select value={pendingVariantId} onChange={(e) => {setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value})}} className="bg-transparent text-[#fbbf24] outline-none text-xs cursor-pointer font-black">
+            <select value={pendingVariantId} onChange={(e) => {
+                setPendingVariantId(e.target.value); 
+                socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value});
+            }} className="bg-transparent text-[#fbbf24] outline-none text-xs cursor-pointer font-black">
                 {Object.entries(VARIANTS).map(([k,v])=><option key={k} value={k} className="bg-slate-900 font-black">{v.name}</option>)}
             </select>
         </div>
-        <div className="flex gap-2 font-black uppercase">
+        <div className="flex gap-2 font-black uppercase items-center">
+            <div className="hidden sm:flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl mr-2 font-mono text-[11px] text-[#fbbf24] shadow-inner">
+                <Clock size={14} />
+                {currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+            </div>
             <button onClick={addBot} className="text-indigo-400 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-indigo-400/20 font-black" title="Bot"><Bot size={20}/></button>
             <button onClick={() => {setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-red-500/20 font-black"><LogOut size={20}/></button>
         </div>
@@ -484,7 +529,7 @@ const App = () => {
             
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 overflow-hidden translate-y-[20%]">
                 <span className="text-[12vw] font-black text-white/5 italic tracking-tighter uppercase select-none rotate-[-12deg] whitespace-nowrap">
-                  {activeVariant.name}
+                  {activeVariant?.name || "Hold'em"}
                 </span>
             </div>
 
@@ -518,37 +563,40 @@ const App = () => {
                     <div className={`text-[6vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot || 0).toLocaleString()}</div>
                 </div>
               )}
-              <div className="flex gap-2 md:gap-4 scale-[1.1] md:scale-[1.8] mt-6 md:mt-12 font-black uppercase">
-                  {(community || []).map((c, j) => (
-                    <div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[4px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}>
-                        <span className="text-[14px] md:text-[0.9vw] font-black">{String(c.value)}</span><span className={`text-[18px] md:text-[2.2vw] font-black ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
-                    </div>
-                  ))}
-              </div>
+              {/* Community cards for HOLDEM, OMAHA, PINEAPPLE, HILOW, MUFLIS. Excludes REDSBLACKS based on 4-card logic. */}
+              {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS'].includes(activeVariant?.id) && (
+                <div className="flex gap-2 md:gap-4 scale-[1.1] md:scale-[1.8] mt-6 md:mt-12 font-black uppercase">
+                    {(community || []).map((c, j) => (
+                        <div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[4px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}>
+                            <span className="text-[14px] md:text-[0.9vw] font-black">{String(c.value)}</span><span className={`text-[18px] md:text-[2.2vw] font-black ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                        </div>
+                    ))}
+                </div>
+              )}
             </div>
         </div>
       </main>
 
       <footer style={{ height: `${footerHeight}px` }} className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-hidden">
         
-        <div className="flex w-[35%] border-r border-white/10 p-2 flex-col overflow-hidden text-[10px] font-mono tracking-widest font-black uppercase">
+        <div className="flex w-[35%] border-r border-white/10 p-2 flex-col overflow-hidden text-[12px] font-mono tracking-widest font-black uppercase">
             <div className="text-white/40 mb-1 flex items-center justify-between border-b border-white/5 pb-1 px-1 uppercase">
                 <div className="flex items-center gap-1.5"><Eye size={12} className="text-[#fbbf24]"/> INTELLIGENCE</div>
-                <div className="flex items-center gap-1 text-emerald-500 animate-pulse text-[8px]"><div className="w-1 h-1 bg-emerald-500 rounded-full" /> LIVE</div>
+                <div className="flex items-center gap-1 text-emerald-500 animate-pulse text-[10px]"><div className="w-1 h-1 bg-emerald-500 rounded-full" /> LIVE</div>
             </div>
             <div className="flex-1 space-y-1 overflow-y-auto scrollbar-hide font-black p-0.5">
                 {(logs || []).map(l => (
                     <div key={l.id} className="animate-in slide-in-from-left duration-200 flex items-center gap-2 border-l-2 border-white/10 pl-2 py-0.5 hover:bg-white/5 transition-colors border-b border-white/5">
-                        <span className="text-white/20 text-[6px] font-black shrink-0 w-8">{String(l.time)}</span> 
+                        <span className="text-white/20 text-[9px] font-black shrink-0 w-10">{String(l.time)}</span> 
                         <div className="flex items-center gap-x-1.5 font-black leading-none overflow-hidden">
-                            <span className={`font-black uppercase text-[8px] px-1 rounded-sm shrink-0 ${
+                            <span className={`font-black uppercase text-[11px] px-1.5 py-0.5 rounded-sm shrink-0 ${
                                 l.type === 'win' ? 'bg-emerald-500/20 text-emerald-400' : 
                                 l.type === 'variant' ? 'bg-purple-500/20 text-purple-400' : 
                                 l.type === 'fold' ? 'bg-red-500/20 text-red-400' :
                                 l.type === 'phase' ? 'bg-cyan-500/20 text-cyan-400' :
                                 'bg-yellow-500/20 text-[#fbbf24]'
                             }`}>{String(l.name)}</span>
-                            <span className="text-white/60 lowercase tracking-tight text-[8px] font-black truncate">{String(l.action)}</span>
+                            <span className="text-white/60 lowercase tracking-tight text-[11px] font-black truncate">{String(l.action)}</span>
                         </div>
                     </div>
                 ))}
@@ -559,7 +607,6 @@ const App = () => {
           {activeIdx === heroIdx && phase !== PHASES.SHOWDOWN && phase !== PHASES.IDLE && heroPlayerObj ? (
             <div className="flex flex-col gap-3 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
                 
-                {/* HERO REAL-TIME HAND INTEL (REPLACED AS REQUESTED) */}
                 <div className="absolute top-2 right-4 animate-in slide-in-from-right duration-500">
                     <div className="flex flex-col items-end">
                       <span className="text-[7px] text-white/40 tracking-[0.2em] font-black uppercase">Current Hand</span>
