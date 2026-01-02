@@ -25,7 +25,7 @@ const DISPLAY_POSITIONS = [
 ];
 
 const BET_OFFSETS = [
-  { x: 0, y: -160 },   { x: 100, y: -110 }, { x: 130, y: 0 },    { x: 100, y: 110 },  { x: 60, y: 130 },   
+  { x: 0, y: -160 },   { x: 100, y: -110 }, { x: 130, y: 0 },    { x: 100, y: 110 },  { x: 60, y: 130 },    
   { x: 0, y: 150 },    { x: -60, y: 130 },  { x: -100, y: 110 }, { x: -130, y: 0 },   { x: -100, y: -110 } 
 ];
 
@@ -55,7 +55,6 @@ const Seat = ({
     return (
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'}`}>
             
-            {/* 1. WIN PROBABILITY BADGE - Hero Only or Showdown */}
             {(isHero || isShowdown) && !player.isFolded && player.winProbability !== undefined && phase !== PHASES.IDLE && (
               <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-300">
                 <div className="bg-slate-900/80 backdrop-blur-xl border border-cyan-500/50 px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
@@ -68,7 +67,6 @@ const Seat = ({
               </div>
             )}
 
-            {/* Action Label Overlay */}
             {player.lastAction && !isActiveTurn && !isCollectingBets && (
               <div className="absolute top-[-30px] animate-bounce-short z-[200]">
                 <span className={`text-[8px] font-black px-2 py-0.5 rounded shadow-lg uppercase border border-white/20 ${
@@ -81,7 +79,6 @@ const Seat = ({
               </div>
             )}
 
-            {/* Split Pot Winner Badges */}
             {isShowdown && potTransferring && (
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-20 flex flex-col gap-1 items-center z-[500]">
                     {highAward && <span className="bg-emerald-600 text-white text-[8px] md:text-[10px] px-2 py-0.5 rounded-full font-black animate-bounce shadow-lg whitespace-nowrap uppercase">HIGH WINNER (+${highAward.amount.toLocaleString()})</span>}
@@ -89,7 +86,6 @@ const Seat = ({
                 </div>
             )}
 
-            {/* Bet Bubble */}
             {player.currentBet > 0 && (
                 <div className={`absolute z-[100] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot opacity-0' : 'opacity-100'}`}
                     style={{ transform: `translate(calc(-50% + ${betOffset.x}px), ${betOffset.y}px)`, left: '50%', top: '50%' }}>
@@ -100,7 +96,6 @@ const Seat = ({
                 </div>
             )}
 
-            {/* Player Info Box */}
             <div className={`relative flex flex-col items-center p-1.5 rounded-2xl border-2 bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[100px] md:min-w-[150px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-4 ring-cyan-400/40 scale-105 shadow-[0_0_20px_rgba(34,211,238,0.3)]' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 animate-pulse-glow' : ''}`}>
                 {player.isDealer && (
                     <div className="absolute -top-1.5 -right-1.5 flex items-center justify-center z-30">
@@ -123,7 +118,6 @@ const Seat = ({
                 )}
             </div>
 
-            {/* Cards */}
             {player.hand && Array.isArray(player.hand) && !player.isFolded && (
                 <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible translate-y-[55px]">
                     {player.hand.map((c, ci) => (
@@ -135,7 +129,6 @@ const Seat = ({
                         </div>
                     ))}
                     
-                    {/* Hand Strength Badge */}
                     {strengthLabel && !player.isFolded && (isHero || isShowdown) && phase !== PHASES.IDLE && (
                         <div className="absolute -bottom-12 z-[120] whitespace-nowrap bg-purple-600/90 backdrop-blur-md px-3 py-1 rounded-full border border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-in fade-in zoom-in" style={{ transform: `translate(0px, -60px)`, bottom: '0px' }}>
                              <span className="text-[9px] md:text-[11px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
@@ -184,7 +177,6 @@ const App = () => {
   const [heroCardScale, setHeroCardScale] = useState(1.2);
   const [showLayoutControls, setShowLayoutControls] = useState(false);
 
-  // Pot derived state: main pot + current round bets
   const totalDisplayPot = useMemo(() => {
     const currentBetsSum = players.reduce((acc, p) => acc + (p?.currentBet || 0), 0);
     return potAmount + currentBetsSum;
@@ -246,12 +238,6 @@ const App = () => {
       if (!currentRoomId) return;
       socket.emit('adminAddBot', { roomId: currentRoomId });
   }, [currentRoomId]);
-
-  const getWinnerDisplayPos = useCallback((idx) => {
-    const heroSeatOffset = heroIdx !== -1 ? heroIdx : 0;
-    const relativeIdx = (idx - heroSeatOffset + TOTAL_SEATS) % TOTAL_SEATS;
-    return DISPLAY_POSITIONS[relativeIdx] || { x: 50, y: 50 };
-  }, [heroIdx]);
 
   useEffect(() => {
     socket.on('roomUpdate', (d) => {
@@ -444,7 +430,6 @@ const App = () => {
           </div>
       )}
 
-      {/* HEADER */}
       <header style={{ height: `${headerHeight}px` }} className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-4 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black uppercase">
         <div className="flex items-center gap-2">
             <div className="bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 shadow-inner truncate font-black uppercase">
@@ -492,11 +477,9 @@ const App = () => {
         </div>
       </header>
 
-      {/* TABLE AREA */}
       <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-emerald-950/20 to-transparent overflow-hidden px-2 py-2 font-black uppercase">
         <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 10}px)` }} className="relative w-full max-w-[1400px] aspect-[21/10] flex items-center justify-center h-full transition-transform duration-300 ease-out origin-center font-black">
             
-            {/* Table Surface & Watermark */}
             <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[2vw] border-slate-900/60 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)] border-double font-black uppercase" />
             
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 overflow-hidden translate-y-[20%]">
@@ -546,10 +529,8 @@ const App = () => {
         </div>
       </main>
 
-      {/* FOOTER */}
       <footer style={{ height: `${footerHeight}px` }} className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-hidden">
         
-        {/* INTELLIGENCE FEED */}
         <div className="flex w-[35%] border-r border-white/10 p-2 flex-col overflow-hidden text-[10px] font-mono tracking-widest font-black uppercase">
             <div className="text-white/40 mb-1 flex items-center justify-between border-b border-white/5 pb-1 px-1 uppercase">
                 <div className="flex items-center gap-1.5"><Eye size={12} className="text-[#fbbf24]"/> INTELLIGENCE</div>
@@ -574,21 +555,17 @@ const App = () => {
             </div>
         </div>
 
-        {/* ACTION PANEL */}
         <div className="flex-1 flex flex-col justify-center px-4 md:px-10 relative bg-white/5 shadow-inner py-3 font-black uppercase">
           {activeIdx === heroIdx && phase !== PHASES.SHOWDOWN && phase !== PHASES.IDLE && heroPlayerObj ? (
             <div className="flex flex-col gap-3 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
                 
-                {/* HERO REAL-TIME HAND INTEL */}
-                <div className="absolute top-2 right-4 flex items-center gap-4 animate-in slide-in-from-right duration-500">
+                {/* HERO REAL-TIME HAND INTEL (REPLACED AS REQUESTED) */}
+                <div className="absolute top-2 right-4 animate-in slide-in-from-right duration-500">
                     <div className="flex flex-col items-end">
-                      <span className="text-[7px] text-white/40 tracking-[0.2em] font-black">CURRENT STRENGTH</span>
-                      <span className="text-[10px] text-purple-400 font-black">{heroPlayerObj.strength || "NONE"}</span>
-                    </div>
-                    <div className="h-8 w-[1px] bg-white/10" />
-                    <div className="flex flex-col items-end">
-                      <span className="text-[7px] text-white/40 tracking-[0.2em] font-black">EST. EQUITY</span>
-                      <span className="text-[14px] text-cyan-400 font-mono font-black">{heroPlayerObj.winProbability ? Math.round(heroPlayerObj.winProbability) : '--'}%</span>
+                      <span className="text-[7px] text-white/40 tracking-[0.2em] font-black uppercase">Current Hand</span>
+                      <span className="text-[12px] md:text-[14px] text-purple-400 font-black uppercase">
+                        {heroPlayerObj.strength || "High Card"}
+                      </span>
                     </div>
                 </div>
 
@@ -668,10 +645,8 @@ const App = () => {
       <style>{`
           @keyframes progress { from { width: 100%; } to { width: 0%; } }
           @keyframes fling-to-pot { 0% { transform: translate(-50%, -100%) scale(1.5); filter: blur(0px); } 100% { transform: translate(0, -35vh) scale(0.1) rotate(1080deg); filter: blur(4px); opacity: 0; } }
-          @keyframes transfer-chip { 0% { top: 43%; left: 50%; opacity: 1; transform: translate(-50%, -50%) scale(1); filter: brightness(2); } 100% { top: var(--ty); left: var(--tx); opacity: 0; transform: translate(-50%, -50%) scale(0.1); filter: brightness(1); } }
           @keyframes pot-pulse { 0% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 50% { transform: scale(1.1); filter: drop-shadow(0 0 30px #fbbf24) brightness(1.2); } 100% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } }
           .animate-pot-pulse { animation: pot-pulse 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-          .animate-transfer-chip { animation: transfer-chip 1s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards; }
           .bg-glimmer { background: linear-gradient(135deg, #fff 0%, #fff 40%, #fbbf24 50%, #fff 60%, #fff 100%); background-size: 200% 200%; animation: glimmer 3s infinite; }
           @keyframes glimmer { 0% { background-position: -100% -100%; } 100% { background-position: 200% 200%; } }
           .animate-pulse-glow { animation: pulse-glow 2s infinite ease-in-out; }
