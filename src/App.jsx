@@ -125,7 +125,6 @@ const Seat = ({
                         <div key={c.id || ci} 
                             className={`w-[5.5vw] md:w-[3vw] h-[8vw] md:h-[5vw] rounded-[4px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
                             style={{ 
-                                // Dynamic spread logic for 2, 3, or 4 cards
                                 transform: `translateX(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 1.5 : 2.5)}vw) rotate(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 5 : 8)}deg) scale(${1.5 * currentCardScale})`, 
                                 transformOrigin: 'bottom center', 
                                 top: player.hand.length > 2 ? '25px' : '45px' 
@@ -196,21 +195,13 @@ const App = () => {
     return potAmount + currentBetsSum;
   }, [potAmount, players]);
 
-  // Robust Hero detection logic fixed for "cannot see cards" bug
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
     return players.findIndex(p => {
         if (!p) return false;
-        
-        // Match by unique UID (Priority 1)
         if (userProfile.uid && p.uid && userProfile.uid === p.uid) return true;
-        
-        // Match by Name + Password combo (Priority 2)
         if (p.name === userProfile.name && p.password === userProfile.password) return true;
-        
-        // Match by Name only (Priority 3 - fallback)
         if (p.name === userProfile.name) return true;
-
         return false;
     });
   }, [players, userProfile]);
@@ -301,7 +292,6 @@ const App = () => {
 
         setPhase(d.phase); setCommunity(d.community || []); 
         
-        // Correctly handle variation mapping from server
         let resolvedVariant = VARIANTS.HOLDEM;
         const sVariant = d.activeVariant;
         if (sVariant) {
@@ -563,8 +553,8 @@ const App = () => {
                     <div className={`text-[6vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot || 0).toLocaleString()}</div>
                 </div>
               )}
-              {/* Community cards for HOLDEM, OMAHA, PINEAPPLE, HILOW, MUFLIS. Excludes REDSBLACKS based on 4-card logic. */}
-              {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS'].includes(activeVariant?.id) && (
+              {/* FIXED: community cards are now visible for REDSBLACKS as well */}
+              {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS', 'REDSBLACKS'].includes(activeVariant?.id) && (
                 <div className="flex gap-2 md:gap-4 scale-[1.1] md:scale-[1.8] mt-6 md:mt-12 font-black uppercase">
                     {(community || []).map((c, j) => (
                         <div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[4px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}>
