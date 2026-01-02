@@ -5,8 +5,7 @@ import {
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
   Zap, Target, DollarSign, User, Lock, DoorOpen, LayoutGrid, ShieldAlert, PlusCircle,
   Users, Layers, Edit3, ScrollText, ArrowLeft, Key, Save, AlertTriangle, Monitor, Bot,
-  Timer, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3, BookOpen, Activity, Percent, Flame,
-  TrendingDown, Gavel, Crown, Terminal, Shield, Cpu, Check, CheckCircle2
+  Timer, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3
 } from 'lucide-react';
 import io from 'socket.io-client';
 
@@ -21,137 +20,24 @@ const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 
 const DISPLAY_POSITIONS = [
-  { x: 50, y: 88 }, { x: 15, y: 80 }, { x: 8,  y: 50 }, { x: 15, y: 20 }, { x: 35, y: 8  },
-  { x: 50, y: 6  }, { x: 65, y: 8  }, { x: 85, y: 20 }, { x: 92, y: 50 }, { x: 85, y: 80 }
+  { x: 50, y: 92 }, { x: 15, y: 82 }, { x: 6,  y: 45 }, { x: 12, y: 12 }, { x: 30, y: 3  },
+  { x: 50, y: 1  }, { x: 70, y: 3  }, { x: 88, y: 12 }, { x: 94, y: 45 }, { x: 85, y: 82 }
 ];
 
 const BET_OFFSETS = [
-  { x: 0, y: -140 },   { x: 80, y: -100 }, { x: 110, y: 0 },    { x: 80, y: 100 },  { x: 60, y: 120 },   
-  { x: 0, y: 130 },    { x: -60, y: 120 },  { x: -80, y: 100 }, { x: -110, y: 0 },   { x: -80, y: -100 } 
+  { x: 0, y: -160 },   { x: 100, y: -110 }, { x: 130, y: 0 },    { x: 100, y: 110 },  { x: 60, y: 130 },   
+  { x: 0, y: 150 },    { x: -60, y: 130 },  { x: -100, y: 110 }, { x: -130, y: 0 },   { x: -100, y: -110 } 
 ];
 
 const VARIANTS = { 
   HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em' }, 
   OMAHA: { id: 'OMAHA', name: 'OMAHA' }, 
   PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple' }, 
-  MUFLIS: { id: 'MUFLIS', name: 'Muflis' },
-  HILOW: { id: 'HILOW', name: 'Hi-Low Split' },
-  SHORTDECK: { id: 'SHORTDECK', name: 'Short Deck (6+)' },
-  SUPEROMAHA: { id: 'SUPEROMAHA', name: 'Super Omaha' },
-  ROYAL: { id: 'ROYAL', name: 'Royal Hold\'em' },
-  COURCHEVEL: { id: 'COURCHEVEL', name: 'Courchevel' },
-  CRAZYPINEAPPLE: { id: 'CRAZYPINEAPPLE', name: 'Crazy Pineapple' }
-};
-
-const VARIANT_RULES = {
-  HOLDEM: "Standard Texas Hold'em rules. Best 5-card hand using 2 hole and 5 board cards.",
-  OMAHA: "Pot-Limit Omaha rules. Must use exactly 2 hole cards and 3 board cards.",
-  PINEAPPLE: "3 cards dealt. Discard one card before pre-flop betting.",
-  MUFLIS: "Standard worst hand is the winner. Royal Flushes lose to High Card.",
-  HILOW: "Split pot between the best High and best Low (8-or-better) hand.",
-  SHORTDECK: "2s through 5s removed. Flushes beat Full Houses.",
-  SUPEROMAHA: "Action Omaha with 5 cards. High variance rules apply.",
-  ROYAL: "20-card deck. Straights and Full Houses are standard minimums.",
-  COURCHEVEL: "First flop card is revealed during pre-flop betting.",
-  CRAZYPINEAPPLE: "3 cards dealt. Discard one card ONLY after the flop betting."
+  MUFLIS: { id: 'Muflis', name: 'Muflis' },
+  HILOW: { id: 'HILOW', name: 'Hi-Low Split' } 
 };
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
-
-// --- HAND EVALUATION ENGINE ---
-const VAL_MAP = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
-
-const rankHand = (cards) => {
-    if (!cards || cards.length < 5) return { power: 0, name: "" };
-    const sorted = [...cards].sort((a, b) => VAL_MAP[b.value] - VAL_MAP[a.value]);
-    const ranks = sorted.map(c => VAL_MAP[c.value]);
-    const counts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
-    const tiebreakerRanks = Object.entries(counts)
-        .map(([rank, count]) => ({ r: parseInt(rank), c: count }))
-        .sort((a, b) => b.c - a.c || b.r - a.r);
-
-    const vc = tiebreakerRanks.map(x => x.c);
-    const isFlush = new Set(sorted.map(c => c.suit)).size === 1;
-    let isStraight = true;
-    for (let i = 0; i < ranks.length - 1; i++) {
-        if (ranks[i] !== ranks[i + 1] + 1) isStraight = false;
-    }
-    if (!isStraight && JSON.stringify(ranks) === "[14,5,4,3,2]") isStraight = true;
-
-    let score = 0, name = "High Card";
-    if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
-    else if (vc[0] === 4) { score = 7; name = "Four of a Kind"; }
-    else if (vc[0] === 3 && vc[1] === 2) { score = 6; name = "Full House"; }
-    else if (isFlush) { score = 5; name = "Flush"; }
-    else if (isStraight) { score = 4; name = "Straight"; }
-    else if (vc[0] === 3) { score = 3; name = "Three of a Kind"; }
-    else if (vc[0] === 2 && vc[1] === 2) { score = 2; name = "Two Pair"; }
-    else if (vc[0] === 2) { score = 1; name = "Pair"; }
-
-    const power = score * 1e10 + tiebreakerRanks.reduce((acc, v, i) => acc + (v.r * Math.pow(15, 4 - i)), 0);
-    return { power, name };
-};
-
-const getBestHand = (hole, comm, variantId) => {
-    if (!hole || hole.length === 0) return null;
-    const combinations = (arr, k) => {
-        const results = [];
-        const f = (start, current) => {
-            if (current.length === k) { results.push([...current]); return; }
-            for (let i = start; i < arr.length; i++) {
-                current.push(arr[i]); f(i + 1, current); current.pop();
-            }
-        };
-        f(0, []); return results;
-    };
-
-    let best = { power: -1, name: "" };
-    if (['OMAHA', 'HILOW', 'SUPEROMAHA', 'COURCHEVEL'].includes(variantId)) {
-        if (hole.length < 2 || comm.length < 3) return null;
-        const h2s = combinations(hole, 2);
-        const c3s = combinations(comm, 3);
-        h2s.forEach(h => {
-            c3s.forEach(c => {
-                const res = rankHand([...h, ...c]);
-                if (res.power > best.power) best = res;
-            });
-        });
-    } else {
-        const full = [...hole, ...comm];
-        if (full.length < 5) return null;
-        const combos = combinations(full, 5);
-        combos.forEach(c => {
-            const res = rankHand(c);
-            if (res.power > best.power) best = res;
-        });
-    }
-    return best.name ? best : null;
-};
-
-// --- UI COMPONENTS ---
-
-const CardSymbol = ({ suit }) => {
-  const isRed = suit === '♥' || suit === '♦';
-  return <span className={isRed ? 'text-red-500' : 'text-slate-950'}>{suit}</span>;
-};
-
-const UIOverlay = ({ children, isOpen, onClose, title, icon: Icon }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-in fade-in duration-300 p-4 font-black uppercase">
-      <div className="w-full max-w-[550px] bg-slate-900 border border-white/10 rounded-[2rem] shadow-[0_0_100px_rgba(0,0,0,1)] p-6 flex flex-col gap-5 relative overflow-hidden ring-1 ring-white/5">
-        <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">{Icon && <Icon size={160} className="text-white" />}</div>
-        <div className="flex justify-between items-center border-b border-white/10 pb-4 relative z-10">
-          <h3 className="text-xl font-black text-[#fbbf24] tracking-widest flex items-center gap-3 uppercase">{Icon && <Icon size={24} />} {title}</h3>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-white"><X size={24} /></button>
-        </div>
-        <div className="relative z-10 min-h-[100px] text-white/80 leading-relaxed font-black uppercase tracking-tight text-sm overflow-y-auto max-h-[70vh] pr-2">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, 
@@ -160,56 +46,99 @@ const Seat = ({
 }) => {
     if (!player || !displayPos) return null;
     const isShowdown = phase === PHASES.SHOWDOWN;
-    const currentCardScale = isHero ? cardScale : 0.85;
+    const currentCardScale = isHero ? cardScale : 1.0;
     const betOffset = BET_OFFSETS[relativeIdx] || { x: 0, y: 0 };
 
+    const highAward = hiLowAwards?.high?.find(a => a.i === player.seatIdx);
+    const lowAward = hiLowAwards?.low?.find(a => a.i === player.seatIdx);
+
     return (
-        <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-700 ${player.isFolded ? 'opacity-30 grayscale scale-75' : 'opacity-100'}`}>
-            {player.lastAction && !isShowdown && !player.isFolded && (
-              <div className="absolute top-[-70px] animate-action-float text-cyan-400 font-black text-[10px] tracking-[0.2em] uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]">{player.lastAction}</div>
-            )}
+        <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'}`}>
             
+            {/* 1. WIN PROBABILITY BADGE - Hero Only or Showdown */}
+            {(isHero || isShowdown) && !player.isFolded && player.winProbability !== undefined && phase !== PHASES.IDLE && (
+              <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-300">
+                <div className="bg-slate-900/80 backdrop-blur-xl border border-cyan-500/50 px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+                  <TrendingUp size={10} className="text-cyan-400" />
+                  <span className="text-[9px] font-black text-white font-mono">{Math.round(player.winProbability)}%</span>
+                </div>
+                <div className="w-10 h-0.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-cyan-400 transition-all duration-500" style={{ width: `${player.winProbability}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Action Label Overlay */}
+            {player.lastAction && !isActiveTurn && !isCollectingBets && (
+              <div className="absolute top-[-30px] animate-bounce-short z-[200]">
+                <span className={`text-[8px] font-black px-2 py-0.5 rounded shadow-lg uppercase border border-white/20 ${
+                  player.lastAction === 'FOLD' ? 'bg-red-600 text-white' : 
+                  player.lastAction === 'RAISE' ? 'bg-amber-500 text-black' : 
+                  'bg-blue-600 text-white'
+                }`}>
+                  {player.lastAction}
+                </span>
+              </div>
+            )}
+
+            {/* Split Pot Winner Badges */}
+            {isShowdown && potTransferring && (
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-20 flex flex-col gap-1 items-center z-[500]">
+                    {highAward && <span className="bg-emerald-600 text-white text-[8px] md:text-[10px] px-2 py-0.5 rounded-full font-black animate-bounce shadow-lg whitespace-nowrap uppercase">HIGH WINNER (+${highAward.amount.toLocaleString()})</span>}
+                    {lowAward && <span className="bg-orange-600 text-white text-[8px] md:text-[10px] px-2 py-0.5 rounded-full font-black animate-bounce shadow-lg whitespace-nowrap uppercase">LOW WINNER (+${lowAward.amount.toLocaleString()})</span>}
+                </div>
+            )}
+
+            {/* Bet Bubble */}
             {player.currentBet > 0 && (
-                <div className={`absolute z-[100] transition-all duration-1000 ${isCollectingBets ? 'animate-fling-to-pot' : 'opacity-100'}`} style={{ transform: `translate(calc(-50% + ${betOffset.x * 0.7}px), ${betOffset.y} * 0.7px)`, left: '50%', top: '50%', '--bx': `${-betOffset.x * 0.7}px`, '--by': `${-betOffset.y * 0.7 - 50}px` }}>
-                    <div className="bg-gradient-to-b from-amber-200 via-amber-500 to-amber-800 text-black font-black text-[9px] md:text-[12px] px-3 py-1.5 rounded-full shadow-lg border-t border-white/60 flex items-center gap-1 whitespace-nowrap tracking-tighter uppercase">
-                        <div className="w-4 h-4 rounded-full border border-black/20 bg-white/20 flex items-center justify-center shrink-0"><Coins size={10} fill="black" /></div>
-                        {Number(player.currentBet).toLocaleString()}
+                <div className={`absolute z-[100] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot opacity-0' : 'opacity-100'}`}
+                    style={{ transform: `translate(calc(-50% + ${betOffset.x}px), ${betOffset.y}px)`, left: '50%', top: '50%' }}>
+                    <div className="bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-black text-[10px] md:text-[12px] px-3 py-1 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.6)] border border-white/30 flex items-center gap-1 whitespace-nowrap">
+                        <Coins size={10} />
+                        ${String(player.currentBet.toLocaleString())}
                     </div>
                 </div>
             )}
 
-            <div className={`relative flex flex-col items-center p-1.5 rounded-[1.5rem] border-2 bg-gradient-to-br from-slate-800/95 to-slate-950 backdrop-blur-xl transition-all duration-500 min-w-[90px] md:min-w-[150px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-[8px] ring-cyan-400/10 scale-110' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 animate-winner-ring z-50' : ''}`}>
+            {/* Player Info Box */}
+            <div className={`relative flex flex-col items-center p-1.5 rounded-2xl border-2 bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[100px] md:min-w-[150px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-4 ring-cyan-400/40 scale-105 shadow-[0_0_20px_rgba(34,211,238,0.3)]' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 animate-pulse-glow' : ''}`}>
                 {player.isDealer && (
-                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-white rounded-full border-2 border-slate-900 flex items-center justify-center font-black text-[10px] text-black shadow-xl">D</div>
+                    <div className="absolute -top-1.5 -right-1.5 flex items-center justify-center z-30">
+                        <div className="w-4 h-4 bg-red-600 rounded-full border-2 border-white shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse" />
+                    </div>
                 )}
-                <div className="flex flex-col items-center w-full font-black">
-                    <span className="text-[8px] md:text-[10px] font-black text-white/50 uppercase tracking-widest truncate w-full text-center px-2 mb-0.5">{String(player.name || "Anon")}</span>
-                    <span className={`text-[12px] md:text-[16px] font-mono font-black tracking-tight ${player.chips === 0 ? 'text-red-500' : 'text-emerald-400'}`}>${Number(player.chips || 0).toLocaleString()}</span>
+                <div className="flex flex-col items-center gap-0.5 w-full">
+                    <span className="text-[10px] md:text-[12px] font-black text-white/90 uppercase tracking-tight truncate w-full text-center px-2">{String(player.name || "Anon")}</span>
+                    <span className={`text-[11px] md:text-[14px] font-mono font-black ${player.chips === 0 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>
+                        ${Number(player.chips || 0).toLocaleString()}
+                    </span>
+                    {isActiveTurn && <span className="text-[7px] text-cyan-400 font-black animate-pulse tracking-widest mt-0.5">THINKING...</span>}
                 </div>
                 {isActiveTurn && timeRemaining > 0 && (
-                    <div className="absolute -bottom-1.5 w-[80%] h-1 bg-black/60 rounded-full overflow-hidden">
-                        <div className="h-full bg-cyan-400" style={{ width: `${(timeRemaining / 30) * 100}%` }} />
+                    <div className="absolute -bottom-2 w-full px-2 h-1.5">
+                        <div className="w-full h-full bg-black/40 rounded-full overflow-hidden shadow-inner">
+                            <div className="h-full bg-cyan-400 transition-all duration-1000 linear" style={{ width: `${(timeRemaining / 30) * 100}%` }} />
+                        </div>
                     </div>
                 )}
             </div>
 
+            {/* Cards */}
             {player.hand && Array.isArray(player.hand) && !player.isFolded && (
-                <div className="relative flex items-center justify-center w-[10vw] h-[5vw] mt-2 overflow-visible translate-y-[35px] font-black">
+                <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible translate-y-[55px]">
                     {player.hand.map((c, ci) => (
-                        <div key={c.id || ci} className={`w-[6vw] md:w-[3.5vw] h-[9vw] md:h-[5.5vw] rounded-lg flex flex-col items-start p-1 border-2 shadow-xl absolute transition-all duration-700 ${isShowdown || isHero ? 'bg-gradient-to-br from-white to-slate-100 text-slate-900' : 'bg-gradient-to-br from-slate-700 to-slate-900 border-white/10 text-transparent'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-[4px] ring-yellow-400 scale-125 z-30 shadow-[0_0_40px_#fbbf24]' : ''} font-black`} style={{ transform: `translateX(${(ci - (player.hand.length - 1) / 2) * 22}px) rotate(${(ci - (player.hand.length - 1) / 2) * 8}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', zIndex: ci }}>
-                            {(isShowdown || isHero) ? (
-                                <div className="flex flex-col items-center w-full relative font-black leading-none">
-                                  <span className="text-[10px] md:text-[14px] font-black tracking-tighter">{String(c.value)}</span>
-                                  <div className="text-[12px] md:text-[18px] mt-0.5"><CardSymbol suit={c.suit} /></div>
-                                </div>
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center opacity-10"><ShieldCheck className="text-white" size={16} /></div>
+                        <div key={c.id || ci} className={`w-[5.5vw] md:w-[3vw] h-[8vw] md:h-[5vw] rounded-[4px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} style={{ transform: `translateX(${(ci - (player.hand.length - 1) / 2) * 20}px) rotate(${(ci - (player.hand.length - 1) / 2) * 8}deg) scale(${1.4 * currentCardScale})`, transformOrigin: 'bottom center' }}>
+                            {(isShowdown || isHero) && (
+                                <><span className="text-[10px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[12px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></>
                             )}
+                            {!(isShowdown || isHero) && ( <div className="w-full h-full flex items-center justify-center opacity-20"><ShieldCheck size={14}/></div> )}
                         </div>
                     ))}
+                    
+                    {/* Hand Strength Badge */}
                     {strengthLabel && !player.isFolded && (isHero || isShowdown) && phase !== PHASES.IDLE && (
-                        <div className="absolute -bottom-16 z-[120] whitespace-nowrap bg-purple-600/90 px-3 py-1 rounded-full border border-purple-400 shadow-lg font-black">
-                             <span className="text-[8px] md:text-[11px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
+                        <div className="absolute -bottom-12 z-[120] whitespace-nowrap bg-purple-600/90 backdrop-blur-md px-3 py-1 rounded-full border border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-in fade-in zoom-in" style={{ transform: `translate(0px, -60px)`, bottom: '0px' }}>
+                             <span className="text-[9px] md:text-[11px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
                         </div>
                     )}
                 </div>
@@ -219,7 +148,6 @@ const Seat = ({
 };
 
 const App = () => {
-  const [user, setUser] = useState(null);
   const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
   const [adminTab, setAdminTab] = useState(ADMIN_TABS.PLAYERS);
   const [userProfile, setUserProfile] = useState(null);
@@ -248,20 +176,15 @@ const App = () => {
   const [potTransferring, setPotTransferring] = useState(false);
   const [showdownWinners, setShowdownWinners] = useState(null);
   const [hiLowAwards, setHiLowAwards] = useState(null);
-  
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [confirmDeletePlayer, setConfirmDeletePlayer] = useState(null);
-  const [editingChipsUid, setEditingChipsUid] = useState(null);
-  const [editChipsVal, setEditChipsVal] = useState(0);
   const [nuclearConfirm, setNuclearConfirm] = useState(false);
 
   const [headerHeight, setHeaderHeight] = useState(64); 
-  const [footerHeight, setFooterHeight] = useState(window.innerWidth < 768 ? 170 : 250); 
-  const [tableZoom, setTableZoom] = useState(window.innerWidth < 768 ? 0.7 : 1);
-  const [heroCardScale, setHeroCardScale] = useState(window.innerWidth < 768 ? 1.2 : 1.4);
+  const [footerHeight, setFooterHeight] = useState(200); 
+  const [tableZoom, setTableZoom] = useState(1);
+  const [heroCardScale, setHeroCardScale] = useState(1.2);
   const [showLayoutControls, setShowLayoutControls] = useState(false);
-  const [showRules, setShowRules] = useState(false);
 
+  // Pot derived state: main pot + current round bets
   const totalDisplayPot = useMemo(() => {
     const currentBetsSum = players.reduce((acc, p) => acc + (p?.currentBet || 0), 0);
     return potAmount + currentBetsSum;
@@ -272,55 +195,37 @@ const App = () => {
     return players.findIndex(p => p && p.uid === userProfile.uid);
   }, [players, userProfile]);
 
-  const heroPlayerObj = useMemo(() => heroIdx !== -1 ? players[heroIdx] : null, [players, heroIdx]);
-
-  const heroStrength = useMemo(() => {
-    if (!heroPlayerObj || !heroPlayerObj.hand || heroPlayerObj.hand.length === 0 || heroPlayerObj.isFolded) return null;
-    if (phase === PHASES.IDLE) return null;
-    const res = getBestHand(heroPlayerObj.hand, community, activeVariant.id);
-    return res ? res.name : null;
-  }, [heroPlayerObj, community, activeVariant, phase]);
+  const heroPlayerObj = useMemo(() => {
+    if (heroIdx === -1) return null;
+    return players[heroIdx];
+  }, [players, heroIdx]);
 
   const isBrokeStatus = useMemo(() => !!heroPlayerObj?.isBust, [heroPlayerObj]);
-  const minRaiseAllowed = useMemo(() => Math.max(highestBet + 20, highestBet * 2), [highestBet]);
 
-  // Handle Resize
-  useEffect(() => {
-    const onResize = () => {
-      if (window.innerWidth < 768) {
-        setTableZoom(0.7);
-        setFooterHeight(180);
-      } else {
-        setTableZoom(1);
-        setFooterHeight(250);
-      }
-    };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  const refreshState = useCallback(() => {
-    socket.emit('getInitialData');
-  }, []);
+  const minRaiseAllowed = useMemo(() => {
+      const bb = 20; 
+      return Math.max(highestBet + bb, highestBet * 2);
+  }, [highestBet]);
 
   const handleAction = useCallback((type, amt = 0) => {
-      if (!currentRoomId) return;
-      socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(amt || raiseInput) : 0 });
+      const roomId = currentRoomId; if (!roomId) return;
+      socket.emit('playerAction', { roomId, type, amount: type === 'RAISE' ? Number(amt || raiseInput) : 0 });
   }, [currentRoomId, raiseInput]);
 
   const handleLogin = useCallback(() => { 
       if (passwordInput === 'pass') { 
-          refreshState();
-          setUserProfile({ name: 'SUPER ADMIN', uid: 'admin_1', isAdmin: true }); 
+          socket.emit('getInitialData'); 
+          setUserProfile({ name: 'SUPER ADMIN', uid: 'admin_1' }); 
           setCurrentView(VIEWS.ADMIN); 
       } 
       else { socket.emit('playerLogin', { password: passwordInput }); }
-  }, [passwordInput, refreshState]);
+  }, [passwordInput]);
 
   const joinRoom = useCallback(() => {
     if (!selectedTableForJoin || !userProfile) return;
-    socket.emit('joinRoom', { roomId: selectedTableForJoin.id, profile: { ...userProfile, pendingVariant: pendingVariantId }, buyIn: buyInAmount }, (res) => {
-        if (res?.status === 'ok') { setCurrentRoomId(selectedTableForJoin.id); setCurrentView(VIEWS.GAME); setSelectedTableForJoin(null); }
+    const rId = selectedTableForJoin.id;
+    socket.emit('joinRoom', { roomId: rId, profile: { ...userProfile, pendingVariant: pendingVariantId }, buyIn: buyInAmount }, (res) => {
+        if (res?.status === 'ok') { setCurrentRoomId(rId); setCurrentView(VIEWS.GAME); setSelectedTableForJoin(null); }
     });
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
@@ -337,28 +242,39 @@ const App = () => {
       setNuclearConfirm(false);
   }, [nuclearConfirm]);
 
+  const addBot = useCallback(() => {
+      if (!currentRoomId) return;
+      socket.emit('adminAddBot', { roomId: currentRoomId });
+  }, [currentRoomId]);
+
+  const getWinnerDisplayPos = useCallback((idx) => {
+    const heroSeatOffset = heroIdx !== -1 ? heroIdx : 0;
+    const relativeIdx = (idx - heroSeatOffset + TOTAL_SEATS) % TOTAL_SEATS;
+    return DISPLAY_POSITIONS[relativeIdx] || { x: 50, y: 50 };
+  }, [heroIdx]);
+
   useEffect(() => {
     socket.on('roomUpdate', (d) => {
         if (!d) { setPlayers(INITIAL_PLAYERS); setPhase(PHASES.IDLE); setPotAmount(0); setCommunity([]); return; }
         if (d.id) setCurrentRoomId(d.id);
-        const nextPotAmt = Number(d.potData?.[0]?.amount || 0);
-        const potIncreased = (nextPotAmt > potAmount);
         
-        if (d.phase !== phase && phase !== PHASES.IDLE) {
+        const phaseChanged = d.phase !== phase && phase !== PHASES.IDLE && d.phase !== PHASES.IDLE;
+        const currentPotValue = Number(d.potData?.[0]?.amount || 0);
+        const potIncreased = currentPotValue > potAmount;
+
+        if (phaseChanged) {
             setIsCollectingBets(true);
-            setTimeout(() => { 
-                setIsCollectingBets(false); 
-                if (potIncreased) setPotAnimating(true); 
+            setTimeout(() => {
+                setIsCollectingBets(false);
+                if (potIncreased) { setPotAnimating(true); setTimeout(() => setPotAnimating(false), 600); }
             }, 1200);
-            setTimeout(() => setPotAnimating(false), 2200);
-        } else if (potIncreased) { 
-            setPotAnimating(true); 
-            setTimeout(() => setPotAnimating(false), 800); 
+        } else if (potIncreased && d.phase === phase) {
+             setPotAnimating(true); setTimeout(() => setPotAnimating(false), 600);
         }
 
         if (d.phase === PHASES.SHOWDOWN) {
-            setPotTransferring(true); 
-            setShowdownWinners(d.showdownWinners || null); 
+            setPotTransferring(true);
+            setShowdownWinners(d.showdownWinners || null);
             setHiLowAwards(d.hiLowAwards || null);
             setTimeout(() => { setPotTransferring(false); setShowdownWinners(null); }, 7500);
         }
@@ -369,18 +285,14 @@ const App = () => {
             return next; 
         });
 
-        setPhase(d.phase); 
-        setCommunity(d.community || []); 
-        setActiveVariant(d.activeVariant || VARIANTS.HOLDEM);
-        setHighestBet(Number(d.highestBet) || 0); 
-        setActiveIdx(d.activeIdx ?? -1); 
-        setWinning5Ids(d.winning5Ids || []);
-        setPotAmount(nextPotAmt); 
-        setTimeRemaining(Number(d.timeRemaining) || 30);
+        setPhase(d.phase); setCommunity(d.community || []); setActiveVariant(d.activeVariant || VARIANTS.HOLDEM);
+        setHighestBet(Number(d.highestBet) || 0); setActiveIdx(d.activeIdx ?? -1); setWinning5Ids(d.winning5Ids || []);
+        setPotAmount(currentPotValue); setTimeRemaining(Number(d.timeRemaining) || 30);
 
         if (d.activeIdx !== -1 && d.players?.[d.activeIdx]?.uid === userProfile?.uid) {
-            const minR = Math.max(Number(d.highestBet) + 20, Number(d.highestBet) * 2);
-            setRaiseInput(p => p < minR ? minR : p);
+            const bb = 20; 
+            const minRaise = Math.max(Number(d.highestBet) + bb, Number(d.highestBet) * 2);
+            setRaiseInput(prev => (prev < minRaise) ? minRaise : prev);
         }
     });
 
@@ -393,126 +305,81 @@ const App = () => {
         setCurrentView(VIEWS.LOBBY); 
         socket.emit('getInitialData'); 
     });
-    socket.on('log', (d) => { 
-        setLogs(prev => [{ id: Math.random(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), ...d }, ...prev].slice(0, 50)); 
+    socket.on('log', (d) => {
+        const entry = { id: Math.random(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), ...d };
+        setLogs(prev => [entry, ...prev].slice(0, 50));
     });
 
     return () => { 
-        socket.off('roomUpdate'); 
-        socket.off('lobbyUpdate'); 
-        socket.off('profilesUpdate'); 
-        socket.off('loginSuccess'); 
-        socket.off('log'); 
+        socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('loginSuccess'); socket.off('log'); 
     };
   }, [phase, potAmount, userProfile]);
 
-  useEffect(() => {
-    if (currentView === VIEWS.ADMIN) refreshState();
-  }, [currentView, refreshState]);
-
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white font-black uppercase tracking-tighter">
-        <div className="w-full max-w-[420px] p-8 md:p-14 bg-slate-900/60 border border-white/10 rounded-[3rem] backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-10 ring-1 ring-white/5 relative overflow-hidden">
-            <div className="p-6 bg-white/5 rounded-full ring-2 ring-white/10 shadow-inner relative"><Lock size={36} className="text-[#fbbf24] animate-pulse-fast" /></div>
-            <div className="w-full space-y-6 relative z-10">
-                <div className="text-center space-y-1"><h2 className="text-2xl md:text-3xl font-black tracking-[0.2em] text-white">ELITE ARENA</h2><p className="text-[9px] text-white/30 tracking-[0.5em] font-black uppercase">SYSTEM ACCESS REQUIRED</p></div>
-                <div className="space-y-3">
-                  <label className="text-[10px] text-white/40 block ml-2 tracking-widest font-black uppercase">AUTHENTICATION PASSCODE</label>
-                  <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="w-full bg-black/40 border border-white/10 p-5 rounded-[1.2rem] text-center tracking-[0.6em] text-[#fbbf24] outline-none text-xl font-black focus:border-[#fbbf24]/50 transition-all shadow-inner uppercase"/>
-                </div>
+        <div className="w-full max-w-[400px] p-8 md:p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8 font-black">
+            <div className="p-5 bg-white/5 rounded-full ring-1 ring-white/10 shadow-inner"><Lock size={32} className="text-[#fbbf24]" /></div>
+            <div className="w-full space-y-4">
+                <label className="text-[10px] text-white/40 block ml-2">ACCESS PASSCODE</label>
+                <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-center tracking-[0.5em] text-[#fbbf24] outline-none text-xl font-black uppercase"/>
             </div>
-            <button onClick={handleLogin} className="w-full p-5 bg-gradient-to-r from-amber-400 to-amber-600 text-black rounded-[1.2rem] hover:scale-[1.03] active:scale-95 font-black text-lg transition-all shadow-xl uppercase relative z-10">INITIATE SESSION</button>
+            <button onClick={handleLogin} className="w-full p-6 bg-[#fbbf24] text-black rounded-2xl hover:scale-[1.02] font-black text-lg transition-transform uppercase">SIT AT TABLE</button>
         </div>
     </div>
   );
 
   if (currentView === VIEWS.ADMIN) return (
-    <div className="h-screen bg-[#06080c] flex flex-col md:flex-row text-white font-black uppercase overflow-hidden">
-        <aside className="w-full md:w-72 border-b md:border-b-0 md:border-r border-white/10 p-4 md:p-10 flex flex-row md:flex-col gap-4 bg-black/40 shrink-0 relative">
-            <h2 className="text-[#fbbf24] tracking-widest hidden md:flex items-center gap-3 mb-6 font-black text-xl uppercase"><ShieldCheck size={28}/> COMMAND</h2>
-            <button onClick={()=>setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex-1 md:flex-none p-3 rounded-xl text-xs md:text-sm transition-all font-black flex items-center justify-center md:justify-start gap-3 ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black' : 'bg-white/5 text-white/30'}`}><Users size={16}/> PLAYERS</button>
-            <button onClick={()=>setAdminTab(ADMIN_TABS.TABLES)} className={`flex-1 md:flex-none p-3 rounded-xl text-xs md:text-sm transition-all font-black flex items-center justify-center md:justify-start gap-3 ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black' : 'bg-white/5 text-white/30'}`}><Cpu size={16}/> TABLES</button>
-            <div className="hidden md:flex flex-col mt-auto gap-3">
-              <button onClick={handleNuclear} className={`w-full p-4 rounded-xl items-center justify-center gap-3 border-2 transition-all font-black flex ${nuclearConfirm ? 'bg-red-600 border-white text-white animate-pulse' : 'bg-red-950/20 border-red-500/50 text-red-500 hover:bg-red-500'}`}>{nuclearConfirm ? <Bomb size={24}/> : <ShieldAlert size={24}/>}<span>{nuclearConfirm ? 'CONFIRM' : 'NUCLEAR'}</span></button>
-              <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-white/20 hover:text-white text-xs flex items-center justify-center gap-2 font-black transition-all uppercase"><ArrowLeft size={16}/> RETURN</button>
-            </div>
+    <div className="h-screen bg-[#06080c] flex flex-col md:flex-row text-white font-black uppercase overflow-hidden font-black">
+        <aside className="w-full md:w-64 border-b md:border-b-0 md:border-r border-white/10 p-4 md:p-8 flex flex-row md:flex-col gap-4 bg-black/20 shrink-0 font-black">
+            <h2 className="text-[#fbbf24] tracking-widest hidden md:flex items-center gap-2 mb-4 font-black"><ShieldCheck size={20}/> ADMIN</h2>
+            <button onClick={()=>setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex-1 md:flex-none p-3 md:p-4 rounded-xl text-xs md:text-sm transition-all font-black ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black shadow-lg shadow-yellow-500/20' : 'bg-white/5 text-white/40'}`}>PLAYERS</button>
+            <button onClick={()=>setAdminTab(ADMIN_TABS.TABLES)} className={`flex-1 md:flex-none p-3 md:p-4 rounded-xl text-xs md:text-sm transition-all font-black ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black shadow-lg shadow-yellow-500/20' : 'bg-white/5 text-white/40'}`}>TABLES</button>
+            <button onClick={handleNuclear} className={`hidden md:flex mt-auto p-4 rounded-xl items-center justify-center gap-2 border-2 transition-all font-black ${nuclearConfirm ? 'bg-red-600 border-white text-white animate-pulse' : 'bg-red-950/20 border-red-500 text-red-500'}`}>
+                {nuclearConfirm ? <Bomb size={20}/> : <ShieldAlert size={20}/>}
+                <span>{nuclearConfirm ? 'CONFIRM' : 'NUCLEAR'}</span>
+            </button>
+            <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="p-3 md:p-4 text-white/20 hover:text-white text-xs flex items-center gap-2 font-black"><ArrowLeft size={16}/></button>
         </aside>
-        <main className="flex-1 p-4 md:p-16 overflow-y-auto bg-[#080a0f] relative font-black uppercase">
+        <main className="flex-1 p-6 md:p-12 overflow-y-auto bg-black/40 font-black font-black uppercase">
             {adminTab === ADMIN_TABS.PLAYERS ? (
-                <div className="flex flex-col gap-8 animate-in fade-in duration-500">
-                    <h3 className="text-xl md:text-3xl tracking-[0.2em] border-l-4 border-[#fbbf24] pl-4 font-black uppercase">REGISTRY CONTROL</h3>
-                    <div className="bg-slate-900/50 p-6 rounded-[1.5rem] grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/5 shadow-2xl">
-                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="PLAYER NAME" className="w-full bg-black/60 p-4 rounded-xl border border-white/5 outline-none focus:border-[#fbbf24] font-black uppercase shadow-inner"/>
-                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASSCODE" className="w-full bg-black/60 p-4 rounded-xl border border-white/5 outline-none focus:border-[#fbbf24] font-black uppercase shadow-inner"/>
-                        <button onClick={()=>socket.emit('adminCreatePlayer', {...newPlayer, uid: Math.random().toString(36).slice(2)})} className="w-full h-[56px] bg-[#fbbf24] text-black rounded-xl font-black p-4 transition-all uppercase hover:brightness-110">COMMIT</button>
+                <div className="flex flex-col gap-8 animate-in fade-in">
+                    <h3 className="text-xl md:text-2xl tracking-widest border-l-4 border-[#fbbf24] pl-4 font-black">PLAYER REGISTRY</h3>
+                    <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10 shadow-xl font-black">
+                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-4 rounded-xl border border-white/10 outline-none focus:border-[#fbbf24] font-black uppercase"/>
+                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-4 rounded-xl border border-white/10 outline-none focus:border-[#fbbf24] font-black uppercase"/>
+                        <button onClick={()=>socket.emit('adminCreatePlayer', {...newPlayer, uid: Math.random().toString(36).slice(2)})} className="bg-[#fbbf24] text-black rounded-xl font-black p-4 transition-all">CREATE</button>
                     </div>
-                    <div className="bg-slate-900/40 rounded-[1.5rem] overflow-hidden border border-white/5 shadow-2xl">
-                        {(allProfiles || []).map((p, idx) => (
-                            <div key={p.uid} className={`flex justify-between items-center p-4 md:p-6 hover:bg-white/5 transition-all group ${idx !== (allProfiles?.length || 0) -1 ? 'border-b border-white/5' : ''}`}>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 transition-all"><User size={20} className="text-white/20" /></div>
-                                    <div className="flex flex-col"><span className="uppercase text-sm md:text-lg font-black">{String(p.name)}</span><span className="text-white/20 text-[8px] tracking-widest font-black uppercase">ID: {String(p.password)}</span></div>
-                                </div>
-                                <div className="flex gap-4 items-center">
-                                    {editingChipsUid === p.uid ? (
-                                      <div className="flex items-center gap-2 bg-black/40 p-2 rounded-xl">
-                                        <input type="number" value={editChipsVal} onChange={e=>setEditChipsVal(Number(e.target.value))} className="w-20 bg-transparent text-emerald-400 font-mono text-right outline-none font-black text-xs" />
-                                        <button onClick={()=>{socket.emit('adminEditChips', {uid: p.uid, chips: editChipsVal}); setEditingChipsUid(null);}} className="text-emerald-500"><CheckCircle2 size={20}/></button>
-                                        <button onClick={()=>setEditingChipsUid(null)} className="text-red-500"><X size={20}/></button>
-                                      </div>
-                                    ) : (
-                                      <div className="flex flex-col items-end">
-                                        <span className="text-[9px] text-emerald-500/40 font-black tracking-widest uppercase">BALANCE</span>
-                                        <span className="text-emerald-400 font-mono text-base md:text-xl font-black">${Number(p.chips || 0).toLocaleString()}</span>
-                                      </div>
-                                    )}
-                                    <div className="flex gap-2">
-                                      <button onClick={()=>{setEditingChipsUid(p.uid); setEditChipsVal(p.chips);}} className="p-2.5 bg-white/5 rounded-lg text-cyan-400 hover:bg-cyan-400/20"><Edit3 size={16}/></button>
-                                      {confirmDeletePlayer === p.uid ? (
-                                        <div className="flex gap-1 animate-in slide-in-from-right">
-                                          <button onClick={()=>{socket.emit('adminDeletePlayer', p.uid); setConfirmDeletePlayer(null);}} className="bg-red-600 text-white p-2.5 rounded-lg"><Trash2 size={16}/></button>
-                                          <button onClick={()=>setConfirmDeletePlayer(null)} className="bg-white/5 text-white/40 p-2.5 rounded-lg"><X size={16}/></button>
-                                        </div>
-                                      ) : (
-                                        <button onClick={()=>setConfirmDeletePlayer(p.uid)} className="p-2.5 bg-white/5 rounded-lg text-red-500"><Trash2 size={16}/></button>
-                                      )}
-                                    </div>
+                    <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10 font-black">
+                        {(allProfiles || []).map(p => (
+                            <div key={p.uid} className="flex justify-between p-4 md:p-6 border-b border-white/5 hover:bg-white/5 transition-all font-black">
+                                <span className="uppercase">{String(p.name)} <span className="text-white/20 ml-2">[{String(p.password)}]</span></span>
+                                <div className="flex gap-4 items-center font-black">
+                                    <span className="text-emerald-400 font-mono text-sm md:text-lg tracking-tighter">${Number(p.chips || 0).toLocaleString()}</span>
+                                    <button onClick={()=>{const n = prompt("NEW WALLET", p.chips); if(n) socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}}><Edit3 size={18} className="text-cyan-400"/></button>
+                                    <button onClick={()=>socket.emit('adminDeletePlayer', p.uid)}><Trash2 size={18} className="text-red-500"/></button>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
             ) : (
-                <div className="flex flex-col gap-8 animate-in fade-in duration-500 font-black uppercase">
-                    <h3 className="text-xl md:text-3xl tracking-[0.2em] border-l-4 border-emerald-500 pl-4 font-black uppercase">ARENA DEPLOYMENT</h3>
-                    <div className="bg-slate-900/50 p-6 rounded-[1.5rem] border border-white/5 shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-4 relative overflow-hidden">
-                        <div className="col-span-full space-y-2"><label className="text-[9px] text-white/40 tracking-widest pl-2 uppercase font-black">INSTANCE IDENTIFIER</label><input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ARENA NAME" className="w-full bg-black/60 p-4 rounded-xl border border-white/5 outline-none focus:border-emerald-500/50 font-black uppercase shadow-inner"/></div>
-                        <div className="grid grid-cols-4 gap-3">
-                            <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase tracking-widest">SB</span><input value={newTable.sb} type="number" className="w-full bg-black/60 p-3 rounded-lg border border-white/5 font-black outline-none text-center" onChange={e=>setNewTable({...newTable, sb: Number(e.target.value)})}/></div>
-                            <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase tracking-widest">BB</span><input value={newTable.bb} type="number" className="w-full bg-black/60 p-3 rounded-lg border border-white/5 font-black outline-none text-center" onChange={e=>setNewTable({...newTable, bb: Number(e.target.value)})}/></div>
-                            <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase tracking-widest">MIN</span><input value={newTable.minBuy} type="number" className="w-full bg-black/60 p-3 rounded-lg border border-white/5 font-black outline-none text-center" onChange={e=>setNewTable({...newTable, minBuy: Number(e.target.value)})}/></div>
-                            <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase tracking-widest">MAX</span><input value={newTable.maxBuy} type="number" className="w-full bg-black/60 p-3 rounded-lg border border-white/5 font-black outline-none text-center" onChange={e=>setNewTable({...newTable, maxBuy: Number(e.target.value)})}/></div>
+                <div className="flex flex-col gap-8 animate-in fade-in font-black uppercase">
+                    <h3 className="text-xl md:text-2xl tracking-widest border-l-4 border-emerald-500 pl-4 font-black">ARENA CONTROL</h3>
+                    <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-4 border border-white/10 shadow-xl font-black">
+                        <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ARENA NAME" className="bg-black/40 p-4 rounded-xl border border-white/10 outline-none focus:border-[#fbbf24] font-black uppercase"/>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 font-black">
+                            <div className="space-y-1"><span className="text-[9px] text-white/40 font-black">SB</span><input value={newTable.sb} type="number" className="w-full bg-black/40 p-3 rounded-lg border border-white/10 font-black" onChange={e=>setNewTable({...newTable, sb: Number(e.target.value)})}/></div>
+                            <div className="space-y-1"><span className="text-[9px] text-white/40 font-black">BB</span><input value={newTable.bb} type="number" className="w-full bg-black/40 p-3 rounded-lg border border-white/10 font-black" onChange={e=>setNewTable({...newTable, bb: Number(e.target.value)})}/></div>
+                            <div className="space-y-1"><span className="text-[9px] text-white/40 font-black">MIN</span><input value={newTable.minBuy} type="number" className="w-full bg-black/40 p-3 rounded-lg border border-white/10 font-black" onChange={e=>setNewTable({...newTable, minBuy: Number(e.target.value)})}/></div>
+                            <div className="space-y-1"><span className="text-[9px] text-white/40 font-black">MAX</span><input value={newTable.maxBuy} type="number" className="w-full bg-black/40 p-3 rounded-lg border border-white/10 font-black" onChange={e=>setNewTable({...newTable, maxBuy: Number(e.target.value)})}/></div>
                         </div>
-                        <button onClick={handleSpawnArena} className="col-span-full bg-emerald-600 rounded-xl font-black p-4 uppercase transition-all shadow-xl hover:brightness-110">INITIALIZE ARENA</button>
+                        <button onClick={handleSpawnArena} className="bg-emerald-600 rounded-xl font-black p-4 uppercase transition-all font-black">SPAWN ARENA</button>
                     </div>
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-black">
                         {(activeTables || []).map(t => (
-                            <div key={t.id} className="bg-slate-900/40 p-4 rounded-2xl flex justify-between items-center border border-white/5 hover:border-emerald-500/40 transition-all shadow-xl font-black uppercase">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 bg-emerald-500/5 rounded-xl flex items-center justify-center border border-emerald-500/20"><LayoutGrid size={20} className="text-emerald-500/40" /></div>
-                                  <div className="flex flex-col"><h4 className="text-[#fbbf24] text-base font-black uppercase tracking-tighter truncate max-w-[120px]">{String(t.name)}</h4><p className="text-[8px] text-white/30 tracking-[0.2em] uppercase font-black font-mono">STAKES: ${t.sb}/${t.bb}</p></div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <div className="flex flex-col items-end"><span className="text-[8px] text-white/20 font-black uppercase mb-0.5">CAPACITY</span><span className="text-white/60 font-black text-sm">{t.players?.filter(Boolean).length || 0}<span className="text-white/20">/10</span></span></div>
-                                    {confirmDeleteId === t.id ? (
-                                      <div className="flex gap-1 animate-in slide-in-from-right">
-                                        <button onClick={()=>{socket.emit('adminDeleteRoom', t.id); setConfirmDeleteId(null);}} className="bg-red-600 text-white p-2.5 rounded-lg font-black text-[9px]">YES</button>
-                                        <button onClick={()=>setConfirmDeleteId(null)} className="bg-white/5 text-white/40 p-2.5 rounded-lg font-black text-[9px]">NO</button>
-                                      </div>
-                                    ) : (
-                                      <button onClick={()=>setConfirmDeleteId(t.id)} className="p-2.5 bg-red-950/20 border border-red-500/20 rounded-lg text-red-500"><Trash2 size={16}/></button>
-                                    )}
-                                </div>
+                            <div key={t.id} className="bg-white/5 p-4 md:p-6 rounded-2xl flex justify-between items-center border border-white/10 hover:border-emerald-500/50 transition-all shadow-lg font-black uppercase">
+                                <div><h4 className="text-[#fbbf24] text-base md:text-lg font-black truncate">{String(t.name)}</h4><p className="text-[10px] text-white/40 tracking-widest">${t.sb}/${t.bb} | {t.players?.filter(Boolean).length || 0}/10 SEATED</p></div>
+                                <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="bg-red-950/40 p-2 md:p-3 rounded-xl text-red-500 hover:bg-red-500 transition-all font-black">TERMINATE</button>
                             </div>
                         ))}
                     </div>
@@ -523,29 +390,41 @@ const App = () => {
   );
 
   if (currentView === VIEWS.LOBBY) return (
-    <div className="h-screen bg-[#06080c] flex flex-col text-white font-black uppercase overflow-hidden">
+    <div className="h-screen bg-[#06080c] flex flex-col text-white font-black uppercase overflow-hidden font-black">
         {selectedTableForJoin && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-2xl animate-in fade-in duration-500 px-4">
-                <div className="w-full max-w-[420px] p-8 md:p-14 bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-[0_40px_100px_rgba(0,0,0,1)] flex flex-col gap-8 ring-1 ring-white/5">
-                    <div className="space-y-1 text-center font-black uppercase"><h3 className="text-2xl md:text-4xl text-[#fbbf24] tracking-tighter uppercase font-black leading-tight italic">{String(selectedTableForJoin.name)}</h3><div className="h-0.5 w-16 bg-emerald-500 mx-auto rounded-full" /></div>
-                    <div className="space-y-6 font-black text-center uppercase p-5 bg-black/40 rounded-[1.5rem] border border-white/5 shadow-inner">
-                        <div className="flex justify-between items-center text-[9px] text-white/40 tracking-widest font-black uppercase border-b border-white/5 pb-3"><span>BUY-IN AMOUNT</span><span className="text-emerald-400 text-xl md:text-3xl font-mono tracking-tighter">${buyInAmount.toLocaleString()}</span></div>
-                        <input type="range" min={selectedTableForJoin.minBuy || 400} max={selectedTableForJoin.maxBuy || 2000} step={100} value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer accent-[#fbbf24] shadow-xl" />
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300 px-6 font-black uppercase">
+                <div className="w-full max-w-[400px] p-8 md:p-12 bg-slate-900 border border-[#fbbf24]/30 rounded-[2vw] shadow-2xl flex flex-col gap-10">
+                    <h3 className="text-2xl md:text-3xl text-center tracking-widest text-[#fbbf24] underline underline-offset-8 uppercase font-black">{String(selectedTableForJoin.name)}</h3>
+                    <div className="space-y-6 font-black text-center uppercase">
+                        <div className="flex justify-between items-center text-[10px] text-white/40 tracking-widest font-black"><span>BUY-IN AMOUNT</span><span className="text-emerald-400 text-xl md:text-2xl font-mono">${buyInAmount.toLocaleString()}</span></div>
+                        <input type="range" min={selectedTableForJoin.minBuy || 400} max={selectedTableForJoin.maxBuy || 2000} step={100} value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="w-full h-3 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#fbbf24]" />
                     </div>
-                    <div className="flex gap-4"><button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all font-black uppercase tracking-widest text-[10px]">BACK</button><button onClick={joinRoom} className="flex-[2] p-4 bg-emerald-600 rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all text-xs tracking-widest font-black uppercase">SIT DOWN</button></div>
+                    <div className="flex gap-4">
+                        <button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all font-black uppercase">BACK</button>
+                        <button onClick={joinRoom} className="flex-2 p-5 bg-emerald-600 rounded-2xl shadow-lg hover:scale-105 active:scale-95 transition-all text-sm tracking-widest font-black uppercase">SIT DOWN</button>
+                    </div>
                 </div>
             </div>
         )}
-        <header className="h-20 border-b border-white/10 flex items-center justify-between px-6 md:px-12 bg-[#0a0c12]/80 backdrop-blur-xl shadow-2xl z-50 shrink-0">
-            <div className="flex items-center gap-4"><div className="w-10 h-10 bg-[#fbbf24]/10 rounded-xl flex items-center justify-center border border-[#fbbf24]/30"><Crown className="text-[#fbbf24]" size={22}/></div><h2 className="tracking-[0.2em] text-sm md:text-xl font-black uppercase">ARENA LOBBY</h2></div>
-            <div className="flex items-center gap-6"><div className="flex flex-col items-end uppercase group"><span className="text-[8px] text-white/20 uppercase tracking-[0.2em] font-black mb-0.5">ID: {String(userProfile?.name || "??")}</span><span className="text-emerald-400 font-mono text-xl md:text-3xl tracking-tighter">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="p-2.5 bg-white/5 rounded-xl text-white/20 hover:text-red-500 transition-all border border-white/5 font-black uppercase"><LogOut size={22}/></button></div>
+        <header className="h-20 border-b border-white/10 flex items-center justify-between px-6 md:px-12 bg-black/40 backdrop-blur-md shadow-xl z-50 shrink-0 font-black">
+            <h2 className="tracking-widest md:tracking-[0.4em] text-sm md:text-xl flex items-center gap-4 font-black"><LayoutGrid className="text-[#fbbf24]"/> LOBBY</h2>
+            <div className="flex items-center gap-6 md:gap-10 font-black">
+                <div className="flex flex-col items-end font-black uppercase">
+                    <span className="text-[8px] md:text-[10px] text-white/40 uppercase italic">ID: {String(userProfile?.name || "??")}</span>
+                    <span className="text-emerald-400 font-mono text-base md:text-2xl tracking-tighter font-black">${Number(userProfile?.chips || 0).toLocaleString()}</span>
+                </div>
+                <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={24}/></button>
+            </div>
         </header>
-        <main className="flex-1 p-6 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10 overflow-y-auto bg-gradient-to-br from-[#06080c] via-[#080a12] to-[#0d111a] font-black uppercase">
+        <main className="flex-1 p-6 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase">
             {(activeTables || []).map((t) => (
-                <div key={t.id} className="group p-8 bg-slate-900/40 border border-white/5 rounded-[2.5rem] flex flex-col gap-6 shadow-2xl hover:border-[#fbbf24]/30 hover:bg-slate-900/60 transition-all relative overflow-hidden">
-                    <div className="flex justify-between items-start relative z-10"><div className="space-y-1"><h3 className="text-xl md:text-3xl tracking-tighter text-white font-black group-hover:text-[#fbbf24] transition-colors uppercase italic">{String(t.name)}</h3><div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /><span className="text-[8px] text-white/30 tracking-widest uppercase font-black">ACTIVE</span></div></div></div>
-                    <div className="bg-black/40 p-5 rounded-[1.5rem] flex justify-between items-center border border-white/5 shadow-inner relative z-10"><div className="flex flex-col gap-1"><span className="text-[8px] text-white/20 tracking-widest font-black uppercase">STAKES</span><span className="text-[#fbbf24] text-lg font-black">${t.sb}/${t.bb}</span></div><div className="flex flex-col items-end gap-1"><span className="text-[8px] text-white/20 tracking-widest font-black uppercase">SEATS</span><span className="text-white/80 font-mono text-base font-black tracking-tighter">{t.players?.filter(p=>p).length || 0}<span className="text-white/20">/10</span></span></div></div>
-                    <button onClick={()=>setSelectedTableForJoin(t)} className="w-full p-5 bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-2xl tracking-[0.2em] shadow-lg transition-all font-black uppercase text-xs">ENTER ARENA</button>
+                <div key={t.id} className="p-8 bg-white/5 border border-white/5 rounded-3xl flex flex-col gap-6 shadow-2xl hover:border-[#fbbf24]/20 transition-all group relative overflow-hidden font-black">
+                    <h3 className="text-xl md:text-2xl tracking-widest text-white group-hover:text-[#fbbf24] transition-colors uppercase font-black">{String(t.name)}</h3>
+                    <div className="bg-black/60 p-4 md:p-6 rounded-2xl flex justify-between items-center border border-white/5 shadow-inner uppercase font-black">
+                        <div className="flex flex-col font-black uppercase"><span className="text-[8px] text-white/40 tracking-widest font-black">STAKES</span><span className="text-[#fbbf24] text-lg md:text-xl font-black">${t.sb}/${t.bb}</span></div>
+                        <div className="flex flex-col items-end font-black"><span className="text-[8px] text-white/40 tracking-widest font-black">SEATS</span><span className="text-white/80 font-mono text-sm md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
+                    </div>
+                    <button onClick={()=>setSelectedTableForJoin(t)} className="w-full p-6 md:p-8 bg-emerald-600 rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] transition-all font-black uppercase">ENTER ARENA</button>
                 </div>
             ))}
         </main>
@@ -553,83 +432,256 @@ const App = () => {
   );
 
   return (
-    <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter font-executive">
-      <UIOverlay isOpen={showRules} onClose={() => setShowRules(false)} title="ARENA PROTOCOL" icon={BookOpen}>
-        <div className="space-y-4 font-black uppercase"><div className="bg-white/5 p-4 rounded-2xl border border-white/5 shadow-inner font-black uppercase"><div className="text-[#fbbf24] text-[9px] tracking-[0.3em] mb-2 font-black uppercase">VARIANT: {activeVariant.name}</div><div className="text-sm leading-relaxed text-white/90 font-black italic tracking-wide">{VARIANT_RULES[activeVariant.id] || "Rules coming soon..."}</div></div></div>
-      </UIOverlay>
+    <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter">
+      
+      {isBrokeStatus && (
+          <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-6 font-black">
+                <div className="w-full max-w-[400px] p-10 bg-slate-900 border-2 border-red-500 rounded-3xl text-center shadow-[0_0_100px_rgba(239,68,68,0.4)] font-black uppercase">
+                    <AlertTriangle size={80} className="text-red-500 animate-pulse mb-6 mx-auto" />
+                    <h2 className="text-3xl font-black mb-2">BUSTED!</h2>
+                    <button onClick={() => socket.emit('adminAddChips', { roomId: currentRoomId, uid: userProfile.uid, chips: 1000 })} className="w-full p-6 bg-emerald-600 text-white rounded-2xl shadow-xl animate-bounce font-black">REBUY $1,000</button>
+                </div>
+          </div>
+      )}
 
       {/* HEADER */}
-      <header style={{ height: `${headerHeight}px` }} className="bg-[#0a0a0a]/90 border-b border-white/10 flex items-center justify-between px-4 md:px-10 z-[80] shadow-2xl backdrop-blur-3xl shrink-0 font-black uppercase">
+      <header style={{ height: `${headerHeight}px` }} className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-4 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black uppercase">
         <div className="flex items-center gap-2">
-            <button onClick={() => setShowRules(true)} className="bg-white/5 px-3 py-2 rounded-xl border border-white/10 flex items-center gap-2 font-black active:scale-95"><Info size={14} className="text-[#fbbf24]" /><span className="text-white text-[9px] font-black underline decoration-dashed decoration-[#fbbf24]/40">{String(activeVariant.name)}</span></button>
-            <button onClick={() => setShowLayoutControls(!showLayoutControls)} className={`p-2 rounded-lg transition-all ${showLayoutControls ? 'bg-[#fbbf24] text-black shadow-xl' : 'bg-white/5 text-white/30'}`}><Sliders size={18}/></button>
-            <div className="flex items-center gap-2 bg-black/40 px-3 py-2 rounded-xl border border-white/5 ml-2">
-                <Clock size={14} className="text-cyan-400" />
-                <span className={`text-[12px] font-mono font-black ${timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-cyan-400'}`}>0:{String(timeRemaining).padStart(2, '0')}</span>
+            <div className="bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 shadow-inner truncate font-black uppercase">
+                <span className="text-[#fbbf24] text-[8px] md:text-[10px] tracking-widest font-black">ARENA:</span>
+                <span className="text-white ml-2 text-[10px] md:text-xs font-black">{String(activeVariant.name)}</span>
             </div>
+            <button onClick={() => setShowLayoutControls(!showLayoutControls)} className={`p-2 rounded-lg transition-all font-black uppercase ${showLayoutControls ? 'bg-[#fbbf24] text-black shadow-[0_0_15px_#fbbf24]' : 'bg-white/5 text-white/40'}`}>
+                <Sliders size={18}/>
+            </button>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:flex bg-white/5 border border-white/10 px-4 py-2 rounded-xl items-center gap-3 font-black uppercase"><span className="text-white/30 text-[9px] tracking-[0.2em] font-black uppercase">DEALER CHOICE:</span><select value={pendingVariantId} onChange={(e) => {setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value})}} className="bg-transparent text-[#fbbf24] outline-none text-[10px] font-black uppercase cursor-pointer uppercase">{Object.entries(VARIANTS).map(([k,v])=><option key={k} value={k} className="bg-slate-900 font-black uppercase">{v.name.toUpperCase()}</option>)}</select></div>
-          <div className="flex gap-2"><button onClick={()=>socket.emit('adminAddBot', {roomId: currentRoomId})} className="text-indigo-400 p-2 bg-white/5 border border-white/10 rounded-xl font-black uppercase hover:bg-indigo-400 active:scale-90"><Bot size={18}/></button><button onClick={() => {setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl font-black uppercase hover:bg-red-500 active:scale-90"><LogOut size={18}/></button></div>
+
+        {showLayoutControls && (
+            <div className="absolute top-16 left-4 bg-black/95 border border-white/10 p-6 rounded-2xl shadow-2xl z-[1000] flex flex-col gap-5 min-w-[280px] animate-in slide-in-from-top-4 backdrop-blur-xl font-black">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                        <span className="text-[8px] text-white/40 uppercase font-black">HEADER</span>
+                        <input type="range" min="40" max="100" value={headerHeight} onChange={(e)=>setHeaderHeight(Number(e.target.value))} className="w-full accent-[#fbbf24] h-1 bg-white/10 rounded-full appearance-none"/>
+                    </div>
+                    <div className="space-y-1">
+                        <span className="text-[8px] text-white/40 uppercase font-black">FOOTER</span>
+                        <input type="range" min="120" max="400" value={footerHeight} onChange={(e)=>setFooterHeight(Number(e.target.value))} className="w-full accent-[#fbbf24] h-1 bg-white/10 rounded-full appearance-none"/>
+                    </div>
+                </div>
+                <div className="space-y-1">
+                    <span className="text-[8px] text-white/40 uppercase font-black">TABLE ZOOM ({Math.round(tableZoom * 100)}%)</span>
+                    <input type="range" min="0.5" max="1.5" step="0.05" value={tableZoom} onChange={(e)=>setTableZoom(Number(e.target.value))} className="w-full accent-[#fbbf24] h-1 bg-white/10 rounded-full appearance-none"/>
+                </div>
+                <div className="space-y-1">
+                    <span className="text-[8px] text-white/40 uppercase text-emerald-400 font-black">HERO CARD SIZE ({Math.round(heroCardScale * 100)}%)</span>
+                    <input type="range" min="0.5" max="2.5" step="0.1" value={heroCardScale} onChange={(e)=>setHeroCardScale(Number(e.target.value))} className="w-full accent-emerald-500 h-1 bg-white/10 rounded-full appearance-none"/>
+                </div>
+                <button onClick={()=>setShowLayoutControls(false)} className="bg-[#fbbf24] text-black font-black py-2 rounded-lg text-[10px] tracking-widest uppercase">CLOSE</button>
+            </div>
+        )}
+
+        <div className="bg-white/5 border border-white/10 px-4 py-1.5 rounded-xl flex items-center gap-4 shadow-inner font-black uppercase">
+            <span className="hidden sm:inline text-white/40 text-[9px] tracking-widest uppercase font-black">DEALER CHOICE:</span>
+            <select value={pendingVariantId} onChange={(e) => {setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value})}} className="bg-transparent text-[#fbbf24] outline-none text-xs cursor-pointer font-black">
+                {Object.entries(VARIANTS).map(([k,v])=><option key={k} value={k} className="bg-slate-900 font-black">{v.name}</option>)}
+            </select>
+        </div>
+        <div className="flex gap-2 font-black uppercase">
+            <button onClick={addBot} className="text-indigo-400 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-indigo-400/20 font-black" title="Bot"><Bot size={20}/></button>
+            <button onClick={() => {setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-red-500/20 font-black"><LogOut size={20}/></button>
         </div>
       </header>
 
-      {/* TABLE */}
-      <main className="flex-1 flex flex-col items-center justify-center relative bg-[#010a08] overflow-hidden">
-        <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1450px] aspect-[21/10] flex items-center justify-center h-full transition-all duration-700 ease-out origin-center">
-            <div className="absolute inset-0 bg-[#121212] rounded-[50%] border-[2.8vw] border-[#1a110a] shadow-[0_40px_100px_rgba(0,0,0,1)] ring-[1px] ring-white/10 font-black" />
-            <div className="absolute inset-[3.2vw] bg-[#0c3125] rounded-[50%] shadow-[inset_0_0_80px_rgba(0,0,0,0.9)] overflow-hidden"><div className="absolute inset-0 bg-felt-texture opacity-20 font-black" /></div>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"><span className="text-[13vw] font-black text-white/5 italic uppercase select-none rotate-[-6deg] font-black">{activeVariant.name}</span></div>
-            <div className="absolute inset-0 pointer-events-none z-20 font-black uppercase">{(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} strengthLabel={i === heroIdx ? heroStrength : p.strength} isCollectingBets={isCollectingBets} timeRemaining={timeRemaining} isHero={i === heroIdx} hiLowAwards={hiLowAwards} cardScale={heroCardScale} relativeIdx={rIdx} />); })}</div>
-            <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full h-full justify-center">{!potTransferring && (<div className={`flex flex-col items-center transition-all duration-700 ${potAnimating ? 'scale-110' : 'scale-100'}`}><div className={`text-[6.5vw] md:text-[5.5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-2xl ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot || 0).toLocaleString()}</div><div className="h-2.5 w-32 bg-white/5 rounded-full mt-2 overflow-hidden border border-white/5"><div className="h-full bg-gradient-to-r from-amber-600 via-amber-400 to-amber-600 animate-shimmer rounded-full" style={{ width: '100%' }} /></div></div>)}<div className="flex gap-2 md:gap-5 scale-[1.1] md:scale-[1.85] mt-6 md:mt-12 font-black uppercase">{(community || []).map((c, j) => (<div key={c.id || j} className={`w-[6vw] md:w-[3.6vw] h-[9vw] md:h-[5.6vw] rounded-xl border-2 bg-gradient-to-tr from-white to-slate-200 flex flex-col items-center justify-center text-slate-900 font-black transition-all duration-700 shadow-2xl ${winning5Ids?.includes(c.id) ? 'ring-[5px] ring-yellow-400 scale-110' : 'border-white/10'}`}><span className="text-[11px] md:text-[15px] font-black tracking-tighter">{String(c.value)}</span><span className="text-[16px] md:text-[22px] mt-1"><CardSymbol suit={c.suit} /></span></div>))}</div></div>
+      {/* TABLE AREA */}
+      <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-emerald-950/20 to-transparent overflow-hidden px-2 py-2 font-black uppercase">
+        <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 10}px)` }} className="relative w-full max-w-[1400px] aspect-[21/10] flex items-center justify-center h-full transition-transform duration-300 ease-out origin-center font-black">
+            
+            {/* Table Surface & Watermark */}
+            <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[2vw] border-slate-900/60 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)] border-double font-black uppercase" />
+            
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 overflow-hidden translate-y-[20%]">
+                <span className="text-[12vw] font-black text-white/5 italic tracking-tighter uppercase select-none rotate-[-12deg] whitespace-nowrap">
+                  {activeVariant.name}
+                </span>
+            </div>
+
+            <div className="absolute inset-0 pointer-events-none z-20 font-black uppercase">
+              {(players || []).map((p, i) => {
+                if (!p) return null;
+                const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS;
+                return (
+                  <Seat 
+                    key={i} 
+                    player={p} 
+                    displayPos={DISPLAY_POSITIONS[rIdx]} 
+                    phase={phase} 
+                    winning5Ids={winning5Ids} 
+                    isActiveTurn={activeIdx === i} 
+                    strengthLabel={p.strength} 
+                    isCollectingBets={isCollectingBets} 
+                    timeRemaining={timeRemaining} 
+                    isHero={i === heroIdx} 
+                    hiLowAwards={hiLowAwards} 
+                    cardScale={heroCardScale} 
+                    relativeIdx={rIdx}
+                  />
+                );
+              })}
+            </div>
+
+            <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full h-full justify-center">
+              {!potTransferring && (
+                <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}>
+                    <div className={`text-[6vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot || 0).toLocaleString()}</div>
+                </div>
+              )}
+              <div className="flex gap-2 md:gap-4 scale-[1.1] md:scale-[1.8] mt-6 md:mt-12 font-black uppercase">
+                  {(community || []).map((c, j) => (
+                    <div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[4px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}>
+                        <span className="text-[14px] md:text-[0.9vw] font-black">{String(c.value)}</span><span className={`text-[18px] md:text-[2.2vw] font-black ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
         </div>
       </main>
 
       {/* FOOTER */}
-      <footer style={{ height: `${footerHeight}px` }} className="bg-[#080a12]/95 backdrop-blur-3xl border-t border-white/10 flex flex-col lg:flex-row z-[100] shadow-2xl shrink-0 font-black uppercase overflow-hidden">
-        <div className="hidden lg:flex w-[32%] border-r border-white/10 p-5 flex-col overflow-hidden text-[10px] font-mono tracking-[0.2em] font-black uppercase"><div className="text-white/40 mb-3 flex items-center justify-between border-b border-white/5 pb-3 px-2 font-black uppercase"><div className="flex items-center gap-3"><Eye size={16} className="text-[#fbbf24]"/> ACTIVITY</div></div><div className="flex-1 space-y-2 overflow-y-auto scrollbar-hide font-black">{(logs || []).map(l => (<div key={l.id} className="animate-in slide-in-from-left duration-300 flex items-center gap-4 border-l-2 border-white/5 pl-4 py-2 hover:bg-white/5 transition-all border-b border-white/5 font-black uppercase"><span className="text-white/10 text-[8px] font-black shrink-0 w-12 font-mono">{String(l.time)}</span><div className="flex items-center gap-x-3 font-black uppercase"><span className={`font-black uppercase text-[10px] px-2 py-1 rounded-md ${l.type === 'win' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-yellow-500/10 text-[#fbbf24]'} font-black`}>{String(l.name)}</span><span className="text-white/50 lowercase tracking-tight text-[10px] font-black truncate max-w-[150px]">{String(l.action)}</span></div></div>))}</div></div>
+      <footer style={{ height: `${footerHeight}px` }} className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-hidden">
         
-        <div className="flex-1 flex flex-col justify-between relative py-3 px-4 md:px-12 font-black uppercase">
-          {activeIdx === heroIdx && phase !== PHASES.SHOWDOWN && phase !== PHASES.IDLE && heroPlayerObj ? (
-            <div className="flex flex-col h-full justify-between animate-in slide-in-from-bottom-4 duration-500 font-black">
-               <div className="flex items-center justify-between bg-slate-900/60 rounded-[1.5rem] p-2 border border-white/10 font-black shadow-2xl">
-                  <div className="flex items-center gap-3"><div className="w-10 h-10 bg-purple-600/10 rounded-xl flex items-center justify-center font-black border border-purple-500/30"><Activity size={20} className="text-purple-400" /></div><div className="flex flex-col"><span className="text-[8px] text-white/30 tracking-widest font-black uppercase">STRENGTH</span><span className="text-sm font-black italic">{String(heroStrength || "...")}</span></div></div>
-                  <div className="flex flex-col items-end"><span className="text-[8px] text-white/30 tracking-widest font-black uppercase">EQUITY</span><div className="flex items-center gap-3 font-black"><div className="w-20 h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/10 font-black shadow-inner"><div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-1000 font-black shadow-[0_0_10px_cyan]" style={{ width: `${heroPlayerObj.winProbability || 0}%` }} /></div><span className="text-lg text-cyan-400 font-mono font-black">{Math.round(heroPlayerObj.winProbability || 0)}%</span></div></div>
-               </div>
+        {/* INTELLIGENCE FEED */}
+        <div className="flex w-[35%] border-r border-white/10 p-2 flex-col overflow-hidden text-[10px] font-mono tracking-widest font-black uppercase">
+            <div className="text-white/40 mb-1 flex items-center justify-between border-b border-white/5 pb-1 px-1 uppercase">
+                <div className="flex items-center gap-1.5"><Eye size={12} className="text-[#fbbf24]"/> INTELLIGENCE</div>
+                <div className="flex items-center gap-1 text-emerald-500 animate-pulse text-[8px]"><div className="w-1 h-1 bg-emerald-500 rounded-full" /> LIVE</div>
+            </div>
+            <div className="flex-1 space-y-1 overflow-y-auto scrollbar-hide font-black p-0.5">
+                {(logs || []).map(l => (
+                    <div key={l.id} className="animate-in slide-in-from-left duration-200 flex items-center gap-2 border-l-2 border-white/10 pl-2 py-0.5 hover:bg-white/5 transition-colors border-b border-white/5">
+                        <span className="text-white/20 text-[6px] font-black shrink-0 w-8">{String(l.time)}</span> 
+                        <div className="flex items-center gap-x-1.5 font-black leading-none overflow-hidden">
+                            <span className={`font-black uppercase text-[8px] px-1 rounded-sm shrink-0 ${
+                                l.type === 'win' ? 'bg-emerald-500/20 text-emerald-400' : 
+                                l.type === 'variant' ? 'bg-purple-500/20 text-purple-400' : 
+                                l.type === 'fold' ? 'bg-red-500/20 text-red-400' :
+                                l.type === 'phase' ? 'bg-cyan-500/20 text-cyan-400' :
+                                'bg-yellow-500/20 text-[#fbbf24]'
+                            }`}>{String(l.name)}</span>
+                            <span className="text-white/60 lowercase tracking-tight text-[8px] font-black truncate">{String(l.action)}</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
 
-               <div className="grid grid-cols-12 gap-3 h-16 md:h-24 font-black uppercase">
-                  <button onClick={()=>handleAction('FOLD')} className="col-span-3 bg-red-950/20 border-2 border-red-500/30 rounded-2xl flex flex-col items-center justify-center font-black uppercase hover:bg-red-600 active:scale-95"><X size={20} className="text-red-500" /><span className="text-[10px] font-black text-red-500 uppercase">FOLD</span></button>
-                  <button onClick={()=>handleAction('CALL')} className="col-span-5 bg-gradient-to-b from-indigo-500 to-indigo-700 border-2 border-indigo-400 rounded-2xl flex flex-col items-center justify-center font-black uppercase shadow-xl active:scale-95"><span className="text-lg md:text-3xl font-black italic uppercase leading-none">{highestBet > heroPlayerObj.currentBet ? 'CALL' : 'CHECK'}</span><span className="text-[9px] font-mono opacity-60 font-black">{highestBet > heroPlayerObj.currentBet ? `$${(highestBet - heroPlayerObj.currentBet).toLocaleString()}` : 'SYNC'}</span></button>
-                  <div className="col-span-4 bg-slate-900/60 border-2 border-emerald-500/30 rounded-2xl flex flex-col overflow-hidden font-black shadow-xl"><div className="flex-1 flex items-center justify-center px-2 font-black"><span className="text-emerald-500 text-base mr-1 font-black italic uppercase">$</span><input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(heroPlayerObj.chips + heroPlayerObj.currentBet, Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-full bg-transparent text-center font-mono text-lg text-white outline-none font-black uppercase" /></div><button onClick={()=>handleAction('RAISE', raiseInput)} className="h-8 bg-emerald-600 flex items-center justify-center hover:bg-emerald-500 font-black uppercase"><Zap size={14} className="text-white mr-2"/><span className="text-[9px] font-black uppercase">RAISE</span></button></div>
-               </div>
+        {/* ACTION PANEL */}
+        <div className="flex-1 flex flex-col justify-center px-4 md:px-10 relative bg-white/5 shadow-inner py-3 font-black uppercase">
+          {activeIdx === heroIdx && phase !== PHASES.SHOWDOWN && phase !== PHASES.IDLE && heroPlayerObj ? (
+            <div className="flex flex-col gap-3 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
+                
+                {/* HERO REAL-TIME HAND INTEL */}
+                <div className="absolute top-2 right-4 flex items-center gap-4 animate-in slide-in-from-right duration-500">
+                    <div className="flex flex-col items-end">
+                      <span className="text-[7px] text-white/40 tracking-[0.2em] font-black">CURRENT STRENGTH</span>
+                      <span className="text-[10px] text-purple-400 font-black">{heroPlayerObj.strength || "NONE"}</span>
+                    </div>
+                    <div className="h-8 w-[1px] bg-white/10" />
+                    <div className="flex flex-col items-end">
+                      <span className="text-[7px] text-white/40 tracking-[0.2em] font-black">EST. EQUITY</span>
+                      <span className="text-[14px] text-cyan-400 font-mono font-black">{heroPlayerObj.winProbability ? Math.round(heroPlayerObj.winProbability) : '--'}%</span>
+                    </div>
+                </div>
+
+                <div className="flex gap-2 w-full max-w-[600px] font-black uppercase">
+                    <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-[12px] hover:bg-white/20 transition-all font-black">1/2 POT</button>
+                    <button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-[12px] hover:bg-white/20 transition-all font-black">POT</button>
+                    <button onClick={()=>handleAction('RAISE', heroPlayerObj.chips + heroPlayerObj.currentBet)} className="flex-1 py-2 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black">ALL-IN</button>
+                </div>
+                <div className="flex gap-3 md:gap-6 w-full items-center justify-center font-black">
+                    <button onClick={()=>handleAction('FOLD')} className="w-16 md:w-32 h-14 md:h-16 bg-red-950/60 border-2 border-red-500/50 rounded-2xl tracking-[0.2em] hover:brightness-125 transition-all font-black text-xs shadow-xl font-black">FOLD</button>
+                    <button onClick={()=>handleAction('CALL')} className="flex-1 max-w-[360px] h-14 md:h-16 bg-indigo-900/60 border-2 border-indigo-400/50 rounded-2xl text-sm md:text-xl tracking-[0.3em] hover:brightness-125 font-black shadow-xl shadow-indigo-900/20 font-black">
+                        {highestBet > heroPlayerObj.currentBet ? `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}` : 'CHECK'}
+                    </button>
+                    <div className="flex gap-2 items-center bg-black/60 border border-white/10 p-1 md:p-2 rounded-2xl shadow-inner min-w-[120px] md:min-w-[320px] font-black uppercase">
+                        <div className="flex items-center bg-black/40 px-3 md:px-5 rounded-xl border border-white/5 h-12 md:h-14 font-black uppercase">
+                            <span className="text-[#fbbf24] text-[12px] md:text-xl font-mono mr-1">$</span>
+                            <input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(heroPlayerObj.chips + heroPlayerObj.currentBet, Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-10 md:w-28 bg-transparent text-center font-mono text-sm md:text-2xl text-[#fbbf24] outline-none font-black" />
+                        </div>
+                        <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-12 md:h-14 bg-emerald-600/60 border border-emerald-400/50 rounded-xl flex items-center justify-center hover:brightness-125 font-black uppercase text-xs md:text-xl shadow-xl shadow-emerald-900/20 font-black">
+                            <Zap size={20} className="md:mr-2 text-emerald-400"/> RAISE
+                        </button>
+                    </div>
+                </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full relative font-black uppercase">
-               <span className="text-white/20 text-[8px] tracking-[0.3em] font-black uppercase mb-1">WAITING FOR ACTION</span>
-               <span className="text-2xl md:text-5xl font-black text-white tracking-widest uppercase italic font-black">{players[activeIdx]?.name || "SYSTEM"}</span>
-               <div className="flex gap-2 mt-4">
-                  {[0, 1, 2].map(i => <div key={i} className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.25}s` }} />)}
-                </div>
+                {showdownWinners && showdownWinners.length > 0 ? (
+                    <div className="flex flex-col items-center gap-3 w-full h-full justify-center">
+                        <div className="flex items-center gap-2 text-yellow-400 animate-pulse font-black tracking-widest text-xs">
+                             <Trophy size={16} /> {showdownWinners.length > 1 ? "SPLIT POT SHOWDOWN" : "WINNER TAKES ALL"}
+                        </div>
+                        <div className="flex flex-wrap gap-6 items-center justify-center animate-in fade-in zoom-in duration-700 w-full overflow-y-auto">
+                            {showdownWinners.map((winner, idx) => (
+                                <div key={idx} className="flex items-center gap-4 bg-black/40 p-3 rounded-3xl border border-white/5 shadow-2xl min-w-[280px]">
+                                    <div className="flex flex-col items-center shrink-0">
+                                        <div className="text-[#fbbf24] font-black text-sm md:text-lg truncate max-w-[100px]">{winner.name}</div>
+                                        <div className="text-emerald-400 font-mono text-xs md:text-base font-black">+${(winner.amount || 0).toLocaleString()}</div>
+                                        <div className="text-[7px] text-white/40 tracking-tighter uppercase mt-1">{winner.rank}</div>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        {(winner.hand || []).map((c, ci) => (
+                                            <div key={ci} className="w-8 h-12 bg-white rounded flex flex-col items-center justify-center text-black shadow-lg transform hover:scale-110 transition-all font-black bg-glimmer">
+                                                <span className="text-[10px] font-black leading-none">{String(c.value)}</span>
+                                                <span className={`text-[12px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center gap-4 animate-in fade-in duration-500 font-black">
+                        {phase === PHASES.IDLE ? (
+                             <div className="flex flex-col items-center gap-3">
+                                <div className="p-4 bg-white/5 rounded-full animate-pulse"><Target size={36} className="text-white/20"/></div>
+                                <span className="text-white/40 tracking-[0.4em] text-xs md:text-lg font-black italic">ARENA IDLE</span>
+                             </div>
+                        ) : (
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="flex items-center gap-2 text-cyan-400 animate-pulse mb-1">
+                                    <MessageSquare size={16} />
+                                    <span className="text-[10px] md:text-[xs] font-black tracking-[0.2em]">WAITING ON</span>
+                                </div>
+                                <span className="text-2xl md:text-4xl font-black text-white tracking-tighter drop-shadow-lg">{players[activeIdx]?.name || "OPPONENT"}</span>
+                                <div className="flex gap-1.5 mt-2">
+                                    {[0, 1, 2].map(i => <div key={i} className="w-2 h-2 bg-cyan-400/40 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
           )}
         </div>
       </footer>
       <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700;900&display=swap');
-          .font-executive { font-family: 'Noto Sans', sans-serif; }
-          @keyframes action-float { 0% { transform: translateY(0); opacity: 0; } 20% { transform: translateY(-10px); opacity: 1; } 80% { transform: translateY(-20px); opacity: 1; } 100% { transform: translateY(-30px); opacity: 0; } }
-          .animate-action-float { animation: action-float 2.5s ease-out forwards; }
-          @keyframes fling-to-pot { 0% { transform: translate(0, 0) scale(1.2); opacity: 1; } 100% { transform: translate(var(--bx), var(--by)) scale(0.1); opacity: 0; } }
-          @keyframes pot-pulse { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 50% { transform: scale(1.05); filter: drop-shadow(0 0 50px #fbbf24); } }
-          .animate-pot-pulse { animation: pot-pulse 1.4s ease-in-out infinite; }
-          .animate-winner-ring { animation: winner-ring 2.5s infinite; }
-          @keyframes winner-ring { 0%, 100% { box-shadow: 0 0 0px #fbbf24; border-color: #fbbf24; } 50% { box-shadow: 0 0 60px #fbbf24; border-color: white; } }
-          .animate-pulse-fast { animation: pulse 1s infinite; }
-          @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.6; } }
-          .bg-felt-texture { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"); }
-          .animate-shimmer { background: linear-gradient(90deg, transparent, rgba(251,191,36,0.5), transparent); background-size: 200% 100%; animation: shimmer 2.5s infinite linear; }
-          @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-          .scrollbar-hide::-webkit-scrollbar { display: none; }
+          @keyframes progress { from { width: 100%; } to { width: 0%; } }
+          @keyframes fling-to-pot { 0% { transform: translate(-50%, -100%) scale(1.5); filter: blur(0px); } 100% { transform: translate(0, -35vh) scale(0.1) rotate(1080deg); filter: blur(4px); opacity: 0; } }
+          @keyframes transfer-chip { 0% { top: 43%; left: 50%; opacity: 1; transform: translate(-50%, -50%) scale(1); filter: brightness(2); } 100% { top: var(--ty); left: var(--tx); opacity: 0; transform: translate(-50%, -50%) scale(0.1); filter: brightness(1); } }
+          @keyframes pot-pulse { 0% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 50% { transform: scale(1.1); filter: drop-shadow(0 0 30px #fbbf24) brightness(1.2); } 100% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } }
+          .animate-pot-pulse { animation: pot-pulse 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+          .animate-transfer-chip { animation: transfer-chip 1s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards; }
+          .bg-glimmer { background: linear-gradient(135deg, #fff 0%, #fff 40%, #fbbf24 50%, #fff 60%, #fff 100%); background-size: 200% 200%; animation: glimmer 3s infinite; }
+          @keyframes glimmer { 0% { background-position: -100% -100%; } 100% { background-position: 200% 200%; } }
+          .animate-pulse-glow { animation: pulse-glow 2s infinite ease-in-out; }
+          @keyframes pulse-glow { 0% { box-shadow: 0 0 0px rgba(34,211,238,0); } 50% { box-shadow: 0 0 20px rgba(34,211,238,0.6); } 100% { box-shadow: 0 0 0px rgba(34,211,238,0); } }
+          ::-webkit-scrollbar { display: none; }
+          @keyframes bounce-short {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+          }
+          .animate-bounce-short { animation: bounce-short 1.5s ease-in-out infinite; }
       `}</style>
     </div>
   );
