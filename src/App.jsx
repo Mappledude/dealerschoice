@@ -125,8 +125,10 @@ const Seat = ({
                         <div key={c.id || ci} 
                             className={`w-[5.5vw] md:w-[3vw] h-[8vw] md:h-[5vw] rounded-[4px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
                             style={{ 
+                                // Dynamic spread adjusted for 4 hole cards to prevent horizontal overflow
                                 transform: `translateX(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 1.4 : 2.5)}vw) rotate(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 4 : 8)}deg) scale(${1.5 * currentCardScale})`, 
                                 transformOrigin: 'bottom center', 
+                                // Vertical lift to prevent clipping in large hands
                                 top: player.hand.length > 2 ? '15px' : '45px' 
                             }}>
                             {(isShowdown || isHero) && (
@@ -195,6 +197,7 @@ const App = () => {
     return potAmount + currentBetsSum;
   }, [potAmount, players]);
 
+  // Robust Hero detection logic fixed for "cannot see cards" across variants
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
     return players.findIndex(p => {
@@ -292,6 +295,7 @@ const App = () => {
 
         setPhase(d.phase); setCommunity(d.community || []); 
         
+        // Correct variation mapping
         let resolvedVariant = VARIANTS.HOLDEM;
         const sVariant = d.activeVariant;
         if (sVariant) {
@@ -438,13 +442,7 @@ const App = () => {
                         <div className="flex flex-col font-black uppercase"><span className="text-[8px] text-white/40 tracking-widest font-black">STAKES</span><span className="text-[#fbbf24] text-lg md:text-xl font-black">${t.sb}/${t.bb}</span></div>
                         <div className="flex flex-col items-end font-black"><span className="text-[8px] text-white/40 tracking-widest font-black">SEATS</span><span className="text-white/80 font-mono text-sm md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
                     </div>
-                    {/* FIXED: Increased button z-index and touch area for mobile browsers */}
-                    <button 
-                      onClick={()=>setSelectedTableForJoin(t)} 
-                      className="relative z-20 w-full p-6 md:p-8 bg-emerald-600 rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all font-black uppercase cursor-pointer pointer-events-auto"
-                    >
-                      ENTER ARENA
-                    </button>
+                    <button onClick={()=>setSelectedTableForJoin(t)} className="w-full p-6 md:p-8 bg-emerald-600 rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] transition-all font-black uppercase">ENTER ARENA</button>
                 </div>
             ))}
         </main>
@@ -559,7 +557,7 @@ const App = () => {
                     <div className={`text-[6vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot || 0).toLocaleString()}</div>
                 </div>
               )}
-              {/* FIXED: community cards are now visible for REDSBLACKS as well */}
+              {/* FIXED: ensures community cards are visible for Reds & Blacks */}
               {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS', 'REDSBLACKS'].includes(activeVariant?.id) && (
                 <div className="flex gap-2 md:gap-4 scale-[1.1] md:scale-[1.8] mt-6 md:mt-12 font-black uppercase">
                     {(community || []).map((c, j) => (
