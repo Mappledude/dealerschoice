@@ -72,7 +72,7 @@ const rankHand = (cards) => {
     const ranks = sorted.map(c => VM[c.value]);
     const counts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
     
-    // Identifies pairs/sets/full-houses by sorting groups by count then by rank
+    // Primary sort by count (pairs/sets first) then by rank descending (kickers)
     const tiebreakerRanks = Object.entries(counts)
         .map(([rank, count]) => ({ r: parseInt(rank), c: count }))
         .sort((a, b) => b.c - a.c || b.r - a.r);
@@ -111,7 +111,7 @@ const rankHand = (cards) => {
     else if (vc[0] === 2 && vc[1] === 2) { score = 2; name = "Two Pair"; }
     else if (vc[0] === 2) { score = 1; name = "Pair"; }
 
-    // FIXED: Precision power scale (15^7) handles up to 5 kickers without overlap or rounding errors
+    // Weighted power ensures kickers correctly break ties (A-K beats A-Q)
     const power = score * Math.pow(15, 7) + compArr.reduce((acc, v, i) => acc + (v * Math.pow(15, 6 - i)), 0);
     return { power, name, cards: sorted.slice(0, 5) };
 };
@@ -134,47 +134,44 @@ const getBestHand = (hole, comm, variantId) => {
         const reds = hole.filter(c => isRed(c.suit)).length;
         const blacks = hole.length - reds;
         
-        const possibleEvals = [];
+        let bestEval = null;
 
-        // If Joker exists (mix of color in 4 cards), Joker (3 cards) acts as a flexible wild mimicing anything
+        // Joker Logic: Mix of colors (at least 1 Red and 1 Black)
         if (reds > 0 && blacks > 0) {
+            // Check each card as the "4th card" that the Joker mimics
             for (let i = 0; i < hole.length; i++) {
                 const card4 = hole[i];
                 const others = hole.filter((_, idx) => idx !== i);
                 const oReds = others.filter(c => isRed(c.suit)).length;
                 const oBlacks = 3 - oReds;
 
-                // A valid Joker is 2R1B or 1R2B among the OTHER 3 cards
+                // Joker exists if the other 3 cards are a mix (2R1B or 1R2B)
                 if ((oReds === 2 && oBlacks === 1) || (oReds === 1 && oBlacks === 2)) {
-                    const boardSubsets = combinations(comm, Math.min(comm.length, 3));
-                    boardSubsets.forEach(boardCards => {
-                        // For each combination of board cards, find the best use of a Wild Card
-                        VALUES.forEach(v => {
-                            const wild = { value: v, suit: boardCards[0]?.suit || SUITS[0], id: 'wild' };
-                            const pool = [card4, wild, ...boardCards];
-                            const padded = [...pool];
-                            while(padded.length < 5) padded.push({value: '2', suit: '♠', id: 'f'});
-                            possibleEvals.push(rankHand(padded));
-                        });
+                    // Joker mimics card4 rank and suit, effectively a pocket pair
+                    const virtualHole = [card4, { ...card4, id: 'wild' }];
+                    const fullPool = [...virtualHole, ...comm];
+                    
+                    combinations(fullPool, Math.min(fullPool.length, 5)).forEach(c => {
+                        const padded = [...c];
+                        while(padded.length < 5) padded.push({value: '2', suit: '♠', id: 'f'});
+                        const res = rankHand(padded);
+                        if (!bestEval || res.power > bestEval.power) bestEval = res;
                     });
                 }
             }
         } else {
-            // Same Color Rule: use 2 from hand and 3 from board
-            combinations(hole, 2).forEach(hSubset => {
-                combinations(comm, Math.min(comm.length, 3)).forEach(boardSubset => {
-                    const pool = [...hSubset, ...boardSubset];
+            // Same Color: Play best 2 from hole and 3 from board
+            combinations(hole, 2).forEach(h => {
+                combinations(comm, Math.min(comm.length, 3)).forEach(c => {
+                    const pool = [...h, ...c];
                     const padded = [...pool];
-                    while (padded.length < 5) padded.push({ value: '2', suit: '♠', id: 'f' });
-                    possibleEvals.push(rankHand(padded));
+                    while(padded.length < 5) padded.push({value: '2', suit: '♠', id: 'f'});
+                    const res = rankHand(padded);
+                    if (!bestEval || res.power > bestEval.power) bestEval = res;
                 });
             });
         }
-
-        if (possibleEvals.length > 0) {
-            return possibleEvals.sort((a, b) => b.power - a.power)[0];
-        }
-        return { power: 0, name: "High Card", cards: [] };
+        return bestEval || { power: 0, name: "High Card", cards: [] };
     }
 
     if (variantId === 'OMAHA' || variantId === 'HILOW') {
@@ -192,7 +189,7 @@ const getBestHand = (hole, comm, variantId) => {
         return best;
     }
 
-    // Default Hold'em / Pineapple
+    // Default (Holdem/Pineapple): Best of all hole + board
     const full = [...hole, ...comm];
     let best = null;
     combinations(full, Math.min(full.length, 5)).forEach(c => {
