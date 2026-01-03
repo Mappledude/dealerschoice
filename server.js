@@ -72,6 +72,7 @@ const rankHand = (cards) => {
     const ranks = sorted.map(c => VM[c.value]);
     const counts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
     
+    // Primary sort by count (pairs/sets first) then by rank descending (kickers)
     const tiebreakerRanks = Object.entries(counts)
         .map(([rank, count]) => ({ r: parseInt(rank), c: count }))
         .sort((a, b) => b.c - a.c || b.r - a.r);
@@ -93,6 +94,7 @@ const rankHand = (cards) => {
             break; 
         }
     }
+    // A-5 Wheel detection
     if(!isStraight && uniqueRanks.includes(14) && uniqueRanks.includes(5) && uniqueRanks.includes(4) && uniqueRanks.includes(3) && uniqueRanks.includes(2)) {
         isStraight = true;
         straightHigh = 5;
@@ -109,8 +111,8 @@ const rankHand = (cards) => {
     else if (vc[0] === 2 && vc[1] === 2) { score = 2; name = "Two Pair"; }
     else if (vc[0] === 2) { score = 1; name = "Pair"; }
 
-    // Fixed Kicker Calculation: Higher weight on primary rank, then subsequent kickers
-    const power = score * 1e12 + compArr.reduce((acc, v, i) => acc + (v * Math.pow(15, 6 - i)), 0);
+    // Weighted power ensures kickers correctly break ties (A-K beats A-Q)
+    const power = score * Math.pow(15, 7) + compArr.reduce((acc, v, i) => acc + (v * Math.pow(15, 6 - i)), 0);
     return { power, name, cards: sorted.slice(0, 5) };
 };
 
@@ -132,52 +134,68 @@ const getBestHand = (hole, comm, variantId) => {
         const reds = hole.filter(c => isRed(c.suit)).length;
         const blacks = hole.length - reds;
         
-        // 4 Reds or 4 Blacks rule: Play any 2 cards from hole + 3 from board
-        if (reds === 4 || blacks === 4) {
-            let best = null;
+        let bestEval = null;
+
+        // Joker Logic: Mix of colors (at least 1 Red and 1 Black)
+        if (reds > 0 && blacks > 0) {
+            // Check each card as the "4th card" that the Joker mimics
+            for (let i = 0; i < hole.length; i++) {
+                const card4 = hole[i];
+                const others = hole.filter((_, idx) => idx !== i);
+                const oReds = others.filter(c => isRed(c.suit)).length;
+                const oBlacks = 3 - oReds;
+
+                // Joker exists if the other 3 cards are a mix (2R1B or 1R2B)
+                if ((oReds === 2 && oBlacks === 1) || (oReds === 1 && oBlacks === 2)) {
+                    // Joker mimics card4 rank and suit, effectively a pocket pair
+                    const virtualHole = [card4, { ...card4, id: 'wild' }];
+                    const fullPool = [...virtualHole, ...comm];
+                    
+                    combinations(fullPool, Math.min(fullPool.length, 5)).forEach(c => {
+                        const padded = [...c];
+                        while(padded.length < 5) padded.push({value: '2', suit: '♠', id: 'f'});
+                        const res = rankHand(padded);
+                        if (!bestEval || res.power > bestEval.power) bestEval = res;
+                    });
+                }
+            }
+        } else {
+            // Same Color: Play best 2 from hole and 3 from board
             combinations(hole, 2).forEach(h => {
-                const boardCombs = combinations(comm, Math.min(comm.length, 3));
-                boardCombs.forEach(c => {
-                    const res = rankHand([...h, ...c]);
-                    if (!best || res.power > best.power) best = res;
+                combinations(comm, Math.min(comm.length, 3)).forEach(c => {
+                    const pool = [...h, ...c];
+                    const padded = [...pool];
+                    while(padded.length < 5) padded.push({value: '2', suit: '♠', id: 'f'});
+                    const res = rankHand(padded);
+                    if (!bestEval || res.power > bestEval.power) bestEval = res;
                 });
             });
-            return best || { power: 0, name: "High Card", cards: [] };
-        } 
-        
-        // Joker Rule (2R1B or 1R2B): Use all 4 cards + best from board
-        let best = null;
-        const boardCombs = combinations(comm, Math.min(comm.length, 1)); // Joker + 1 from hand + 1 from board
-        boardCombs.forEach(c => {
-            const res = rankHand([...hole, ...c]);
-            if (!best || res.power > best.power) best = res;
-        });
-        
-        // Ensure Joker hands are at least a Pair
-        if (best && best.power < 1e12) {
-            best.name = "Joker Pair";
-            best.power += 1e12; 
         }
-        return best || { power: 0, name: "High Card", cards: [] };
+        return bestEval || { power: 0, name: "High Card", cards: [] };
     }
 
     if (variantId === 'OMAHA' || variantId === 'HILOW') {
-        if (comm.length < 3) return { power: 0, name: "High Card", cards: [] };
         let best = null;
         combinations(hole, 2).forEach(h => {
-            combinations(comm, 3).forEach(c => {
-                const res = rankHand([...h, ...c]);
+            const bCount = Math.min(comm.length, 3);
+            combinations(comm, bCount).forEach(c => {
+                const pool = [...h, ...c];
+                const padded = [...pool];
+                while(padded.length < 5) padded.push({value: '2', suit: '♠', id: 'f'});
+                const res = rankHand(padded);
                 if (!best || res.power > best.power) best = res;
             });
         });
         return best;
     }
 
+    // Default (Holdem/Pineapple): Best of all hole + board
     const full = [...hole, ...comm];
-    if (full.length < 5) return { power: 0, name: "High Card", cards: [] };
     let best = null;
-    combinations(full, 5).forEach(c => {
-        const res = rankHand(c);
+    combinations(full, Math.min(full.length, 5)).forEach(c => {
+        const padded = [...c];
+        while(padded.length < 5) padded.push({value: '2', suit: '♠', id: 'f'});
+        const res = rankHand(padded);
         if (!best || res.power > best.power) best = res;
     });
     return best;
@@ -205,7 +223,7 @@ const startShotClock = (roomId) => {
             const cr = rooms[roomId];
             if (!cr || cr.activeIdx === -1 || cr.players[cr.activeIdx]?.uid !== p.uid) return;
             const res = getBestHand(p.hand, cr.community, cr.activeVariant?.id);
-            const score = res ? res.power / 1e12 : 0;
+            const score = res ? res.power / Math.pow(15, 7) : 0;
             let type = 'CALL', amt = 0;
             if (score >= 3) { type = 'RAISE'; amt = cr.highestBet + Math.max(cr.bb, Math.floor(cr.potData[0].amount * 0.4)); }
             else if (score < 1 && (cr.highestBet - p.currentBet) > 100 && Math.random() > 0.2) { type = 'FOLD'; }
@@ -323,7 +341,8 @@ const processShowdown = (roomId) => {
     room.hiLowAwards = { high: [], low: [] };
 
     if (evals.length === 1 || !evals[0].res) {
-        const p = room.players[activeIndices[0]];
+        const pIdx = activeIndices[0];
+        const p = room.players[pIdx];
         if (p) {
             p.chips += totalPot; p.isWinner = true;
             room.showdownWinners.push({ name: p.name, rank: "Winner", hand: p.hand, amount: totalPot });
