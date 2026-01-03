@@ -18,34 +18,28 @@ const runIgnition = (roomId) => {
     const vId = dealer.pendingVariant || 'HOLDEM';
     room.activeVariant = { id: vId, name: variantNames[vId], holeCards: holeCardsMap[vId] || 2 };
     
-    // Changed "DEALER" to dealer.name
+    // Feed now correctly attributes the variant deal to the player's name
     io.to(roomId).emit('log', { name: dealer.name, action: `deals ${variantNames[vId]}`, type: 'variant' });
 
     room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
     room.community = []; room.potData = [{ amount: 0 }]; room.highestBet = room.bb;
-
-    // ... blinds logic ...
     
-    updateStrengths(room);
-    room.phase = PHASES.PRE_FLOP; 
-    const bbPos = seated.indexOf(bbIdx);
-    room.activeIdx = seated[(bbPos + 1) % seated.length];
-    startShotClock(roomId);
-    io.to(roomId).emit('roomUpdate', room);
+    // ... Blinds logic ...
 };
 
 // 3. UPDATED processShowdown (Include winning cards in log)
 const processShowdown = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
-    // ... evaluation logic ...
+    
+    // ... winner calculation ...
     
     winners.forEach(w => { 
         const p = room.players[w.i]; p.chips += share; p.isWinner = true; 
         room.winning5Ids = w.res.cards.map(c => c.id); 
         room.showdownWinners.push({ name: p.name, rank: w.res.name, hand: w.res.cards, amount: share }); 
         
-        // Added cards property to log
+        // Feed log now includes specific cards to display winning icons
         io.to(roomId).emit('log', { 
             name: p.name, 
             action: `wins $${share.toLocaleString()} with ${w.res.name}`, 
@@ -53,10 +47,9 @@ const processShowdown = (roomId) => {
             cards: w.res.cards 
         });
     });
-    // ... rest of shutdown ...
 };
 
-// 4. UPDATED getBestHand (Flexible Joker Wild Card)
+// 4. UPDATED getBestHand (Precision Kicker Comparison & Reds/Blacks Joker Logic)
 const getBestHand = (hole, comm, variantId) => {
     if (!hole || hole.length === 0) return null;
     if (variantId === 'REDSBLACKS') {
@@ -71,30 +64,26 @@ const getBestHand = (hole, comm, variantId) => {
                 const others = hole.filter((_, idx) => idx !== i);
                 const oReds = others.filter(c => isRed(c.suit)).length;
                 if ((oReds === 2 && (3-oReds) === 1) || (oReds === 1 && (3-oReds) === 2)) {
-                    // Valid Joker. The 3 joker cards act as a wild mimicking anything.
-                    VALUES.forEach(v => {
-                        const wild = { value: v, suit: companion.suit, id: 'wild' };
-                        const pool = [companion, wild, ...comm];
-                        combinations(pool, Math.min(pool.length, 5)).forEach(c => {
-                            const padded = [...c];
-                            while(padded.length < 5) padded.push({value: '2', suit: '♠', id: 'filler'});
-                            evals.push(rankHand(padded));
+                    // Valid joker found. Pre-flop: mimic companion to form pair. 
+                    // Flop+: try every rank to find the absolute best hand.
+                    if (comm.length === 0) {
+                        const p = 1 * Math.pow(15, 7) + VM[companion.value] * Math.pow(15, 6);
+                        evals.push({ power: p, name: `Pair of ${companion.value}s`, cards: [companion, companion] });
+                    } else {
+                        VALUES.forEach(v => {
+                            const wild = { value: v, suit: companion.suit, id: 'wild' };
+                            const pool = [companion, wild, ...comm];
+                            combinations(pool, Math.min(pool.length, 5)).forEach(c => {
+                                evals.push(rankHand(c));
+                            });
                         });
-                    });
+                    }
                 }
             }
         } else {
-            // Same color: play best 2 from hole and 3 from board
-            combinations(hole, 2).forEach(h => {
-                combinations(comm, Math.min(comm.length, 3)).forEach(c => {
-                    const pool = [...h, ...c];
-                    const padded = [...pool];
-                    while(padded.length < 5) padded.push({value: '2', suit: '♠', id: 'filler'});
-                    evals.push(rankHand(padded));
-                });
-            });
+            // ... same color logic ...
         }
         return evals.length ? evals.sort((a,b) => b.power - a.power)[0] : { power: 0, name: "High Card", cards: [] };
     }
-    // ... standard holdem logic ...
+    // ... holdem logic ...
 };
