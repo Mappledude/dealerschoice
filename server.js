@@ -8,65 +8,88 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// --- VERSION & METADATA ---
-const VERSION = "v0.1.3";
-const APP_NAME = "Dealers Choice";
-
 // --- CONSTANTS ---
 const SUITS = ['♥', '♦', '♣', '♠'];
 const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-const VM = { '2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10, 'J':11, 'Q':12, 'K':13, 'A':14 };
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
-
 const BOT_NAMES = ["Ace_Bot", "River_Rat", "Sharky", "BluffMaster", "Foldy", "Annie_AllIn", "Checky", "GambleTron", "PokerFace", "Moneymaker"];
 
-// --- STATE MANAGEMENT ---
 let profiles = []; 
 let rooms = {};
 
-// --- UTILS ---
-const combinations = (array, k) => {
-    let result = [];
-    const fn = (start, prev) => {
-        if (prev.length === k) { result.push(prev); return; }
-        for (let i = start; i < array.length; i++) { fn(i + 1, [...prev, array[i]]); }
-    };
-    fn(0, []);
-    return result;
+// --- GAME LOGIC ---
+const checkStart = (roomId) => {
+    const room = rooms[roomId];
+    if (!room || room.phase !== PHASES.IDLE) return;
+
+    const seated = room.players.filter(p => p !== null);
+    if (seated.length >= 2) {
+        if (room.startTimer) return;
+        
+        io.to(roomId).emit('log', { name: "SYSTEM", action: "Arena active. Dealing in 3s...", type: 'phase' });
+        
+        room.startTimer = setTimeout(() => {
+            if (room.players.filter(p => p !== null).length >= 2) {
+                runIgnition(roomId);
+            }
+            room.startTimer = null;
+        }, 3000);
+    }
 };
 
-// --- HAND RANKING ENGINE ---
-const rankHand = (cards) => {
-    if (!cards || cards.length < 5) return { power: 0, name: "High Card", cards: [] };
-    const sorted = [...cards].sort((a, b) => VM[b.value] - VM[a.value]);
-    const ranks = sorted.map(c => VM[c.value]);
-    const counts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
-    const groups = Object.entries(counts).map(([r, c]) => ({ r: parseInt(r), c })).sort((a, b) => b.c - a.c || b.r - a.r);
-    const vc = groups.map(x => x.c);
-    const isFlush = new Set(sorted.map(c => c.suit)).size === 1;
-    const uniqueRanks = [...new Set(ranks)].sort((a,b) => b-a);
-    let isStraight = false, straightHigh = 0;
-    for(let i=0; i <= uniqueRanks.length - 5; i++) {
-        if(uniqueRanks[i] === uniqueRanks[i+4] + 4) { isStraight = true; straightHigh = uniqueRanks[i]; break; }
-    }
-    if(!isStraight && uniqueRanks.includes(14) && uniqueRanks.includes(5) && uniqueRanks.includes(4) && uniqueRanks.includes(3) && uniqueRanks.includes(2)) {
-        isStraight = true; straightHigh = 5;
-    }
-    let score = 0, name = "High Card";
-    if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
-    else if (vc[0] === 4) { score = 7; name = "Four of a Kind"; }
-    else if (vc[0] === 3 && vc[1] === 2) { score = 6; name = "Full House"; }
-    else if (isFlush) { score = 5; name = "Flush"; }
-    else if (isStraight) { score = 4; name = "Straight"; }
-    else if (vc[0] === 3) { score = 3; name = "Three of a Kind"; }
-    else if (vc[0] === 2 && vc[1] === 2) { score = 2; name = "Two Pair"; }
-    else if (vc[0] === 2) { score = 1; name = "Pair"; }
+const runIgnition = (roomId) => {
+    const room = rooms[roomId];
+    if (!room) return;
 
-    const power = score * Math.pow(15, 7) + groups.reduce((acc, g, i) => acc + (g.r * Math.pow(15, 6 - i)), 0);
-    return { power, name, cards: sorted.slice(0, 5) };
+    const seatedIndices = room.players.map((p, i) => p ? i : null).filter(x => x !== null);
+    if (seatedIndices.length < 2) {
+        room.phase = PHASES.IDLE;
+        io.to(roomId).emit('roomUpdate', room);
+        return;
+    }
+
+    // Reset Hand State
+    room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
+    room.community = [];
+    room.potData = [{ amount: 0 }];
+    room.highestBet = room.bb;
+    room.phase = PHASES.PRE_FLOP;
+    room.winning5Ids = [];
+
+    // Dealer & Blinds Rotation
+    room.dealerIdx = seatedIndices[(seatedIndices.indexOf(room.dealerIdx) + 1) % seatedIndices.length];
+    const sbIdx = seatedIndices[(seatedIndices.indexOf(room.dealerIdx) + 1) % seatedIndices.length];
+    const bbIdx = seatedIndices[(seatedIndices.indexOf(room.dealerIdx) + 2) % seatedIndices.length];
+    
+    // Deal Cards per Variant
+    room.players.forEach((p, i) => {
+        if (!p) return;
+        const vId = p.pendingVariant || 'HOLDEM';
+        const count = ['OMAHA', 'HILOW', 'REDSBLACKS'].includes(vId) ? 4 : ['PINEAPPLE', 'MUFLIS'].includes(vId) ? 3 : 2;
+        
+        p.hand = room.deck.splice(0, count);
+        p.currentBet = 0;
+        p.isFolded = false;
+        p.isWinner = false;
+        p.lastAction = null;
+        p.strength = "High Card";
+
+        if (i === sbIdx) { p.chips -= room.sb; p.currentBet = room.sb; }
+        if (i === bbIdx) { p.chips -= room.bb; p.currentBet = room.bb; }
+    });
+
+    room.activeIdx = seatedIndices[(seatedIndices.indexOf(bbIdx) + 1) % seatedIndices.length];
+    room.timeRemaining = 30;
+
+    io.to(roomId).emit('log', { 
+        name: room.players[room.dealerIdx].name, 
+        action: `deals ${room.players[room.dealerIdx].pendingVariant || 'Holdem'}`, 
+        type: 'variant' 
+    });
+    io.to(roomId).emit('roomUpdate', room);
 };
 
-// --- CORE SOCKET LOGIC ---
+// --- SOCKET EVENTS ---
 io.on('connection', (socket) => {
     socket.on('getInitialData', () => {
         socket.emit('initialDataResponse', { profiles, rooms: Object.values(rooms) });
@@ -108,6 +131,7 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         io.to(roomId).emit('roomUpdate', room);
         callback?.({ status: 'ok' });
+        checkStart(roomId);
     });
 
     socket.on('adminAddBot', ({ roomId }) => {
@@ -117,20 +141,25 @@ io.on('connection', (socket) => {
         if (seat === -1) return;
 
         const botName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + "_" + Math.floor(Math.random() * 99);
-        const botId = 'bot_' + Math.random().toString(36).slice(2, 7);
-        
         room.players[seat] = {
-            uid: botId,
+            uid: 'bot_' + Math.random().toString(36).slice(2, 7),
             name: botName,
             chips: 2000,
             currentBet: 0,
             isFolded: false,
             isBot: true,
-            seatIdx: seat
+            seatIdx: seat,
+            pendingVariant: 'HOLDEM'
         };
 
         io.to(roomId).emit('roomUpdate', room);
         io.to(roomId).emit('log', { name: "SYSTEM", action: `added bot ${botName}`, type: 'variant' });
+        checkStart(roomId);
+    });
+
+    socket.on('updatePlayerSettings', ({ uid, pendingVariant }) => {
+        const p = profiles.find(x => x.uid === uid);
+        if (p) p.pendingVariant = pendingVariant;
     });
 
     socket.on('adminNuclearReset', () => {
@@ -140,22 +169,9 @@ io.on('connection', (socket) => {
         io.emit('profilesUpdate', []);
     });
 
-    socket.on('adminDeleteRoom', (id) => {
-        delete rooms[id];
-        io.emit('lobbyUpdate', Object.values(rooms));
-    });
-
-    socket.on('adminCreatePlayer', (p) => {
-        profiles.push({ ...p, chips: Number(p.chips) });
-        io.emit('profilesUpdate', profiles);
-    });
-
-    socket.on('adminDeletePlayer', (uid) => {
-        profiles = profiles.filter(x => x.uid !== uid);
-        io.emit('profilesUpdate', profiles);
-    });
+    socket.on('adminDeleteRoom', (id) => { delete rooms[id]; io.emit('lobbyUpdate', Object.values(rooms)); });
+    socket.on('adminDeletePlayer', (uid) => { profiles = profiles.filter(x => x.uid !== uid); io.emit('profilesUpdate', profiles); });
 });
 
-server.listen(10000, () => {
-    console.log(`${APP_NAME} ${VERSION} running on port 10000`);
-});
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => console.log(`Server v0.1.6 Running on ${PORT}`));
