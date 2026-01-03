@@ -8,25 +8,18 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// --- VERSION & METADATA ---
-const VERSION = "v0.1";
-const APP_NAME = "Dealers Choice";
-
 // --- CONSTANTS ---
-const SUITS = ['♥', '♦', '♣', '♠'];
 const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const SUITS = ['♥', '♦', '♣', '♠'];
 const VM = { '2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10, 'J':11, 'Q':12, 'K':13, 'A':14 };
-
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 
-const holeCardsMap = { 
-    HOLDEM: 2, OMAHA: 4, PINEAPPLE: 3, MUFLIS: 3, HILOW: 4, REDSBLACKS: 4 
-};
+const holeCardsMap = { HOLDEM: 2, OMAHA: 4, PINEAPPLE: 3, MUFLIS: 3, HILOW: 4, REDSBLACKS: 4 };
+const variantNames = { HOLDEM: "Texas Hold'em", OMAHA: "Omaha", PINEAPPLE: "Pineapple", MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks" };
 
-const variantNames = {
-    HOLDEM: "Texas Hold'em", OMAHA: "Omaha", PINEAPPLE: "Pineapple",
-    MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks"
-};
+// --- STATE ---
+let profiles = [];
+let rooms = {};
 
 // --- UTILS ---
 const combinations = (array, k) => {
@@ -39,33 +32,19 @@ const combinations = (array, k) => {
     return result;
 };
 
-// --- HAND RANKING ENGINE (Precision v0.1) ---
 const rankHand = (cards) => {
     if (!cards || cards.length < 5) return { power: 0, name: "High Card", cards: [] };
-    
     const sorted = [...cards].sort((a, b) => VM[b.value] - VM[a.value]);
     const ranks = sorted.map(c => VM[c.value]);
     const counts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
-    
-    const groups = Object.entries(counts)
-        .map(([rank, count]) => ({ r: parseInt(rank), c: count }))
-        .sort((a, b) => b.c - a.c || b.r - a.r);
-
-    let compArr = [];
-    groups.forEach(g => { for(let i=0; i<g.c; i++) compArr.push(g.r); });
-    
+    const groups = Object.entries(counts).map(([rank, count]) => ({ r: parseInt(rank), c: count })).sort((a, b) => b.c - a.c || b.r - a.r);
+    let compArr = []; groups.forEach(g => { for(let i=0; i<g.c; i++) compArr.push(g.r); });
     const vc = groups.map(x => x.c);
     const isFlush = new Set(sorted.map(c => c.suit)).size === 1;
     const uniqueRanks = [...new Set(ranks)].sort((a,b) => b-a);
-    let isStraight = false, straightHigh = 0;
-
-    for(let i=0; i <= uniqueRanks.length - 5; i++) {
-        if(uniqueRanks[i] === uniqueRanks[i+4] + 4) { isStraight = true; straightHigh = uniqueRanks[i]; break; }
-    }
-    if(!isStraight && uniqueRanks.includes(14) && uniqueRanks.includes(5) && uniqueRanks.includes(4) && uniqueRanks.includes(3) && uniqueRanks.includes(2)) {
-        isStraight = true; straightHigh = 5; compArr = [5, 4, 3, 2, 1]; 
-    }
-
+    let isStraight = false;
+    for(let i=0; i <= uniqueRanks.length - 5; i++) { if(uniqueRanks[i] === uniqueRanks[i+4] + 4) { isStraight = true; break; } }
+    if(!isStraight && uniqueRanks.includes(14) && uniqueRanks.includes(5) && uniqueRanks.includes(4) && uniqueRanks.includes(3) && uniqueRanks.includes(2)) { isStraight = true; compArr = [5, 4, 3, 2, 1]; }
     let score = 0, name = "High Card";
     if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
     else if (vc[0] === 4) { score = 7; name = "Four of a Kind"; }
@@ -75,7 +54,6 @@ const rankHand = (cards) => {
     else if (vc[0] === 3) { score = 3; name = "Three of a Kind"; }
     else if (vc[0] === 2 && vc[1] === 2) { score = 2; name = "Two Pair"; }
     else if (vc[0] === 2) { score = 1; name = "Pair"; }
-
     const power = score * Math.pow(15, 7) + compArr.reduce((acc, v, i) => acc + (v * Math.pow(15, 6 - i)), 0);
     return { power, name, cards: sorted.slice(0, 5) };
 };
@@ -122,28 +100,56 @@ const getBestHand = (hole, comm, variantId) => {
     return best;
 };
 
-// State
-let rooms = {};
-
-// Sockets
+// --- HANDLERS ---
 io.on('connection', (socket) => {
-    // ... joinRoom, playerAction handlers ...
+    socket.on('getInitialData', () => {
+        socket.emit('initialDataResponse', { rooms: Object.values(rooms), profiles });
+    });
+
+    socket.on('playerLogin', ({ password }) => {
+        const p = profiles.find(x => x.password === password);
+        if (p) socket.emit('loginSuccess', p);
+    });
+
+    // ADMIN HANDLERS
+    socket.on('adminCreatePlayer', (data) => {
+        profiles.push({ ...data, chips: Number(data.chips) });
+        io.emit('profilesUpdate', profiles);
+    });
+
+    socket.on('adminDeletePlayer', (uid) => {
+        profiles = profiles.filter(p => p.uid !== uid);
+        io.emit('profilesUpdate', profiles);
+    });
+
+    socket.on('adminEditChips', ({ uid, chips }) => {
+        const p = profiles.find(x => x.uid === uid);
+        if (p) p.chips = Number(chips);
+        io.emit('profilesUpdate', profiles);
+    });
+
+    socket.on('adminCreateRoom', (data) => {
+        const newRoom = { 
+            ...data, 
+            players: Array(TOTAL_SEATS).fill(null), 
+            phase: PHASES.IDLE, community: [], potData: [{amount: 0}], dealerIdx: 0 
+        };
+        rooms[data.id] = newRoom;
+        io.emit('lobbyUpdate', Object.values(rooms));
+    });
+
+    socket.on('adminDeleteRoom', (id) => {
+        delete rooms[id];
+        io.emit('lobbyUpdate', Object.values(rooms));
+    });
+
+    socket.on('adminNuclearReset', () => {
+        rooms = {}; profiles = [];
+        io.emit('lobbyUpdate', []);
+        io.emit('profilesUpdate', []);
+    });
 });
 
-const processShowdown = (roomId) => {
-    const room = rooms[roomId];
-    const winners = []; // ... winner calculation logic ...
-    winners.forEach(w => {
-        // ... payout logic ...
-        io.to(roomId).emit('log', { 
-            name: room.players[w.i].name, 
-            action: `wins with ${w.res.name}`, 
-            type: 'win',
-            cards: w.res.cards 
-        });
-    });
-};
-
 server.listen(10000, () => {
-    console.log(`${APP_NAME} ${VERSION} running on port 10000`);
+    console.log(`Dealers Choice v0.1 running on port 10000`);
 });
