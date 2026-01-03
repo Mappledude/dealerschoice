@@ -53,17 +53,58 @@ const Seat = ({
 
     const flingDelay = useMemo(() => Math.random() * 0.3, [isCollectingBets]);
 
+    // Redesigned Betting Chip Visuals with strict error handling for toLocaleString
+    const renderBetChip = () => {
+      const bet = Number(player.currentBet || 0);
+      if (bet <= 0) return null;
+      
+      return (
+        <div 
+          className={`absolute z-[100] transition-all`}
+          style={{ 
+            transform: `translate(calc(-50% + ${betOffset.x * betOffsetMultiplier + betChipXShift}px), ${betOffset.y * betOffsetMultiplier + betChipYShift}px)`, 
+            left: '50%', 
+            top: '50%',
+            animationName: isCollectingBets ? 'fling-to-pot' : 'bet-impact-slide',
+            animationDuration: isCollectingBets ? '1s' : '0.5s',
+            animationTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+            animationFillMode: 'forwards',
+            animationDelay: isCollectingBets ? `${flingDelay}s` : '0s'
+          }}>
+          <div className="relative group select-none cursor-default">
+            <div className="absolute top-1 left-0 w-full h-full bg-black/40 rounded-full blur-sm -z-10" />
+            <div className="bg-[#1e293b] border-2 border-white/20 rounded-full p-0.5 shadow-xl flex items-center justify-center min-w-[50px] h-[50px] relative overflow-hidden">
+               <div className="absolute inset-0 opacity-20 bg-[repeating-conic-gradient(#fff_0_15deg,#000_0_30deg)]" />
+               <div className="w-full h-full rounded-full bg-gradient-to-b from-amber-400 to-amber-700 border border-black/20 flex flex-col items-center justify-center z-10 shadow-inner">
+                  <span className="text-[8px] text-black font-black leading-none opacity-60">BET</span>
+                  <span className="text-[11px] text-white font-black leading-none drop-shadow-md">
+                    ${bet >= 1000 ? (bet / 1000).toFixed(1) + 'k' : bet}
+                  </span>
+               </div>
+            </div>
+            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur px-2 py-0.5 rounded text-[9px] text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-[110] border border-white/10">
+              ${bet.toLocaleString()}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     return (
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'}`}>
             
+            {isShowdown && player.isWinner && (
+              <div className="absolute inset-[-60px] bg-yellow-400/5 rounded-full blur-3xl animate-winner-aura -z-10" />
+            )}
+
             {(isHero || isShowdown) && !player.isFolded && player.winProbability !== undefined && phase !== PHASES.IDLE && (
               <div className="absolute top-[-55px] left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-300">
                 <div className="bg-slate-900/90 backdrop-blur-xl border border-cyan-500/50 px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
                   <TrendingUp size={10} className="text-cyan-400" />
-                  <span className="text-[9px] font-black text-white font-mono">{Math.round(player.winProbability)}%</span>
+                  <span className="text-[9px] font-black text-white font-mono">{Math.round(Number(player.winProbability || 0))}%</span>
                 </div>
                 <div className="w-10 h-0.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-cyan-400 transition-all duration-500" style={{ width: `${player.winProbability}%` }} />
+                  <div className="h-full bg-cyan-400 transition-all duration-500" style={{ width: `${Number(player.winProbability || 0)}%` }} />
                 </div>
               </div>
             )}
@@ -75,34 +116,21 @@ const Seat = ({
                   player.lastAction === 'RAISE' ? 'bg-amber-500 border-amber-300 text-black' : 
                   'bg-blue-600 border-blue-400 text-white'
                 }`}>
-                  {player.lastAction}
+                  {String(player.lastAction)}
                 </span>
               </div>
             )}
 
-            {player.currentBet > 0 && (
-                <div className={`absolute z-[100] transition-all ${isCollectingBets ? 'animate-fling-to-pot opacity-0 scale-0' : 'animate-bet-splash opacity-100'}`}
-                    style={{ 
-                      transform: `translate(calc(-50% + ${betOffset.x * betOffsetMultiplier + betChipXShift}px), ${betOffset.y * betOffsetMultiplier + betChipYShift}px)`, 
-                      left: '50%', 
-                      top: '50%',
-                      animationDelay: isCollectingBets ? `${flingDelay}s` : '0s'
-                    }}>
-                    <div className="bg-gradient-to-b from-amber-300 via-amber-500 to-amber-700 text-black font-black text-[10px] md:text-[12px] px-3 py-1 rounded-full shadow-[0_8px_20px_rgba(0,0,0,0.8),inset_0_2px_4px_rgba(255,255,255,0.4)] border-2 border-amber-200/50 flex items-center gap-1 whitespace-nowrap">
-                        <Coins size={10} className="animate-spin-slow" />
-                        ${String(player.currentBet.toLocaleString())}
-                    </div>
-                </div>
-            )}
+            {renderBetChip()}
 
             <div 
-                style={{ transform: `translate(${playerBadgeXOffset}px, ${playerBadgeOffset}px)` }}
+                style={{ transform: `translate(${Number(playerBadgeXOffset || 0)}px, ${Number(playerBadgeOffset || 0)}px)` }}
                 className={`relative z-50 flex flex-col items-center p-1.5 rounded-2xl border-2 bg-slate-900/95 backdrop-blur-md transition-all duration-500 min-w-[110px] md:min-w-[160px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-4 ring-cyan-400/30 shadow-[0_0_40px_rgba(34,211,238,0.5)] animate-turn-glow' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 shadow-[0_0_50px_rgba(250,204,21,0.6)]' : ''}`}
             >
                 {isActiveTurn && timeRemaining > 0 && (
                     <div className="absolute -top-2 w-full px-2 h-1.5 z-[60]">
                         <div className="w-full h-full bg-black/40 rounded-full overflow-hidden shadow-inner">
-                            <div className="h-full bg-cyan-400 transition-all duration-1000 linear shadow-[0_0_10px_#22d3ee]" style={{ width: `${(timeRemaining / 30) * 100}%` }} />
+                            <div className="h-full bg-cyan-400 transition-all duration-1000 linear shadow-[0_0_10px_#22d3ee]" style={{ width: `${(Number(timeRemaining || 0) / 30) * 100}%` }} />
                         </div>
                     </div>
                 )}
@@ -111,12 +139,6 @@ const Seat = ({
                     <div className="absolute -top-1.5 -right-1.5 flex items-center justify-center z-[70] animate-in zoom-in spin-in duration-500">
                         <div className="w-6 h-6 bg-red-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(220,38,38,0.8)] flex items-center justify-center font-black text-[9px] text-white ring-2 ring-red-600/20">D</div>
                     </div>
-                )}
-
-                {player.isWinner && isShowdown && (
-                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-[80] animate-showdown-card-pop">
-                    <Sparkles className="text-yellow-400 fill-yellow-400 animate-pulse" size={36} />
-                  </div>
                 )}
 
                 <div className="flex flex-col items-center gap-0.5 w-full">
@@ -129,7 +151,7 @@ const Seat = ({
             </div>
 
             {player.hand && Array.isArray(player.hand) && !player.isFolded && (
-                <div className={`relative flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible transition-all duration-700 ${isShowdown ? 'z-[500] scale-110 -translate-y-4' : 'z-10'}`}>
+                <div className={`relative flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible transition-all duration-700 ${isShowdown ? 'z-[500] scale-110 -translate-y-6' : 'z-10'}`}>
                     {player.hand.map((c, ci) => {
                         const mid = (player.hand.length - 1) / 2;
                         const offset = ci - mid;
@@ -144,17 +166,20 @@ const Seat = ({
                                   transform: `translateX(${offset * (player.hand.length > 2 ? 1.4 : 2.5)}vw) rotate(${currentRotation}deg) scale(${1.5 * currentCardScale}) ${isRevealing ? 'rotateY(0deg)' : ''}`, 
                                   transformOrigin: 'bottom center', 
                                   top: player.hand.length > 2 ? '15px' : '45px',
-                                  // Fix for Warning: decomposing animation shorthand to avoid conflict with animationDelay
+                                  // Longhand properties to avoid React style conflicts
                                   animationName: isRevealing ? 'card-reveal-reveal' : 'none',
-                                  animationDuration: isRevealing ? '0.8s' : '0s',
+                                  animationDuration: isRevealing ? '1.2s' : '0s',
                                   animationTimingFunction: isRevealing ? 'cubic-bezier(0.175, 0.885, 0.32, 1.275)' : 'linear',
                                   animationFillMode: isRevealing ? 'forwards' : 'none',
-                                  animationDelay: `${ci * 0.1}s`
+                                  animationDelay: `${ci * 0.15}s`
                               }}>
                               {(isShowdown || isHero) ? (
                                   <div className="flex flex-col items-start w-full h-full animate-in fade-in duration-500">
                                     <span className="text-[10px] md:text-[12px] font-black leading-none">{String(c.value)}</span>
                                     <span className={`text-[12px] md:text-[18px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-10 text-[2.5vw] pointer-events-none">
+                                      {String(c.suit)}
+                                    </div>
                                   </div>
                               ) : ( 
                                 <div className="w-full h-full flex items-center justify-center opacity-30">
@@ -169,7 +194,7 @@ const Seat = ({
                         <div 
                             className="absolute -bottom-12 z-[120] whitespace-nowrap bg-purple-600/95 backdrop-blur-xl px-4 py-1.5 rounded-full border border-purple-400 shadow-[0_8px_20px_rgba(168,85,247,0.6)] animate-in fade-in zoom-in h-8 flex items-center justify-center" 
                             style={{ 
-                                transform: `translate(${handStrengthXOffset}px, ${handStrengthYOffset}px)`, 
+                                transform: `translate(${Number(handStrengthXOffset || 0)}px, ${Number(handStrengthYOffset || 0)}px)`, 
                                 bottom: '-20px' 
                             }}
                         >
@@ -242,7 +267,6 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Responsive Table Scaler logic
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
@@ -259,8 +283,8 @@ export default function App() {
   }, []);
 
   const totalDisplayPot = useMemo(() => {
-    const currentBetsSum = players.reduce((acc, p) => acc + (p?.currentBet || 0), 0);
-    return potAmount + currentBetsSum;
+    const currentBetsSum = players.reduce((acc, p) => acc + Number(p?.currentBet || 0), 0);
+    return Number(potAmount || 0) + currentBetsSum;
   }, [potAmount, players]);
 
   const heroIdx = useMemo(() => {
@@ -282,7 +306,7 @@ export default function App() {
 
   const minRaiseAllowed = useMemo(() => {
       const bb = 20; 
-      return Math.max(highestBet + bb, highestBet * 2);
+      return Math.max(Number(highestBet || 0) + bb, Number(highestBet || 0) * 2);
   }, [highestBet]);
 
   const handleAction = useCallback((type, amt = 0) => {
@@ -332,7 +356,7 @@ export default function App() {
         
         const phaseChanged = d.phase !== phase && phase !== PHASES.IDLE && d.phase !== PHASES.IDLE;
         const currentPotValue = Number(d.potData?.[0]?.amount || 0);
-        const potIncreased = currentPotValue > potAmount;
+        const potIncreased = currentPotValue > Number(potAmount || 0);
 
         if (phaseChanged) {
             setIsCollectingBets(true);
@@ -348,7 +372,7 @@ export default function App() {
             setPotTransferring(true);
             setTimeout(() => {
               setShowdownWinners(d.showdownWinners || null);
-            }, 1500);
+            }, 1800);
             setHiLowAwards(d.hiLowAwards || null);
             setTimeout(() => { setPotTransferring(false); setShowdownWinners(null); }, 8500);
         }
@@ -561,7 +585,7 @@ export default function App() {
         <div className="flex items-center gap-3">
             <div className="bg-white/5 px-4 py-2 rounded-2xl border border-white/10 shadow-inner truncate font-black uppercase group">
                 <span className="text-[#fbbf24] text-[9px] tracking-widest font-black uppercase italic opacity-60">NOW PLAYING:</span>
-                <span className="text-white ml-3 text-[11px] md:text-sm font-black group-hover:text-emerald-400 transition-colors">{activeVariant?.name || "Hold'em"}</span>
+                <span className="text-white ml-3 text-[11px] md:text-sm font-black group-hover:text-emerald-400 transition-colors">{String(activeVariant?.name || "Hold'em")}</span>
             </div>
             <button onClick={() => setShowLayoutControls(!showLayoutControls)} className={`p-2.5 rounded-xl transition-all font-black uppercase active:scale-90 ${showLayoutControls ? 'bg-[#fbbf24] text-black shadow-[0_0_20px_#fbbf24]' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}>
                 <Sliders size={22}/>
@@ -624,7 +648,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <button onClick={()=>setShowLayoutControls(false)} className="bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black py-5 rounded-3xl text-[11px] tracking-[0.4em] uppercase mt-4 shadow-xl active:scale-95 transition-transform">LOCK INTERFACE</button>
+                <button onClick={()=>setShowLayoutControls(false)} className="bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black py-4 rounded-2xl text-[11px] tracking-[0.3em] uppercase mt-4 transition-all active:scale-95">LOCK SETTINGS</button>
             </div>
         )}
 
@@ -634,7 +658,7 @@ export default function App() {
                 setPendingVariantId(e.target.value); 
                 socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value});
             }} className="bg-transparent text-[#fbbf24] outline-none text-xs md:text-sm cursor-pointer font-black tracking-wider border-none">
-                {Object.entries(VARIANTS).map(([k,v])=><option key={k} value={k} className="bg-slate-900 font-black">{v.name}</option>)}
+                {Object.entries(VARIANTS).map(([k,v])=><option key={k} value={k} className="bg-slate-900 font-black">{String(v.name)}</option>)}
             </select>
         </div>
         <div className="flex gap-4 font-black uppercase items-center">
@@ -655,7 +679,7 @@ export default function App() {
             
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 overflow-hidden translate-y-[25%]">
                 <span className="text-[13vw] font-black text-white/5 italic tracking-tighter uppercase select-none rotate-[-12deg] whitespace-nowrap">
-                  {activeVariant?.name || "Hold'em"}
+                  {String(activeVariant?.name || "Hold'em")}
                 </span>
             </div>
 
@@ -732,25 +756,25 @@ export default function App() {
                     <div className="flex flex-col items-end">
                       <span className="text-[8px] text-white/30 tracking-[0.3em] font-black uppercase italic mb-1">STRENGTH</span>
                       <span className="text-[13px] md:text-[16px] text-purple-400 font-black uppercase drop-shadow-lg">
-                        {phase === PHASES.PRE_FLOP ? "PRE-FLOP" : (heroPlayerObj.strength || "HIGH CARD")}
+                        {phase === PHASES.PRE_FLOP ? "PRE-FLOP" : String(heroPlayerObj.strength || "HIGH CARD")}
                       </span>
                     </div>
                 </div>
 
                 <div className="flex gap-2 w-full font-black uppercase">
-                    <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] md:text-[13px] hover:bg-white/15 transition-all font-black active:scale-95 tracking-widest">1/2 POT</button>
-                    <button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] md:text-[13px] hover:bg-white/15 transition-all font-black active:scale-95 tracking-widest">POT</button>
-                    <button onClick={()=>handleAction('RAISE', heroPlayerObj.chips + heroPlayerObj.currentBet)} className="flex-1 py-3 bg-red-600/20 border border-red-500/40 rounded-2xl text-[10px] md:text-[13px] text-red-400 hover:bg-red-600 hover:text-white transition-all font-black active:scale-95 tracking-widest">ALL-IN</button>
+                    <button onClick={()=>handleAction('RAISE', Number(highestBet || 0) + Math.floor(Number(potAmount || 0) * 0.5))} className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] md:text-[13px] hover:bg-white/15 transition-all font-black active:scale-95 tracking-widest">1/2 POT</button>
+                    <button onClick={()=>handleAction('RAISE', Number(highestBet || 0) + Number(potAmount || 0))} className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] md:text-[13px] hover:bg-white/15 transition-all font-black active:scale-95 tracking-widest">POT</button>
+                    <button onClick={()=>handleAction('RAISE', Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0))} className="flex-1 py-3 bg-red-600/20 border border-red-500/40 rounded-2xl text-[10px] md:text-[13px] text-red-400 hover:bg-red-600 hover:text-white transition-all font-black active:scale-95 tracking-widest">ALL-IN</button>
                 </div>
                 <div className="flex gap-3 md:gap-8 w-full items-center justify-center font-black">
                     <button onClick={()=>handleAction('FOLD')} className="w-16 md:w-40 h-14 md:h-18 bg-red-950/70 border-2 border-red-500/50 rounded-2xl tracking-[0.2em] hover:brightness-125 transition-all font-black text-[10px] md:text-sm shadow-2xl active:scale-90">FOLD</button>
-                    <button onClick={()=>handleAction('CALL')} className="flex-1 max-w-[450px] h-14 md:h-18 bg-indigo-600/40 border-2 border-indigo-400/60 rounded-2xl text-xs md:text-2xl tracking-[0.4em] hover:brightness-125 font-black shadow-2xl active:scale-90 shadow-indigo-900/30">
-                        {highestBet > heroPlayerObj.currentBet ? `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}` : 'CHECK'}
+                    <button onClick={()=>handleAction('CALL')} className="flex-1 max-w-[450px] h-14 md:h-18 bg-indigo-600/40 border-2 border-indigo-400/60 rounded-3xl text-xs md:text-2xl tracking-[0.4em] hover:brightness-125 font-black shadow-2xl active:scale-90 shadow-indigo-900/30">
+                        {Number(highestBet || 0) > Number(heroPlayerObj.currentBet || 0) ? `CALL $${(Number(highestBet || 0) - Number(heroPlayerObj.currentBet || 0)).toLocaleString()}` : 'CHECK'}
                     </button>
                     <div className="flex gap-2 md:gap-3 items-center bg-black/60 border-2 border-white/10 p-1 rounded-2xl shadow-inner min-w-[130px] md:min-w-[360px] font-black uppercase">
                         <div className="flex items-center bg-black/40 px-2 md:px-6 rounded-xl border border-white/5 h-10 md:h-14 font-black uppercase">
                             <span className="text-[#fbbf24] text-xs md:text-2xl font-mono mr-1 md:mr-2">$</span>
-                            <input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(heroPlayerObj.chips + heroPlayerObj.currentBet, Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-10 md:w-32 bg-transparent text-center font-mono text-xs md:text-3xl text-[#fbbf24] outline-none font-black" />
+                            <input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0), Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-10 md:w-32 bg-transparent text-center font-mono text-xs md:text-3xl text-[#fbbf24] outline-none font-black" />
                         </div>
                         <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-10 md:h-14 bg-gradient-to-b from-emerald-500 to-emerald-700 border-2 border-emerald-400/30 rounded-xl flex items-center justify-center hover:brightness-110 font-black uppercase text-[10px] md:text-2xl shadow-2xl active:scale-90 tracking-tighter">
                             <Zap size={20} className="md:mr-3 text-white hidden md:block" /> RAISE
@@ -767,10 +791,10 @@ export default function App() {
                                 <div key={idx} className="flex flex-col items-center gap-2 bg-slate-900/95 p-4 rounded-[2.5rem] border-2 border-yellow-500 shadow-[0_0_100px_rgba(251,191,36,0.3)] min-w-[300px] animate-showdown-card-pop relative overflow-hidden" style={{ animationDelay: `${idx * 0.2}s` }}>
                                     <div className="absolute inset-0 bg-glimmer opacity-20 pointer-events-none" />
                                     <div className="flex flex-col items-center z-10">
-                                        <div className="text-[#fbbf24] font-black text-3xl md:text-5xl tracking-tighter drop-shadow-2xl uppercase animate-winner-name-shimmer">{winner.name}</div>
+                                        <div className="text-[#fbbf24] font-black text-3xl md:text-5xl tracking-tighter drop-shadow-2xl uppercase animate-winner-name-shimmer">{String(winner.name)}</div>
                                         <div className="flex items-center gap-3 mt-1">
-                                            <div className="text-emerald-400 font-mono text-xl md:text-3xl font-black drop-shadow-md">+${(winner.amount || 0).toLocaleString()}</div>
-                                            <div className="text-white text-[10px] md:text-xs tracking-[0.2em] uppercase font-black px-4 py-1 bg-yellow-600/40 rounded-full border border-yellow-400/50 shadow-inner">{winner.rank}</div>
+                                            <div className="text-emerald-400 font-mono text-xl md:text-3xl font-black drop-shadow-md">+${Number(winner.amount || 0).toLocaleString()}</div>
+                                            <div className="text-white text-[10px] md:text-xs tracking-[0.2em] uppercase font-black px-4 py-1 bg-yellow-600/40 rounded-full border border-yellow-400/50 shadow-inner">{String(winner.rank)}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -788,7 +812,7 @@ export default function App() {
                                 <div className="flex items-center gap-3 text-cyan-400 animate-pulse mb-1">
                                     <span className="text-[10px] md:text-sm font-black tracking-[0.4em]">WAITING ON</span>
                                 </div>
-                                <span className="text-xl md:text-3xl font-black text-white tracking-tighter drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)]">{players[activeIdx]?.name || "OPPONENT"}</span>
+                                <span className="text-xl md:text-3xl font-black text-white tracking-tighter drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)]">{String(players[activeIdx]?.name || "OPPONENT")}</span>
                             </div>
                         )}
                     </div>
@@ -800,7 +824,7 @@ export default function App() {
         <div className="flex-1 flex flex-col overflow-hidden text-[13px] font-mono tracking-widest font-black uppercase bg-black/60 shadow-inner">
             <div className="text-white/40 mb-1 flex items-center justify-between border-b border-white/10 py-1.5 px-4 uppercase shrink-0">
                 <div className="flex items-center gap-2 text-[10px] md:text-xs tracking-[0.2em]"><Eye size={14} className="text-[#fbbf24]"/> INTELLIGENCE</div>
-                <div className="flex items-center gap-2 text-emerald-500 animate-pulse text-[10px] font-black"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]" /> LIVE FEED</div>
+                <div className="flex items-center gap-2 text-emerald-500 animate-pulse text-[11px] font-black"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]" /> LIVE FEED</div>
             </div>
             <div className="flex-1 space-y-1 overflow-y-auto scrollbar-hide font-black px-4 py-2">
                 {(logs || []).map(l => (
@@ -823,59 +847,82 @@ export default function App() {
       </footer>
       <style>{`
           @keyframes progress { from { width: 100%; } to { width: 0%; } }
+          
+          @keyframes bet-impact-slide {
+            0% { transform: translate(calc(-50% + 0px), 100px) scale(0.5); opacity: 0; }
+            80% { transform: translate(calc(-50% + var(--target-x, 0px)), var(--target-y, 0px)) scale(1.1); opacity: 1; }
+            100% { transform: translate(calc(-50% + var(--target-x, 0px)), var(--target-y, 0px)) scale(1); }
+          }
+
+          @keyframes winner-aura {
+            0% { transform: scale(1); opacity: 0.1; }
+            50% { transform: scale(1.5); opacity: 0.3; }
+            100% { transform: scale(1); opacity: 0.1; }
+          }
+          .animate-winner-aura { animation: winner-aura 3s infinite ease-in-out; }
+
           @keyframes fling-to-pot { 
             0% { transform: translate(-50%, -100%) scale(1.5) rotate(0deg); filter: blur(0px); opacity: 1; } 
             25% { transform: translate(calc(-50% + 20vw), -50vh) scale(1.3) rotate(90deg); filter: blur(1px); }
             100% { transform: translate(calc(-50% + (50vw - 50%)), -35vh) scale(0.01) rotate(1440deg); filter: blur(15px); opacity: 0; } 
           }
+          
           @keyframes pot-pulse { 
             0% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 
             25% { transform: scale(1.25); filter: drop-shadow(0 0 50px #fbbf24) brightness(1.4); } 
             100% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(251,191,36,0.4)); } 
           }
           .animate-pot-pulse { animation: pot-pulse 1s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+          
           .bg-glimmer { background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.2) 48%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.2) 52%, transparent 100%); background-size: 200% 200%; animation: glimmer 4s infinite cubic-bezier(0.4, 0, 0.2, 1); }
           @keyframes glimmer { 0% { background-position: -200% -200%; } 100% { background-position: 200% 200%; } }
+          
           @keyframes turn-glow { 
             0% { border-color: rgba(34,211,238,0.3); box-shadow: 0 0 15px rgba(34,211,238,0.2); } 
             50% { border-color: rgba(34,211,238,1); box-shadow: 0 0 45px rgba(34,211,238,0.5); } 
             100% { border-color: rgba(34,211,238,0.3); box-shadow: 0 0 15px rgba(34,211,238,0.2); } 
           }
           .animate-turn-glow { animation: turn-glow 3s infinite ease-in-out; }
+          
           @keyframes pulse-winning-card {
             0% { filter: brightness(1); transform: scale(1.25); }
             50% { filter: brightness(1.5) drop-shadow(0 0 25px #fbbf24); transform: scale(1.35); }
             100% { filter: brightness(1); transform: scale(1.25); }
           }
           .animate-pulse-winning-card { animation: pulse-winning-card 2s infinite ease-in-out; }
+
           @keyframes winner-name-shimmer {
             0% { transform: scale(0.95); text-shadow: 0 0 0px #fbbf24; }
             50% { transform: scale(1.08); text-shadow: 0 0 35px #fbbf24, 0 0 60px #fbbf24; opacity: 1; }
             100% { transform: scale(1); text-shadow: 0 0 15px #fbbf24; }
           }
           .animate-winner-name-shimmer { animation: winner-name-shimmer 2.5s infinite ease-in-out; }
+
           ::-webkit-scrollbar { display: none; }
+          
           @keyframes bounce-short {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-8px); }
           }
           .animate-bounce-short { animation: bounce-short 1.5s ease-in-out infinite; }
-          .animate-fling-to-pot { animation: fling-to-pot 1.1s cubic-bezier(0.5, 0, 0, 1) forwards; }
-          @keyframes bet-splash {
-            0% { transform: translate(-50%, -50%) scale(0.05) rotate(-60deg); opacity: 0; filter: blur(10px); }
-            100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; filter: blur(0px); }
-          }
-          .animate-bet-splash { animation: bet-splash 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          
           @keyframes showdown-pop {
             0% { transform: scale(0.4) translateY(150px) rotateX(-50deg); opacity: 0; filter: blur(20px); }
             100% { transform: scale(1) translateY(0) rotateX(0deg); opacity: 1; filter: blur(0px); }
           }
           .animate-showdown-card-pop { animation: showdown-pop 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+          
+          @keyframes card-flip {
+            0% { transform: rotateY(180deg) scale(0.3); opacity: 0; }
+            100% { transform: rotateY(0deg) scale(1); opacity: 1; }
+          }
+          
           @keyframes card-reveal-reveal {
             0% { transform: rotateY(180deg) scale(1) translateY(0); }
-            50% { transform: rotateY(90deg) scale(1.4) translateY(-20px); }
-            100% { transform: rotateY(0deg) scale(1.1) translateY(-10px); }
+            50% { transform: rotateY(90deg) scale(1.4) translateY(-40px); }
+            100% { transform: rotateY(0deg) scale(1.2) translateY(-25px); }
           }
+
           .preserve-3d { transform-style: preserve-3d; }
           .animate-spin-slow { animation: spin 5s linear infinite; }
           @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
