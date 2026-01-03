@@ -43,7 +43,8 @@ const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, 
   strengthLabel, potTransferring, timeRemaining, isHero, hiLowAwards, 
-  cardScale, relativeIdx
+  cardScale, relativeIdx, holeCardRotation, playerBadgeOffset,
+  handStrengthYOffset, handStrengthXOffset
 }) => {
     if (!player || !displayPos) return null;
     const isShowdown = phase === PHASES.SHOWDOWN;
@@ -80,26 +81,30 @@ const Seat = ({
               </div>
             )}
 
-            {isShowdown && potTransferring && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-20 flex flex-col gap-1 items-center z-[500]">
-                    {highAward && <span className="bg-emerald-600 text-white text-[8px] md:text-[10px] px-2 py-0.5 rounded-full font-black animate-bounce shadow-lg whitespace-nowrap uppercase">HIGH WINNER (+${highAward.amount.toLocaleString()})</span>}
-                    {lowAward && <span className="bg-orange-600 text-white text-[8px] md:text-[10px] px-2 py-0.5 rounded-full font-black animate-bounce shadow-lg whitespace-nowrap uppercase">LOW WINNER (+${lowAward.amount.toLocaleString()})</span>}
-                </div>
-            )}
-
             {player.currentBet > 0 && (
-                <div className={`absolute z-[100] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot opacity-0' : 'opacity-100'}`}
+                <div className={`absolute z-[100] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot opacity-0 scale-0' : 'animate-bet-splash opacity-100'}`}
                     style={{ transform: `translate(calc(-50% + ${betOffset.x}px), ${betOffset.y}px)`, left: '50%', top: '50%' }}>
                     <div className="bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-black text-[10px] md:text-[12px] px-3 py-1 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.6)] border border-white/30 flex items-center gap-1 whitespace-nowrap">
-                        <Coins size={10} />
+                        <Coins size={10} className="animate-spin-slow" />
                         ${String(player.currentBet.toLocaleString())}
                     </div>
                 </div>
             )}
 
-            <div className={`relative flex flex-col items-center p-1.5 rounded-2xl border-2 bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[100px] md:min-w-[150px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-4 ring-cyan-400/40 scale-105 shadow-[0_0_20px_rgba(34,211,238,0.3)]' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 animate-pulse-glow' : ''}`}>
+            <div 
+                style={{ transform: `translateY(${playerBadgeOffset}px)` }}
+                className={`relative z-50 flex flex-col items-center p-1.5 rounded-2xl border-2 bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[100px] md:min-w-[150px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-4 ring-cyan-400/40 scale-105 shadow-[0_0_20px_rgba(34,211,238,0.3)]' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 animate-pulse-glow' : ''}`}
+            >
+                {isActiveTurn && timeRemaining > 0 && (
+                    <div className="absolute -top-2 w-full px-2 h-1.5 z-[60]">
+                        <div className="w-full h-full bg-black/40 rounded-full overflow-hidden shadow-inner">
+                            <div className="h-full bg-cyan-400 transition-all duration-1000 linear" style={{ width: `${(timeRemaining / 30) * 100}%` }} />
+                        </div>
+                    </div>
+                )}
+                
                 {player.isDealer && (
-                    <div className="absolute -top-1.5 -right-1.5 flex items-center justify-center z-30">
+                    <div className="absolute -top-1.5 -right-1.5 flex items-center justify-center z-[70]">
                         <div className="w-4 h-4 bg-red-600 rounded-full border-2 border-white shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse" />
                     </div>
                 )}
@@ -110,37 +115,42 @@ const Seat = ({
                     </span>
                     {isActiveTurn && <span className="text-[7px] text-cyan-400 font-black animate-pulse tracking-widest mt-0.5">THINKING...</span>}
                 </div>
-                {isActiveTurn && timeRemaining > 0 && (
-                    <div className="absolute -bottom-2 w-full px-2 h-1.5">
-                        <div className="w-full h-full bg-black/40 rounded-full overflow-hidden shadow-inner">
-                            <div className="h-full bg-cyan-400 transition-all duration-1000 linear" style={{ width: `${(timeRemaining / 30) * 100}%` }} />
-                        </div>
-                    </div>
-                )}
             </div>
 
             {player.hand && Array.isArray(player.hand) && !player.isFolded && (
-                <div className="relative flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible">
-                    {player.hand.map((c, ci) => (
-                        <div key={c.id || ci} 
-                            className={`w-[5.5vw] md:w-[3vw] h-[8vw] md:h-[5vw] rounded-[4px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
-                            style={{ 
-                                // Dynamic spread adjusted for 4 hole cards to prevent horizontal overflow
-                                transform: `translateX(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 1.4 : 2.5)}vw) rotate(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 4 : 8)}deg) scale(${1.5 * currentCardScale})`, 
-                                transformOrigin: 'bottom center', 
-                                // Vertical lift to prevent clipping in large hands
-                                top: player.hand.length > 2 ? '15px' : '45px' 
-                            }}>
-                            {(isShowdown || isHero) && (
-                                <><span className="text-[10px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[12px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></>
-                            )}
-                            {!(isShowdown || isHero) && ( <div className="w-full h-full flex items-center justify-center opacity-20"><ShieldCheck size={14}/></div> )}
-                        </div>
-                    ))}
+                <div className="relative z-10 flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible">
+                    {player.hand.map((c, ci) => {
+                        const mid = (player.hand.length - 1) / 2;
+                        const offset = ci - mid;
+                        const currentRotation = offset * (player.hand.length > 2 ? holeCardRotation * 0.6 : holeCardRotation);
+                        
+                        return (
+                          <div key={c.id || ci} 
+                              className={`w-[5.5vw] md:w-[3vw] h-[8vw] md:h-[5vw] rounded-[4px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
+                              style={{ 
+                                  transform: `translateX(${offset * (player.hand.length > 2 ? 1.4 : 2.5)}vw) rotate(${currentRotation}deg) scale(${1.5 * currentCardScale})`, 
+                                  transformOrigin: 'bottom center', 
+                                  top: player.hand.length > 2 ? '15px' : '45px' 
+                              }}>
+                              {(isShowdown || isHero) && (
+                                  <><span className="text-[10px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[12px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></>
+                              )}
+                              {!(isShowdown || isHero) && ( <div className="w-full h-full flex items-center justify-center opacity-20"><ShieldCheck size={14}/></div> )}
+                          </div>
+                        );
+                    })}
                     
                     {strengthLabel && !player.isFolded && (isHero || isShowdown) && phase !== PHASES.IDLE && (
-                        <div className="absolute -bottom-12 z-[120] whitespace-nowrap bg-purple-600/90 backdrop-blur-md px-3 py-1 rounded-full border border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-in fade-in zoom-in h-7 flex items-center justify-center" style={{ transform: `translate(0px, 0px)`, bottom: '-15px' }}>
-                             <span className="text-[9px] md:text-[11px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
+                        <div 
+                            className="absolute -bottom-12 z-[120] whitespace-nowrap bg-purple-600/90 backdrop-blur-md px-3 py-1 rounded-full border border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-in fade-in zoom-in h-7 flex items-center justify-center" 
+                            style={{ 
+                                transform: `translate(${handStrengthXOffset}px, ${handStrengthYOffset}px)`, 
+                                bottom: '-15px' 
+                            }}
+                        >
+                             <span className="text-[9px] md:text-[11px] font-black uppercase text-white tracking-widest">
+                                {phase === PHASES.PRE_FLOP ? "Pre-flop" : String(strengthLabel)}
+                             </span>
                         </div>
                     )}
                 </div>
@@ -181,10 +191,17 @@ const App = () => {
   const [nuclearConfirm, setNuclearConfirm] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // UPDATED DEFAULT SIZES BASED ON SCREENSHOT
   const [headerHeight, setHeaderHeight] = useState(64); 
   const [footerHeight, setFooterHeight] = useState(200); 
-  const [tableZoom, setTableZoom] = useState(1);
-  const [heroCardScale, setHeroCardScale] = useState(1.2);
+  const [tableZoom, setTableZoom] = useState(0.75); // 75%
+  const [heroCardScale, setHeroCardScale] = useState(2.5); // 250%
+  const [communityCardScale, setCommunityCardScale] = useState(3.0); // 300%
+  const [holeCardRotation, setHoleCardRotation] = useState(25); // 25 degrees
+  const [playerBadgeOffset, setPlayerBadgeOffset] = useState(100); // 100px
+  const [handStrengthYOffset, setHandStrengthYOffset] = useState(30); // 30px
+  const [handStrengthXOffset, setHandStrengthXOffset] = useState(0); // 0px
+
   const [showLayoutControls, setShowLayoutControls] = useState(false);
 
   useEffect(() => {
@@ -197,7 +214,6 @@ const App = () => {
     return potAmount + currentBetsSum;
   }, [potAmount, players]);
 
-  // Robust Hero detection logic fixed for "cannot see cards" across variants
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
     return players.findIndex(p => {
@@ -295,7 +311,6 @@ const App = () => {
 
         setPhase(d.phase); setCommunity(d.community || []); 
         
-        // Correct variation mapping
         let resolvedVariant = VARIANTS.HOLDEM;
         const sVariant = d.activeVariant;
         if (sVariant) {
@@ -442,7 +457,13 @@ const App = () => {
                         <div className="flex flex-col font-black uppercase"><span className="text-[8px] text-white/40 tracking-widest font-black">STAKES</span><span className="text-[#fbbf24] text-lg md:text-xl font-black">${t.sb}/${t.bb}</span></div>
                         <div className="flex flex-col items-end font-black"><span className="text-[8px] text-white/40 tracking-widest font-black">SEATS</span><span className="text-white/80 font-mono text-sm md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
                     </div>
-                    <button onClick={()=>setSelectedTableForJoin(t)} className="w-full p-6 md:p-8 bg-emerald-600 rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] transition-all font-black uppercase">ENTER ARENA</button>
+                    {/* Fixed button touch priority for mobile */}
+                    <button 
+                      onClick={()=>setSelectedTableForJoin(t)} 
+                      className="relative z-20 w-full p-6 md:p-8 bg-emerald-600 rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all font-black uppercase cursor-pointer pointer-events-auto shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                    >
+                      ENTER ARENA
+                    </button>
                 </div>
             ))}
         </main>
@@ -465,7 +486,7 @@ const App = () => {
       <header style={{ height: `${headerHeight}px` }} className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-4 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black uppercase">
         <div className="flex items-center gap-2">
             <div className="bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 shadow-inner truncate font-black uppercase">
-                <span className="text-[#fbbf24] text-[8px] md:text-[10px] tracking-widest font-black">ARENA:</span>
+                <span className="text-[#fbbf24] text-[8px] md:text-[10px] tracking-widest font-black uppercase italic text-opacity-70">This Hand:</span>
                 <span className="text-white ml-2 text-[10px] md:text-xs font-black">{activeVariant?.name || "Hold'em"}</span>
             </div>
             <button onClick={() => setShowLayoutControls(!showLayoutControls)} className={`p-2 rounded-lg transition-all font-black uppercase ${showLayoutControls ? 'bg-[#fbbf24] text-black shadow-[0_0_15px_#fbbf24]' : 'bg-white/5 text-white/40'}`}>
@@ -474,7 +495,7 @@ const App = () => {
         </div>
 
         {showLayoutControls && (
-            <div className="absolute top-16 left-4 bg-black/95 border border-white/10 p-6 rounded-2xl shadow-2xl z-[1000] flex flex-col gap-5 min-w-[280px] animate-in slide-in-from-top-4 backdrop-blur-xl font-black">
+            <div className="absolute top-16 left-4 bg-black/95 border border-white/10 p-6 rounded-2xl shadow-2xl z-[1000] flex flex-col gap-5 min-w-[280px] max-h-[80vh] overflow-y-auto scrollbar-hide animate-in slide-in-from-top-4 backdrop-blur-xl font-black">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                         <span className="text-[8px] text-white/40 uppercase font-black">HEADER</span>
@@ -491,14 +512,36 @@ const App = () => {
                 </div>
                 <div className="space-y-1">
                     <span className="text-[8px] text-white/40 uppercase text-emerald-400 font-black">HERO CARD SIZE ({Math.round(heroCardScale * 100)}%)</span>
-                    <input type="range" min="0.5" max="2.5" step="0.1" value={heroCardScale} onChange={(e)=>setHeroCardScale(Number(e.target.value))} className="w-full accent-emerald-500 h-1 bg-white/10 rounded-full appearance-none"/>
+                    <input type="range" min="0.5" max="3.5" step="0.1" value={heroCardScale} onChange={(e)=>setHeroCardScale(Number(e.target.value))} className="w-full accent-emerald-500 h-1 bg-white/10 rounded-full appearance-none"/>
+                </div>
+                <div className="space-y-1">
+                    <span className="text-[8px] text-white/40 uppercase text-blue-400 font-black">COMMUNITY CARD SIZE ({Math.round(communityCardScale * 100)}%)</span>
+                    <input type="range" min="0.5" max="4.0" step="0.1" value={communityCardScale} onChange={(e)=>setCommunityCardScale(Number(e.target.value))} className="w-full accent-blue-500 h-1 bg-white/10 rounded-full appearance-none"/>
+                </div>
+                <div className="space-y-1">
+                    <span className="text-[8px] text-white/40 uppercase text-orange-400 font-black">PLAYER BADGE OFFSET ({playerBadgeOffset}px)</span>
+                    <input type="range" min="-200" max="200" step="1" value={playerBadgeOffset} onChange={(e)=>setPlayerBadgeOffset(Number(e.target.value))} className="w-full accent-orange-500 h-1 bg-white/10 rounded-full appearance-none"/>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                      <span className="text-[8px] text-white/40 uppercase text-purple-400 font-black">STRENGTH Y ({handStrengthYOffset}px)</span>
+                      <input type="range" min="-200" max="200" step="1" value={handStrengthYOffset} onChange={(e)=>setHandStrengthYOffset(Number(e.target.value))} className="w-full accent-purple-500 h-1 bg-white/10 rounded-full appearance-none"/>
+                  </div>
+                  <div className="space-y-1">
+                      <span className="text-[8px] text-white/40 uppercase text-purple-400 font-black">STRENGTH X ({handStrengthXOffset}px)</span>
+                      <input type="range" min="-200" max="200" step="1" value={handStrengthXOffset} onChange={(e)=>setHandStrengthXOffset(Number(e.target.value))} className="w-full accent-purple-500 h-1 bg-white/10 rounded-full appearance-none"/>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                    <span className="text-[8px] text-white/40 uppercase text-indigo-400 font-black">HOLE CARD ROTATION ({holeCardRotation}°)</span>
+                    <input type="range" min="0" max="45" step="1" value={holeCardRotation} onChange={(e)=>setHoleCardRotation(Number(e.target.value))} className="w-full accent-indigo-500 h-1 bg-white/10 rounded-full appearance-none"/>
                 </div>
                 <button onClick={()=>setShowLayoutControls(false)} className="bg-[#fbbf24] text-black font-black py-2 rounded-lg text-[10px] tracking-widest uppercase">CLOSE</button>
             </div>
         )}
 
         <div className="bg-white/5 border border-white/10 px-4 py-1.5 rounded-xl flex items-center gap-4 shadow-inner font-black uppercase">
-            <span className="hidden sm:inline text-white/40 text-[9px] tracking-widest uppercase font-black">DEALER CHOICE:</span>
+            <span className="hidden sm:inline text-white/40 text-[9px] tracking-widest uppercase font-black">On my deal:</span>
             <select value={pendingVariantId} onChange={(e) => {
                 setPendingVariantId(e.target.value); 
                 socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value});
@@ -546,6 +589,10 @@ const App = () => {
                     hiLowAwards={hiLowAwards} 
                     cardScale={heroCardScale} 
                     relativeIdx={rIdx}
+                    holeCardRotation={holeCardRotation}
+                    playerBadgeOffset={playerBadgeOffset}
+                    handStrengthYOffset={handStrengthYOffset}
+                    handStrengthXOffset={handStrengthXOffset}
                   />
                 );
               })}
@@ -554,12 +601,14 @@ const App = () => {
             <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full h-full justify-center">
               {!potTransferring && (
                 <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}>
-                    <div className={`text-[6vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot || 0).toLocaleString()}</div>
+                    <div className={`text-[6vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot || 0).toLocaleString()}</div>
                 </div>
               )}
-              {/* FIXED: ensures community cards are visible for Reds & Blacks */}
               {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS', 'REDSBLACKS'].includes(activeVariant?.id) && (
-                <div className="flex gap-2 md:gap-4 scale-[1.1] md:scale-[1.8] mt-6 md:mt-12 font-black uppercase">
+                <div 
+                    className="flex gap-2 md:gap-4 mt-6 md:mt-12 font-black uppercase transition-transform duration-300"
+                    style={{ transform: `scale(${communityCardScale})` }}
+                >
                     {(community || []).map((c, j) => (
                         <div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[4px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}>
                             <span className="text-[14px] md:text-[0.9vw] font-black">{String(c.value)}</span><span className={`text-[18px] md:text-[2.2vw] font-black ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
@@ -591,6 +640,16 @@ const App = () => {
                                 'bg-yellow-500/20 text-[#fbbf24]'
                             }`}>{String(l.name)}</span>
                             <span className="text-white/60 lowercase tracking-tight text-[11px] font-black truncate">{String(l.action)}</span>
+                            
+                            {l.type === 'win' && l.cards && (
+                                <div className="flex gap-0.5 ml-1 shrink-0 scale-90 origin-left">
+                                    {l.cards.map((c, ci) => (
+                                        <div key={ci} className={`flex items-center px-1 rounded-sm text-[8px] font-bold ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600 bg-white' : 'text-slate-900 bg-white'}`}>
+                                            {c.value}{c.suit}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}
@@ -603,9 +662,9 @@ const App = () => {
                 
                 <div className="absolute top-2 right-4 animate-in slide-in-from-right duration-500">
                     <div className="flex flex-col items-end">
-                      <span className="text-[7px] text-white/40 tracking-[0.2em] font-black uppercase">Current Hand</span>
+                      <span className="text-[7px] text-white/40 tracking-[0.2em] font-black uppercase italic">Current Hand</span>
                       <span className="text-[12px] md:text-[14px] text-purple-400 font-black uppercase">
-                        {heroPlayerObj.strength || "High Card"}
+                        {phase === PHASES.PRE_FLOP ? "Pre-flop" : (heroPlayerObj.strength || "High Card")}
                       </span>
                     </div>
                 </div>
@@ -634,23 +693,24 @@ const App = () => {
           ) : (
             <div className="flex flex-col items-center justify-center h-full relative font-black uppercase">
                 {showdownWinners && showdownWinners.length > 0 ? (
-                    <div className="flex flex-col items-center gap-3 w-full h-full justify-center">
-                        <div className="flex items-center gap-2 text-yellow-400 animate-pulse font-black tracking-widest text-xs">
-                             <Trophy size={16} /> {showdownWinners.length > 1 ? "SPLIT POT SHOWDOWN" : "WINNER TAKES ALL"}
-                        </div>
-                        <div className="flex flex-wrap gap-6 items-center justify-center animate-in fade-in zoom-in duration-700 w-full overflow-y-auto">
+                    <div className="flex flex-col items-center gap-3 w-full h-full justify-center relative">
+                        <div className="flex flex-wrap gap-4 items-center justify-center w-full overflow-y-auto px-4 py-2">
                             {showdownWinners.map((winner, idx) => (
-                                <div key={idx} className="flex items-center gap-4 bg-black/40 p-3 rounded-3xl border border-white/5 shadow-2xl min-w-[280px]">
-                                    <div className="flex flex-col items-center shrink-0">
-                                        <div className="text-[#fbbf24] font-black text-sm md:text-lg truncate max-w-[100px]">{winner.name}</div>
-                                        <div className="text-emerald-400 font-mono text-xs md:text-base font-black">+${(winner.amount || 0).toLocaleString()}</div>
-                                        <div className="text-[7px] text-white/40 tracking-tighter uppercase mt-1">{winner.rank}</div>
+                                <div key={idx} className="flex flex-col items-center gap-2 bg-black/60 p-4 rounded-[2rem] border-2 border-yellow-500/40 shadow-[0_0_50px_rgba(251,191,36,0.3)] min-w-[300px] animate-showdown-card-pop relative overflow-hidden" style={{ animationDelay: `${idx * 0.2}s` }}>
+                                    <div className="absolute inset-0 bg-glimmer opacity-10 pointer-events-none" />
+                                    <div className="flex flex-col items-center z-10 mb-1">
+                                        <div className="text-[#fbbf24] font-black text-3xl md:text-5xl tracking-tighter mb-1 drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] uppercase animate-pulse">{winner.name}</div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-emerald-400 font-mono text-xl md:text-3xl font-black">+${(winner.amount || 0).toLocaleString()}</div>
+                                            <div className="text-white/80 text-[10px] md:text-xs tracking-[0.2em] uppercase font-black px-3 py-0.5 bg-yellow-600/20 rounded-full border border-yellow-500/30 shadow-inner">{winner.rank}</div>
+                                        </div>
                                     </div>
-                                    <div className="flex gap-1">
+                                    <div className="flex gap-1 z-10">
                                         {(winner.hand || []).map((c, ci) => (
-                                            <div key={ci} className="w-8 h-12 bg-white rounded flex flex-col items-center justify-center text-black shadow-lg transform hover:scale-110 transition-all font-black bg-glimmer">
-                                                <span className="text-[10px] font-black leading-none">{String(c.value)}</span>
-                                                <span className={`text-[12px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                            <div key={ci} className="w-12 md:w-16 h-18 md:h-24 bg-white rounded-lg flex flex-col items-center justify-center text-black shadow-[0_8px_16px_rgba(0,0,0,0.5)] transform font-black transition-all hover:scale-110 active:scale-125 cursor-default relative" style={{ animation: `card-flip 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards`, animationDelay: `${0.4 + ci * 0.15}s`, opacity: 0 }}>
+                                                <span className="text-[12px] md:text-xl font-black absolute top-1 left-1.5 leading-none">{String(c.value)}</span>
+                                                <span className={`text-3xl md:text-5xl ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                                <span className="text-[12px] md:text-xl font-black absolute bottom-1 right-1.5 rotate-180 leading-none">{String(c.value)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -685,7 +745,12 @@ const App = () => {
       </footer>
       <style>{`
           @keyframes progress { from { width: 100%; } to { width: 0%; } }
-          @keyframes fling-to-pot { 0% { transform: translate(-50%, -100%) scale(1.5); filter: blur(0px); } 100% { transform: translate(0, -35vh) scale(0.1) rotate(1080deg); filter: blur(4px); opacity: 0; } }
+          /* Physics-based arc fling for chips */
+          @keyframes fling-to-pot { 
+            0% { transform: translate(-50%, -100%) scale(1.5); filter: blur(0px); opacity: 1; } 
+            40% { transform: translate(calc(-50% + 20vw), -50vh) scale(0.8) rotate(360deg); filter: blur(2px); }
+            100% { transform: translate(calc(-50% + (50vw - 50%)), -35vh) scale(0.1) rotate(1440deg); filter: blur(8px); opacity: 0; } 
+          }
           @keyframes pot-pulse { 0% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 50% { transform: scale(1.1); filter: drop-shadow(0 0 30px #fbbf24) brightness(1.2); } 100% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } }
           .animate-pot-pulse { animation: pot-pulse 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
           .bg-glimmer { background: linear-gradient(135deg, #fff 0%, #fff 40%, #fbbf24 50%, #fff 60%, #fff 100%); background-size: 200% 200%; animation: glimmer 3s infinite; }
@@ -698,6 +763,27 @@ const App = () => {
             50% { transform: translateY(-5px); }
           }
           .animate-bounce-short { animation: bounce-short 1.5s ease-in-out infinite; }
+          .animate-fling-to-pot { animation: fling-to-pot 0.9s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards; }
+          
+          /* Bet splashing pop-in effect */
+          @keyframes bet-splash {
+            0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+          }
+          .animate-bet-splash { animation: bet-splash 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+          @keyframes showdown-pop {
+            0% { transform: scale(0.7) translateY(40px) rotateX(-20deg); opacity: 0; }
+            100% { transform: scale(1) translateY(0) rotateX(0deg); opacity: 1; }
+          }
+          .animate-showdown-card-pop { animation: showdown-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          
+          @keyframes card-flip {
+            0% { transform: rotateY(90deg) scale(0.5); opacity: 0; }
+            100% { transform: rotateY(0deg) scale(1); opacity: 1; }
+          }
+          .animate-spin-slow { animation: spin 3s linear infinite; }
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
