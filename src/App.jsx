@@ -125,9 +125,9 @@ const Seat = ({
                         <div key={c.id || ci} 
                             className={`w-[5.5vw] md:w-[3vw] h-[8vw] md:h-[5vw] rounded-[4px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
                             style={{ 
-                                transform: `translateX(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 1.5 : 2.5)}vw) rotate(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 5 : 8)}deg) scale(${1.5 * currentCardScale})`, 
+                                transform: `translateX(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 1.4 : 2.5)}vw) rotate(${(ci - (player.hand.length - 1) / 2) * (player.hand.length > 2 ? 4 : 8)}deg) scale(${1.5 * currentCardScale})`, 
                                 transformOrigin: 'bottom center', 
-                                top: player.hand.length > 2 ? '25px' : '45px' 
+                                top: player.hand.length > 2 ? '15px' : '45px' 
                             }}>
                             {(isShowdown || isHero) && (
                                 <><span className="text-[10px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[12px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></>
@@ -137,7 +137,7 @@ const Seat = ({
                     ))}
                     
                     {strengthLabel && !player.isFolded && (isHero || isShowdown) && phase !== PHASES.IDLE && (
-                        <div className="absolute -bottom-12 z-[120] whitespace-nowrap bg-purple-600/90 backdrop-blur-md px-3 py-1 rounded-full border border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-in fade-in zoom-in h-7 flex items-center justify-center" style={{ transform: `translate(0px, 0px)`, bottom: '-10px' }}>
+                        <div className="absolute -bottom-12 z-[120] whitespace-nowrap bg-purple-600/90 backdrop-blur-md px-3 py-1 rounded-full border border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-in fade-in zoom-in h-7 flex items-center justify-center" style={{ transform: `translate(0px, 0px)`, bottom: '-15px' }}>
                              <span className="text-[9px] md:text-[11px] font-black uppercase text-white tracking-widest">{String(strengthLabel)}</span>
                         </div>
                     )}
