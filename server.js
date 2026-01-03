@@ -23,7 +23,6 @@ const rankHand = (cards) => {
     for(let i=0; i <= uniqueRanks.length - 5; i++) {
         if(uniqueRanks[i] === uniqueRanks[i+4] + 4) { isStraight = true; straightHigh = uniqueRanks[i]; break; }
     }
-    // A-5 Wheel detection
     if(!isStraight && uniqueRanks.includes(14) && uniqueRanks.includes(5) && uniqueRanks.includes(4) && uniqueRanks.includes(3) && uniqueRanks.includes(2)) {
         isStraight = true; straightHigh = 5; compArr = [5, 4, 3, 2, 1]; 
     }
@@ -60,12 +59,13 @@ const getBestHand = (hole, comm, variantId) => {
                 const others = hole.filter((_, idx) => idx !== i);
                 const oReds = others.filter(c => isRed(c.suit)).length;
                 if ((oReds === 2 && (3-oReds) === 1) || (oReds === 1 && (3-oReds) === 2)) {
-                    // Joker mimics card that completes the best 5-card combo using hole-card-4 and board
-                    // If pre-flop, mimics card-4 rank to form a pair
+                    // Valid joker found. 
+                    // Pre-flop (no community cards): Joker mimics card-4 to form a pair.
                     if (comm.length === 0) {
-                        const preFlopPower = 1 * Math.pow(15, 7) + VM[card4.value] * Math.pow(15, 6);
-                        evals.push({ power: preFlopPower, name: `Pair of ${card4.value}s`, cards: [card4, card4] });
+                        const p = 1 * Math.pow(15, 7) + VM[card4.value] * Math.pow(15, 6);
+                        evals.push({ power: p, name: `Pair of ${card4.value}s`, cards: [card4, card4] });
                     } else {
+                        // Flop+: Joker acts as wild mimicing the best rank for board context
                         VALUES.forEach(v => {
                             const wild = { value: v, suit: card4.suit, id: 'wild' };
                             const pool = [card4, wild, ...comm];
@@ -77,7 +77,7 @@ const getBestHand = (hole, comm, variantId) => {
                 }
             }
         } else {
-            // Same color: Play best 2 from hole and 3 from board
+            // Same color: play best 2 from hole and 3 from board
             if (comm.length === 0) {
                 combinations(hole, 2).forEach(h => {
                     const v1 = VM[h[0].value], v2 = VM[h[1].value];
