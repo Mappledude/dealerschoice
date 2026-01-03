@@ -438,7 +438,7 @@ const App = () => {
                         <div className="flex flex-col font-black uppercase"><span className="text-[8px] text-white/40 tracking-widest font-black">STAKES</span><span className="text-[#fbbf24] text-lg md:text-xl font-black">${t.sb}/${t.bb}</span></div>
                         <div className="flex flex-col items-end font-black"><span className="text-[8px] text-white/40 tracking-widest font-black">SEATS</span><span className="text-white/80 font-mono text-sm md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
                     </div>
-                    {/* FIXED: Added explicit relative z-index and active state for mobile touch stability */}
+                    {/* FIXED: Added relative positioning and z-index to ensure touch target is valid on mobile browsers */}
                     <button 
                       onClick={()=>setSelectedTableForJoin(t)} 
                       className="relative z-10 w-full p-6 md:p-8 bg-emerald-600 rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all font-black uppercase cursor-pointer pointer-events-auto"
