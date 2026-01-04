@@ -9,7 +9,7 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 // --- VERSION & METADATA ---
-const VERSION = "v0.1";
+const VERSION = "v0.2";
 const APP_NAME = "Dealers Choice";
 
 // --- CONSTANTS ---
@@ -50,12 +50,12 @@ const rankHand = (cards) => {
   const vc = groups.map(x => x.c);
   const isFlush = new Set(sorted.map(c => c.suit)).size === 1;
   const uniqueRanks = [...new Set(ranks)].sort((a, b) => b - a);
-  let isStraight = false, straightHigh = 0;
+  let isStraight = false;
   for (let i = 0; i <= uniqueRanks.length - 5; i++) {
-    if (uniqueRanks[i] === uniqueRanks[i + 4] + 4) { isStraight = true; straightHigh = uniqueRanks[i]; break; }
+    if (uniqueRanks[i] === uniqueRanks[i + 4] + 4) { isStraight = true; break; }
   }
   if (!isStraight && uniqueRanks.includes(14) && uniqueRanks.includes(5) && uniqueRanks.includes(4) && uniqueRanks.includes(3) && uniqueRanks.includes(2)) {
-    isStraight = true; straightHigh = 5; compArr = [5, 4, 3, 2, 1]; 
+    isStraight = true; compArr = [5, 4, 3, 2, 1]; 
   }
   let score = 0, name = "High Card";
   if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
@@ -95,15 +95,16 @@ const getBestHand = (hole, comm, variantId) => {
   return best;
 };
 
-// --- CORE GAME ENGINE ---
 const runIgnition = (roomId) => {
   const room = rooms[roomId];
   if (!room) return;
   const seated = room.players.map((p, i) => (p && p.chips > 0) ? i : null).filter(x => x !== null);
   if (seated.length < 2) { room.phase = PHASES.IDLE; io.to(roomId).emit('roomUpdate', room); return; }
 
-  if (!room.players[room.dealerIdx]) room.dealerIdx = seated[0];
+  if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
   const dealer = room.players[room.dealerIdx];
+  
+  // LOGIC FIX: Explicitly check dealer choice
   const vId = dealer.pendingVariant || 'HOLDEM';
   room.activeVariant = { id: vId, name: variantNames[vId], holeCards: holeCardsMap[vId] };
 
@@ -263,13 +264,30 @@ io.on('connection', (socket) => {
   socket.on('updatePlayerSettings', ({ uid, pendingVariant }) => {
     const profile = profiles.find(p => p.uid === uid);
     if (profile) profile.pendingVariant = pendingVariant;
+    
+    // LOGIC FIX: Sync variation choice to active rooms
+    Object.values(rooms).forEach(room => {
+        const playerInRoom = room.players.find(p => p && p.uid === uid);
+        if (playerInRoom) {
+            playerInRoom.pendingVariant = pendingVariant;
+            io.to(room.id).emit('roomUpdate', room);
+        }
+    });
   });
 
-  // Admin Events
   socket.on('adminNuclearReset', () => { rooms = {}; profiles = []; io.emit('lobbyUpdate', []); io.emit('profilesUpdate', []); });
   socket.on('adminCreatePlayer', (p) => { profiles.push(p); io.emit('profilesUpdate', profiles); });
   socket.on('adminDeletePlayer', (uid) => { profiles = profiles.filter(p => p.uid !== uid); io.emit('profilesUpdate', profiles); });
-  socket.on('adminEditChips', ({ uid, chips }) => { const p = profiles.find(x => x.uid === uid); if(p) p.chips = Number(chips); io.emit('profilesUpdate', profiles); });
+  socket.on('adminEditChips', ({ uid, chips }) => { 
+    const p = profiles.find(x => x.uid === uid); 
+    if(p) p.chips = Number(chips); 
+    Object.values(rooms).forEach(r => {
+        const pr = r.players.find(x => x && x.uid === uid);
+        if(pr) pr.chips = Number(chips);
+        io.to(r.id).emit('roomUpdate', r);
+    });
+    io.emit('profilesUpdate', profiles); 
+  });
   socket.on('adminCreateRoom', (data) => { rooms[data.id] = { ...data, players: Array(10).fill(null), phase: PHASES.IDLE, community: [], potData: [{amount:0}], dealerIdx: 0 }; io.emit('lobbyUpdate', Object.values(rooms)); });
   socket.on('adminDeleteRoom', (id) => { delete rooms[id]; io.emit('lobbyUpdate', Object.values(rooms)); });
   socket.on('adminAddBot', ({ roomId }) => {
@@ -277,7 +295,7 @@ io.on('connection', (socket) => {
       if (!room) return;
       const emptyIdx = room.players.findIndex(p => p === null);
       if (emptyIdx !== -1) {
-          room.players[emptyIdx] = { name: "BOT_"+Math.random().toString(36).slice(2,5).toUpperCase(), chips: 2000, uid: 'bot_'+Math.random(), isBot: true };
+          room.players[emptyIdx] = { name: "BOT_"+Math.random().toString(36).slice(2,5).toUpperCase(), chips: 2000, uid: 'bot_'+Math.random(), isBot: true, pendingVariant: 'HOLDEM' };
           io.to(roomId).emit('roomUpdate', room);
           if (room.phase === PHASES.IDLE && room.players.filter(Boolean).length >= 2) runIgnition(roomId);
       }
