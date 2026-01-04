@@ -70,7 +70,7 @@ const Seat = ({
         <div 
           className="absolute z-[100] transition-all"
           style={{ 
-            transform: `translate(calc(-50% + ${betOffset.x * betOffsetMultiplier + betChipXShift}px), ${betOffset.y * betOffsetMultiplier + betChipYShift}px)`, 
+            transform: `translate(calc(-50% + ${betOffset.x * betOffsetMultiplier + (betChipXShift || 0)}px), ${betOffset.y * betOffsetMultiplier + (betChipYShift || 0)}px)`, 
             left: '50%', 
             top: '50%',
             animationName: isCollectingBets ? 'fling-to-pot' : 'bet-impact-slide',
@@ -88,7 +88,7 @@ const Seat = ({
                   label === 'CHECKED' ? 'from-slate-600 via-slate-400 to-slate-700' :
                   'from-amber-600 via-yellow-400 to-amber-700'
                }`}>
-                  <span className={`font-black leading-none uppercase tracking-tighter text-black/70 mb-0.5 ${label.length > 5 ? 'text-[6px]' : 'text-[8px]'}`}>{label}</span>
+                  <span className={`font-black leading-none uppercase tracking-tighter text-black/70 mb-0.5 ${label.length > 5 ? 'text-[6px]' : 'text-[8px]'}`}>{String(label)}</span>
                   {val > 0 && (
                     <span className="text-[12px] text-white font-black leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]">
                       ${val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val}
@@ -117,11 +117,23 @@ const Seat = ({
               </div>
             )}
 
+            {player.lastAction && !isActiveTurn && !isCollectingBets && (
+              <div className="absolute top-[-35px] animate-bounce-short z-[200]">
+                <span className={`text-[8px] font-black px-2 py-1 rounded-sm shadow-xl uppercase border ${
+                  player.lastAction === 'FOLD' ? 'bg-red-600 border-red-400 text-white' : 
+                  player.lastAction === 'RAISE' ? 'bg-amber-500 border-amber-300 text-black' : 
+                  'bg-blue-600 border-blue-400 text-white'
+                }`}>
+                  {String(player.lastAction)}
+                </span>
+              </div>
+            )}
+
             {renderBetChip()}
 
             <div 
                 style={{ transform: `translate(${Number(playerBadgeXOffset || 0)}px, ${Number(playerBadgeOffset || 0)}px)` }}
-                className={`relative z-50 flex flex-col items-center p-2 rounded-2xl border-2 bg-slate-900/98 backdrop-blur-md transition-all duration-500 min-w-[110px] md:min-w-[170px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-4 ring-cyan-400/30 shadow-[0_0_50px_rgba(34,211,238,0.5)] animate-turn-glow' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 shadow-[0_0_50px_rgba(250,204,21,0.5)] scale-110' : ''}`}
+                className={`relative z-50 flex flex-col items-center p-2 rounded-2xl border-2 bg-slate-900/98 backdrop-blur-md transition-all duration-500 min-w-[110px] md:min-w-[160px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-4 ring-cyan-400/30 shadow-[0_0_50px_rgba(34,211,238,0.5)] animate-turn-glow' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 shadow-[0_0_50px_rgba(250,204,21,0.5)] scale-110' : ''}`}
             >
                 {isActiveTurn && timeRemaining > 0 && (
                     <div className="absolute -top-2 w-full px-2 h-1.5 z-[60]">
@@ -305,7 +317,10 @@ export default function App() {
     return players[heroIdx];
   }, [players, heroIdx]);
 
-  const isBrokeStatus = useMemo(() => !!heroPlayerObj?.isBust, [heroPlayerObj]);
+  const isBrokeStatus = useMemo(() => {
+    if (!heroPlayerObj) return false;
+    return !!heroPlayerObj.isBust || (Number(heroPlayerObj.chips || 0) <= 0 && phase !== PHASES.IDLE);
+  }, [heroPlayerObj, phase]);
 
   const minRaiseAllowed = useMemo(() => {
       const bb = 20; 
@@ -337,6 +352,13 @@ export default function App() {
   const addBot = () => {
       if (!currentRoomId) return;
       socket.emit('adminAddBot', { roomId: currentRoomId });
+  };
+
+  const handleSpawnArena = () => {
+    if (!newTable.name) return;
+    const id = 'room_' + Math.random().toString(36).slice(2, 9);
+    socket.emit('adminCreateRoom', { ...newTable, id });
+    setNewTable({ name: '', sb: 10, bb: 20, minBuy: 400, maxBuy: 2000, pendingVariant: 'HOLDEM' });
   };
 
   useEffect(() => {
@@ -377,7 +399,7 @@ export default function App() {
         let resolvedVariant = VARIANTS.HOLDEM;
         if (d.activeVariant) {
             const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
-            resolvedVariant = VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId };
+            resolvedVariant = VARIANTS[vId] || { id: vId, name: String(d.activeVariant.name || vId) };
         }
         setActiveVariant(resolvedVariant);
         setHighestBet(Number(d.highestBet) || 0); setActiveIdx(d.activeIdx ?? -1); setWinning5Ids(d.winning5Ids || []);
@@ -412,8 +434,9 @@ export default function App() {
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white font-black uppercase tracking-tighter overflow-hidden">
         <div className="w-full max-w-[400px] p-8 md:p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8 font-black animate-in fade-in zoom-in duration-700">
-            <div className="p-6 bg-gradient-to-br from-white/10 to-white/5 rounded-full border border-white/10"><Lock size={40} className="text-[#fbbf24] animate-pulse" /></div>
-            <div className="w-full space-y-4">
+            <div className="p-6 bg-gradient-to-br from-white/10 to-white/5 rounded-full shadow-[inset_0_0_20px_rgba(255,255,255,0.05)] border border-white/10"><Lock size={40} className="text-[#fbbf24] animate-pulse" /></div>
+            <div className="w-full space-y-4 text-center">
+                <h1 className="text-3xl font-black text-white tracking-widest mb-2">DEALERS CHOICE</h1>
                 <label className="text-[10px] text-white/40 block ml-2 tracking-[0.3em] font-black uppercase">ACCESS PASSCODE</label>
                 <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 p-6 rounded-2xl text-center tracking-[0.5em] text-[#fbbf24] outline-none text-2xl font-black uppercase focus:border-[#fbbf24]/50 transition-all"/>
             </div>
@@ -425,7 +448,7 @@ export default function App() {
   if (currentView === VIEWS.ADMIN) return (
     <div className="h-screen bg-[#06080c] flex flex-col md:flex-row text-white font-black uppercase overflow-hidden">
         <aside className="w-full md:w-72 border-b md:border-b-0 md:border-r border-white/10 p-6 md:p-10 flex flex-row md:flex-col gap-5 bg-black/40 backdrop-blur-xl shrink-0">
-            <h2 className="text-[#fbbf24] tracking-[0.4em] hidden md:flex items-center gap-3 mb-6 font-black text-lg"><ShieldCheck size={24}/> ARENA CMD</h2>
+            <h2 className="text-[#fbbf24] tracking-[0.4em] hidden md:flex items-center gap-3 mb-6 font-black text-lg truncate uppercase">DC ADMIN</h2>
             <button onClick={()=>setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex-1 md:flex-none p-4 rounded-2xl text-xs md:text-sm transition-all font-black border-2 ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black border-[#fbbf24] shadow-lg shadow-yellow-500/20' : 'bg-white/5 text-white/40 border-transparent hover:bg-white/10'}`}>PLAYERS</button>
             <button onClick={()=>setAdminTab(ADMIN_TABS.TABLES)} className={`flex-1 md:flex-none p-4 rounded-2xl text-xs md:text-sm transition-all font-black border-2 ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black border-[#fbbf24] shadow-lg shadow-yellow-500/20' : 'bg-white/5 text-white/40'}`}>TABLES</button>
             <div className="hidden md:block flex-1" />
@@ -444,6 +467,18 @@ export default function App() {
                         <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PWD" className="w-full bg-black/40 p-5 rounded-2xl border border-white/10 outline-none focus:border-[#fbbf24] transition-all font-black uppercase"/>
                         <button onClick={()=>socket.emit('adminCreatePlayer', {...newPlayer, uid: Math.random().toString(36).slice(2)})} className="w-full bg-[#fbbf24] text-black h-[60px] rounded-2xl font-black p-4 transition-all hover:brightness-110 active:scale-95 shadow-xl shadow-yellow-500/10">PROVISION</button>
                     </div>
+                    <div className="bg-white/5 rounded-[2.5rem] overflow-hidden border border-white/10 font-black shadow-inner">
+                        {(allProfiles || []).map(p => (
+                            <div key={p.uid} className="flex justify-between items-center p-6 md:p-8 border-b border-white/5 hover:bg-white/10 transition-all font-black">
+                                <span className="uppercase text-sm md:text-lg tracking-wider font-black">{String(p.name)} <span className="text-white/20 ml-3 text-xs italic">({String(p.password)})</span></span>
+                                <div className="flex gap-6 items-center font-black">
+                                    <span className="text-emerald-400 font-mono text-lg md:text-2xl tracking-tighter font-black">${Number(p.chips || 0).toLocaleString()}</span>
+                                    <button onClick={()=>{const n = prompt("NEW WALLET", p.chips); if(n) socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="p-3 bg-cyan-400/10 text-cyan-400 rounded-xl hover:bg-cyan-400 hover:text-black transition-all"><Edit3 size={20}/></button>
+                                    <button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 size={20}/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ) : (
                 <div className="flex flex-col gap-10 animate-in slide-in-from-right duration-500 font-black uppercase">
@@ -455,6 +490,17 @@ export default function App() {
                             <input value={newTable.bb} type="number" className="w-full bg-black/40 p-4 rounded-xl border border-white/10 font-black" onChange={e=>setNewTable({...newTable, bb: Number(e.target.value)})}/>
                         </div>
                         <button onClick={handleSpawnArena} className="md:col-span-2 bg-emerald-600 text-white rounded-2xl font-black p-5 transition-all hover:brightness-110 active:scale-95 shadow-xl shadow-emerald-900/20 font-black">SPAWN ARENA</button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 font-black">
+                        {(activeTables || []).map(t => (
+                            <div key={t.id} className="bg-white/5 p-6 md:p-8 rounded-[2rem] flex justify-between items-center border border-white/10 hover:border-emerald-500/50 transition-all shadow-xl group font-black uppercase">
+                                <div>
+                                  <h4 className="text-[#fbbf24] text-lg md:text-xl font-black truncate tracking-wider">{String(t.name)}</h4>
+                                  <p className="text-[11px] text-white/40 tracking-[0.2em] font-black mt-1">${t.sb}/${t.bb} • {t.players?.filter(Boolean).length || 0}/10 SEATED</p>
+                                </div>
+                                <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="bg-red-500/10 p-4 rounded-2xl text-red-500 hover:bg-red-500 hover:text-white transition-all font-black active:scale-90"><Trash2 size={24}/></button>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
@@ -481,8 +527,8 @@ export default function App() {
                 </div>
             </div>
         )}
-        <header className="h-24 border-b border-white/10 flex items-center justify-between px-6 md:px-16 bg-black/40 backdrop-blur-2xl shadow-2xl z-50 shrink-0 font-black">
-            <h2 className="tracking-[0.5em] text-sm md:text-2xl flex items-center gap-5 font-black uppercase"><LayoutGrid className="text-[#fbbf24]" size={32} /> LOBBY</h2>
+        <header className="h-24 border-b border-white/10 flex items-center justify-between px-6 md:px-16 bg-black/40 backdrop-blur-2xl shadow-2xl z-50 shrink-0 font-black uppercase">
+            <h2 className="tracking-[0.5em] text-sm md:text-2xl flex items-center gap-5 font-black uppercase tracking-widest">DEALERS CHOICE</h2>
             <div className="flex flex-col items-end font-black uppercase">
                 <span className="text-emerald-400 font-mono text-xl md:text-3xl tracking-tighter font-black drop-shadow-md">${Number(userProfile?.chips || 0).toLocaleString()}</span>
             </div>
@@ -604,7 +650,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <button onClick={()=>setShowLayoutControls(false)} className="bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black py-4 rounded-2xl text-[11px] tracking-[0.3em] uppercase mt-4 transition-all active:scale-95 shadow-xl">APPLY CONFIG</button>
+                <button onClick={()=>setShowLayoutControls(false)} className="bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black py-4 rounded-2xl text-[11px] tracking-[0.3em] uppercase mt-4 transition-all active:scale-95 shadow-xl">LOCK SETTINGS</button>
             </div>
         )}
 
@@ -623,6 +669,7 @@ export default function App() {
             
             <div className="absolute inset-0 bg-gradient-to-b from-[#114b38] to-[#0a3124] rounded-[50%] border-[2vw] border-slate-900/80 shadow-[inset_0_0_12vw_rgba(0,0,0,1),0_20px_50px_rgba(0,0,0,0.8)] border-double font-black uppercase z-0" />
             
+            {/* Background Variant Watermark */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 overflow-hidden"
               style={{ transform: `translate(${wmX}px, ${wmY}%) scale(${wmScale / 100})`, opacity: wmOpacity / 100 }}
             >
@@ -675,6 +722,7 @@ export default function App() {
                 </div>
               )}
               
+              {/* Community Cards Area */}
               {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS', 'REDSBLACKS'].includes(activeVariant?.id) && (
                 <div 
                     className="flex gap-2 md:gap-5 mt-10 md:mt-16 font-black uppercase transition-all duration-500"
@@ -702,7 +750,6 @@ export default function App() {
             <div className="flex flex-col gap-4 md:gap-7 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase max-w-[900px] mx-auto">
                 <div className="absolute top-2 right-6 animate-in slide-in-from-right duration-700">
                     <div className="flex flex-col items-end">
-                      <span className="text-[8px] text-white/30 tracking-[0.3em] font-black uppercase italic mb-1">STRENGTH</span>
                       <span className="text-[13px] md:text-[16px] text-purple-400 font-black uppercase drop-shadow-lg">
                         {phase === PHASES.PRE_FLOP ? "PRE-FLOP" : String(heroPlayerObj.strength || "HIGH CARD")}
                       </span>
