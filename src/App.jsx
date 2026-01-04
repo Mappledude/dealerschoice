@@ -127,14 +127,11 @@ const Seat = ({
                         </div>
                     </div>
                 )}
-                
-                {/* DEALER INDICATOR: RED DOT */}
                 {player.isDealer && ( 
                   <div className="absolute -top-1 -right-1 flex items-center justify-center z-[70]">
                     <div className="w-3 h-3 bg-red-600 rounded-full border border-white shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse" />
                   </div> 
                 )}
-
                 <div className="flex flex-col items-center gap-0.5 w-full">
                     <div className="flex items-center gap-1">{player.isBot && <Bot size={10} className="text-indigo-400" />}<span className="text-[10px] md:text-[12px] font-black text-white/90 uppercase tracking-tight truncate max-w-[80px]">{String(player.name || "Anon")}</span></div>
                     <span className={`text-[11px] md:text-[14px] font-mono font-black ${player.chips === 0 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>${Number(player.chips || 0).toLocaleString()}</span>
@@ -209,7 +206,7 @@ const App = () => {
   const [handStrengthXOffset, setHandStrengthXOffset] = useState(0);
   const [showLayoutControls, setShowLayoutControls] = useState(false);
 
-  // --- INITIALIZATION ORDER ---
+  // --- INITIALIZATION ORDER FIXED ---
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players) || userProfile.role === 'admin') return -1;
     return players.findIndex(p => p && (p.uid === userProfile.uid || p.name === userProfile.name));
@@ -285,11 +282,6 @@ const App = () => {
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
     const handleRoomUpdate = (d) => {
         if (!d) { if (currentView === VIEWS.GAME) setCurrentView(VIEWS.LOBBY); return; }
         if (d.id) setCurrentRoomId(d.id);
@@ -309,20 +301,16 @@ const App = () => {
         }
     };
 
+    const handleLobbyUpdate = (list) => setActiveTables(list || []);
+    const handleProfilesUpdate = (list) => setAllProfiles(list || []);
     const handleInitialData = (d) => { 
       if (d.profiles) setAllProfiles(d.profiles); if (d.rooms) setActiveTables(d.rooms); 
       const me = d.profiles?.find(p => p.uid === userProfile?.uid);
       if (me) setUserProfile(prev => ({ ...prev, chips: me.chips }));
     };
-
-    const handleProfilesUpdate = (list) => {
-        setAllProfiles(list || []);
-        const me = list?.find(p => p.uid === userProfile?.uid);
-        if (me) setUserProfile(prev => ({ ...prev, chips: me.chips }));
-    };
     
     socket.on('roomUpdate', handleRoomUpdate);
-    socket.on('lobbyUpdate', (list) => setActiveTables(list || []));
+    socket.on('lobbyUpdate', handleLobbyUpdate);
     socket.on('profilesUpdate', handleProfilesUpdate);
     socket.on('initialDataResponse', handleInitialData);
     socket.on('loginSuccess', (p) => { setUserProfile(p); setPendingVariantId(p.pendingVariant || 'HOLDEM'); setCurrentView(VIEWS.LOBBY); socket.emit('getInitialData'); });
@@ -369,7 +357,7 @@ const App = () => {
                         <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-4 rounded-xl border border-white/10 outline-none focus:border-[#fbbf24] font-black uppercase text-white"/>
                         <button onClick={handleCreatePlayer} className="bg-[#fbbf24] text-black rounded-xl font-black p-4 hover:scale-[1.02] active:scale-95 transition-all">CREATE</button>
                     </div>
-                    <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10 mt-6 font-black uppercase">
+                    <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10 mt-6 font-black uppercase text-white">
                         {allProfiles.length === 0 && <div className="p-10 text-center text-white/20 font-black italic">NO PROFILES LOADED</div>}
                         {allProfiles.map(p => (
                             <div key={p.uid} className="flex justify-between p-4 border-b border-white/5 items-center hover:bg-white/5 transition-colors">
@@ -390,7 +378,7 @@ const App = () => {
                         {activeTables.length === 0 && <div className="p-10 text-center text-white/20 font-black italic">NO ACTIVE ARENAS</div>}
                         {activeTables.map(t => (
                             <div key={t.id} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10 hover:border-emerald-500/50 transition-colors">
-                              <div><h4 className="text-[#fbbf24] font-black">{String(t.name)}</h4><p className="text-[10px] text-white/40 tracking-widest uppercase">${t.sb}/${t.bb} | SEATS: {t.players?.filter(Boolean).length}/10</p></div>
+                              <div><h4 className="text-[#fbbf24] font-black uppercase">{String(t.name)}</h4><p className="text-[10px] text-white/40 tracking-widest uppercase">${t.sb}/${t.bb} | SEATS: {t.players?.filter(Boolean).length}/10</p></div>
                               <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="bg-red-950/40 px-4 py-2 rounded-xl text-red-500 font-black text-xs hover:bg-red-500 hover:text-white transition-all">TERMINATE</button>
                             </div>
                         ))}
@@ -426,11 +414,7 @@ const App = () => {
         </div>
         <div className="bg-white/5 border border-white/10 px-4 py-1.5 rounded-xl flex items-center gap-4 shadow-inner font-black uppercase"><span className="hidden sm:inline text-white/40 text-[9px] tracking-widest uppercase font-black">On my deal:</span><select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-[#fbbf24] outline-none text-xs cursor-pointer font-black">{Object.entries(VARIANTS).map(([k,v])=><option key={k} value={k} className="bg-slate-900 font-black">{v.name}</option>)}</select></div>
         <div className="hidden sm:flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl mr-2 font-mono text-[11px] shadow-inner animate-in fade-in slide-in-from-right duration-500"><TrendingUp size={14} className="text-cyan-400 animate-pulse" /><span className="text-white/40 uppercase text-[9px] font-black tracking-tighter shrink-0">Prob:</span><span className="text-[#fbbf24] font-black min-w-[35px] text-right">{Math.round(heroWinProb || 0)}%</span></div>
-        <div className="flex gap-2 font-black uppercase items-center">
-            <button onClick={addBot} className="text-indigo-400 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-indigo-400/20 font-black" title="Bot"><Bot size={20}/></button>
-            <button onClick={handleNuclear} className={`p-2 border border-white/10 rounded-xl transition-all ${nuclearConfirm ? 'bg-red-600 text-white animate-pulse shadow-[0_0_15px_red]' : 'bg-white/5 text-red-500 hover:bg-red-500/10'}`}>{nuclearConfirm ? <Bomb size={20}/> : <ShieldAlert size={20}/>}</button>
-            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-red-500/20 font-black"><LogOut size={20}/></button>
-        </div>
+        <div className="flex gap-2 font-black uppercase items-center"><button onClick={addBot} className="text-indigo-400 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-indigo-400/20 font-black" title="Bot"><Bot size={20}/></button><button onClick={handleNuclear} className={`p-2 border border-white/10 rounded-xl transition-all ${nuclearConfirm ? 'bg-red-600 text-white animate-pulse shadow-[0_0_15px_red]' : 'bg-white/5 text-red-500 hover:bg-red-500/10'}`}>{nuclearConfirm ? <Bomb size={20}/> : <ShieldAlert size={20}/>}</button><button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-red-500/20 font-black"><LogOut size={20}/></button></div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-emerald-950/20 to-transparent overflow-hidden px-2 py-2 font-black uppercase">
@@ -477,7 +461,13 @@ const App = () => {
                             }`}>{String(l.name)}</span>
                             <span className="text-white/60 lowercase tracking-tight text-[11px] font-black">{String(l.action)}</span>
                             {l.type === 'win' && l.cards && (
-                                <div className="flex items-center gap-0.5 bg-black/40 p-1 rounded border border-white/5 scale-90 origin-left">{l.cards.map((c, ci) => (<div key={ci} className={`flex items-center justify-center px-1 rounded-sm text-[9px] font-bold bg-white h-4 min-w-[20px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}{c.suit}</div>))}</div>
+                                <div className="flex items-center gap-0.5 bg-black/40 p-1 rounded border border-white/5 scale-90 origin-left">
+                                    {l.cards.map((c, ci) => (
+                                        <div key={ci} className={`flex items-center justify-center px-1 rounded-sm text-[9px] font-bold bg-white h-4 min-w-[20px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>
+                                            {c.value}{c.suit}
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     </div>
