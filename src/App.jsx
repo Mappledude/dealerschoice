@@ -473,7 +473,7 @@ export default function App() {
                                 <span className="uppercase text-sm md:text-lg tracking-wider font-black">{String(p.name)} <span className="text-white/20 ml-3 text-xs italic">({String(p.password)})</span></span>
                                 <div className="flex gap-6 items-center font-black">
                                     <span className="text-emerald-400 font-mono text-lg md:text-2xl tracking-tighter font-black">${Number(p.chips || 0).toLocaleString()}</span>
-                                    <button onClick={()=>{const n = prompt("NEW WALLET", p.chips); if(n) socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="p-3 bg-cyan-400/10 text-cyan-400 rounded-xl hover:bg-cyan-400 hover:text-black transition-all"><Edit3 size={20}/></button>
+                                    <button onClick={()=>{const n = prompt("CREDIT WALLET", p.chips); if(n) socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="p-3 bg-cyan-400/10 text-cyan-400 rounded-xl hover:bg-cyan-400 hover:text-black transition-all"><Edit3 size={20}/></button>
                                     <button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 size={20}/></button>
                                 </div>
                             </div>
@@ -527,9 +527,9 @@ export default function App() {
                 </div>
             </div>
         )}
-        <header className="h-24 border-b border-white/10 flex items-center justify-between px-6 md:px-16 bg-black/40 backdrop-blur-2xl shadow-2xl z-50 shrink-0 font-black uppercase">
+        <header className="h-24 border-b border-white/10 flex items-center justify-between px-6 md:px-16 bg-black/40 backdrop-blur-2xl shadow-2xl z-50 shrink-0 font-black uppercase tracking-widest">
             <h2 className="tracking-[0.5em] text-sm md:text-2xl flex items-center gap-5 font-black uppercase tracking-widest">DEALERS CHOICE</h2>
-            <div className="flex flex-col items-end font-black uppercase">
+            <div className="flex flex-col items-end font-black uppercase tracking-tight">
                 <span className="text-emerald-400 font-mono text-xl md:text-3xl tracking-tighter font-black drop-shadow-md">${Number(userProfile?.chips || 0).toLocaleString()}</span>
             </div>
         </header>
@@ -560,8 +560,8 @@ export default function App() {
           <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-6 font-black animate-in fade-in duration-700">
                 <div className="w-full max-w-[400px] p-12 bg-slate-900 border-2 border-red-500 rounded-[3rem] text-center shadow-[0_0_150px_rgba(239,68,68,0.5)] font-black uppercase animate-in zoom-in-90 duration-500">
                     <AlertTriangle size={80} className="text-red-500 animate-pulse mx-auto mb-8" />
-                    <h2 className="text-4xl font-black mb-4 tracking-tighter">BUSTED!</h2>
-                    <button onClick={() => socket.emit('adminAddChips', { roomId: currentRoomId, uid: userProfile.uid, chips: 1000 })} className="w-full p-8 bg-emerald-600 text-white rounded-3xl shadow-xl animate-bounce-short font-black tracking-widest transition-all active:scale-95">REBUY $1,000</button>
+                    <h2 className="text-4xl font-black mb-4 tracking-tighter uppercase">BUSTED!</h2>
+                    <button onClick={() => socket.emit('adminAddChips', { roomId: currentRoomId, uid: userProfile.uid, chips: 1000 })} className="w-full p-8 bg-emerald-600 text-white rounded-3xl shadow-xl animate-bounce-short font-black tracking-widest transition-all active:scale-95 uppercase">REBUY $1,000</button>
                 </div>
           </div>
       )}
@@ -574,6 +574,7 @@ export default function App() {
             <div className="bg-white/5 px-4 py-2 rounded-2xl border border-white/10 shadow-inner font-black uppercase">
                 <span className="text-white ml-2 text-[11px] md:text-sm font-black">{String(activeVariant?.name || "Hold'em")}</span>
             </div>
+            {/* RESTORED: On my deal variation selector */}
             <div className="bg-white/5 border border-white/10 px-4 py-1.5 rounded-xl hidden lg:flex items-center gap-4 shadow-inner font-black uppercase">
                 <span className="text-white/40 text-[9px] tracking-widest uppercase font-black">On my deal:</span>
                 <select value={pendingVariantId} onChange={(e) => {
@@ -629,28 +630,9 @@ export default function App() {
                       <div className="space-y-1 col-span-2 text-center"><span className="text-[8px] text-white/40 font-black uppercase">Dealer Button Offset</span><input type="range" min="-30" max="30" value={dealerOffset} onChange={(e)=>setDealerOffset(Number(e.target.value))} className="w-full accent-red-500 h-1.5 bg-white/10 rounded-full appearance-none"/></div>
                     </div>
                   </div>
-                  
-                  <div className="bg-white/5 p-4 rounded-2xl space-y-4">
-                    <h5 className="text-[10px] text-amber-400 tracking-widest border-b border-white/10 pb-2 mb-2 uppercase">Pot & Comm Cards</h5>
-                    <div className="grid grid-cols-2 gap-5">
-                      <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase">Pot X</span><input type="range" min="-300" max="300" value={potXOffset} onChange={(e)=>setPotXOffset(Number(e.target.value))} className="w-full accent-yellow-500 h-1.5 bg-white/10 rounded-full appearance-none"/></div>
-                      <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase">Pot Y</span><input type="range" min="-300" max="300" value={potYOffset} onChange={(e)=>setPotYOffset(Number(e.target.value))} className="w-full accent-yellow-500 h-1.5 bg-white/10 rounded-full appearance-none"/></div>
-                      <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase">Comm X</span><input type="range" min="-300" max="300" value={commXOffset} onChange={(e)=>setCommXOffset(Number(e.target.value))} className="w-full accent-blue-500 h-1.5 bg-white/10 rounded-full appearance-none"/></div>
-                      <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase">Comm Y</span><input type="range" min="-300" max="300" value={commYOffset} onChange={(e)=>setCommYOffset(Number(e.target.value))} className="w-full accent-blue-500 h-1.5 bg-white/10 rounded-full appearance-none"/></div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/5 p-4 rounded-2xl space-y-4">
-                    <h5 className="text-[10px] text-purple-400 tracking-widest border-b border-white/10 pb-2 mb-2 uppercase">Bet Chips</h5>
-                    <div className="grid grid-cols-2 gap-5">
-                      <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase">Bet X-Shift</span><input type="range" min="-300" max="300" value={betChipXShift} onChange={(e)=>setBetChipXShift(Number(e.target.value))} className="w-full accent-amber-500 h-1.5 bg-white/10 rounded-full appearance-none"/></div>
-                      <div className="space-y-1"><span className="text-[8px] text-white/40 font-black uppercase">Bet Y-Shift</span><input type="range" min="-300" max="300" value={betChipYShift} onChange={(e)=>setBetChipYShift(Number(e.target.value))} className="w-full accent-amber-500 h-1.5 bg-white/10 rounded-full appearance-none"/></div>
-                      <div className="space-y-1 col-span-2 text-center"><span className="text-[8px] text-white/40 font-black uppercase">Bet Radial Scale</span><input type="range" min="0.2" max="2.5" step="0.05" value={betOffsetMultiplier} onChange={(e)=>setBetOffsetMultiplier(Number(e.target.value))} className="w-full accent-amber-500 h-1.5 bg-white/10 rounded-full appearance-none"/></div>
-                    </div>
-                  </div>
                 </div>
 
-                <button onClick={()=>setShowLayoutControls(false)} className="bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black py-4 rounded-2xl text-[11px] tracking-[0.3em] uppercase mt-4 transition-all active:scale-95 shadow-xl">LOCK SETTINGS</button>
+                <button onClick={()=>setShowLayoutControls(false)} className="bg-gradient-to-b from-[#fbbf24] to-[#d97706] text-black font-black py-4 rounded-2xl text-[11px] tracking-[0.3em] uppercase mt-4 transition-all active:scale-95 shadow-xl">APPLY CONFIG</button>
             </div>
         )}
 
@@ -659,6 +641,7 @@ export default function App() {
                 <Clock size={16} />
                 {currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
             </div>
+            {/* RESTORED: Add Bot Button */}
             <button onClick={addBot} className="text-indigo-400 p-2.5 bg-white/5 border border-white/10 rounded-2xl hover:bg-indigo-400/20 active:scale-90 font-black transition-all" title="Add Bot"><Bot size={24}/></button>
             <button onClick={() => {setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2.5 bg-white/5 border border-white/10 rounded-2xl hover:bg-red-500/20 active:scale-90 font-black transition-all"><LogOut size={24}/></button>
         </div>
@@ -717,12 +700,11 @@ export default function App() {
             >
               {!potTransferring && (
                 <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}>
-                    <span className="text-[10px] md:text-[14px] text-white/30 tracking-[0.5em] mb-2 font-black uppercase">MAIN POT</span>
+                    <span className="text-[10px] md:text-[14px] text-white/30 tracking-[0.5em] mb-2 font-black uppercase uppercase">MAIN POT</span>
                     <div className={`text-[7vw] md:text-[5.5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_8px_30px_rgba(0,0,0,0.9)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(potAmount || 0).toLocaleString()}</div>
                 </div>
               )}
               
-              {/* Community Cards Area */}
               {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS', 'REDSBLACKS'].includes(activeVariant?.id) && (
                 <div 
                     className="flex gap-2 md:gap-5 mt-10 md:mt-16 font-black uppercase transition-all duration-500"
@@ -732,7 +714,7 @@ export default function App() {
                         const isWinningCard = winning5Ids?.includes(c.id);
                         return (
                           <div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[6px] border-2 bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-500 shadow-2xl animate-in zoom-in slide-in-from-bottom-4 ${isWinningCard ? 'ring-4 ring-yellow-400 scale-125 z-30 shadow-[0_0_50px_rgba(251,191,36,0.9)] animate-pulse-winning-card' : 'border-black/5'}`}>
-                              <span className="text-[15px] md:text-[0.95vw] font-black leading-none">{String(c.value)}</span>
+                              <span className="text-[15px] md:text-[0.95vw] font-black leading-none uppercase">{String(c.value)}</span>
                               <span className={`text-[20px] md:text-[2.2vw] font-black mt-0.5 ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
                           </div>
                         );
@@ -750,20 +732,20 @@ export default function App() {
             <div className="flex flex-col gap-4 md:gap-7 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase max-w-[900px] mx-auto">
                 <div className="absolute top-2 right-6 animate-in slide-in-from-right duration-700">
                     <div className="flex flex-col items-end">
-                      <span className="text-[13px] md:text-[16px] text-purple-400 font-black uppercase drop-shadow-lg">
+                      <span className="text-[13px] md:text-[16px] text-purple-400 font-black uppercase drop-shadow-lg uppercase">
                         {phase === PHASES.PRE_FLOP ? "PRE-FLOP" : String(heroPlayerObj.strength || "HIGH CARD")}
                       </span>
                     </div>
                 </div>
 
                 <div className="flex gap-2 w-full font-black uppercase">
-                    <button onClick={()=>handleAction('RAISE', Number(highestBet || 0) + Math.floor(Number(potAmount || 0) * 0.5))} className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] md:text-[13px] hover:bg-white/15 transition-all font-black active:scale-95 tracking-widest">1/2 POT</button>
-                    <button onClick={()=>handleAction('RAISE', Number(highestBet || 0) + Number(potAmount || 0))} className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] md:text-[13px] hover:bg-white/15 transition-all font-black active:scale-95 tracking-widest">POT</button>
-                    <button onClick={()=>handleAction('RAISE', Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0))} className="flex-1 py-3 bg-red-600/20 border border-red-500/40 rounded-2xl text-[10px] md:text-[13px] text-red-400 hover:bg-red-600 hover:text-white transition-all font-black active:scale-95 tracking-widest">ALL-IN</button>
+                    <button onClick={()=>handleAction('RAISE', Number(highestBet || 0) + Math.floor(Number(potAmount || 0) * 0.5))} className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] md:text-[13px] hover:bg-white/15 transition-all font-black active:scale-95 tracking-widest uppercase">1/2 POT</button>
+                    <button onClick={()=>handleAction('RAISE', Number(highestBet || 0) + Number(potAmount || 0))} className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] md:text-[13px] hover:bg-white/15 transition-all font-black active:scale-95 tracking-widest uppercase">POT</button>
+                    <button onClick={()=>handleAction('RAISE', Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0))} className="flex-1 py-3 bg-red-600/20 border border-red-500/40 rounded-2xl text-[10px] md:text-[13px] text-red-400 hover:bg-red-600 hover:text-white transition-all font-black active:scale-95 tracking-widest uppercase">ALL-IN</button>
                 </div>
                 <div className="flex gap-3 md:gap-8 w-full items-center justify-center font-black">
-                    <button onClick={()=>handleAction('FOLD')} className="w-16 md:w-40 h-14 md:h-18 bg-red-950/70 border-2 border-red-500/50 rounded-2xl tracking-[0.2em] hover:brightness-125 transition-all active:scale-90">FOLD</button>
-                    <button onClick={()=>handleAction('CALL')} className="flex-1 max-w-[450px] h-14 md:h-18 bg-indigo-600/40 border-2 border-indigo-400/60 rounded-3xl text-xs md:text-2xl tracking-[0.4em] hover:brightness-125 shadow-2xl active:scale-90">
+                    <button onClick={()=>handleAction('FOLD')} className="w-16 md:w-40 h-14 md:h-18 bg-red-950/70 border-2 border-red-500/50 rounded-2xl tracking-[0.2em] hover:brightness-125 transition-all active:scale-90 uppercase">FOLD</button>
+                    <button onClick={()=>handleAction('CALL')} className="flex-1 max-w-[450px] h-14 md:h-18 bg-indigo-600/40 border-2 border-indigo-400/60 rounded-3xl text-xs md:text-2xl tracking-[0.4em] hover:brightness-125 shadow-2xl active:scale-90 uppercase">
                         {Number(highestBet || 0) > Number(heroPlayerObj.currentBet || 0) ? `CALL $${(Number(highestBet || 0) - Number(heroPlayerObj.currentBet || 0)).toLocaleString()}` : 'CHECK'}
                     </button>
                     <div className="flex gap-2 md:gap-3 items-center bg-black/60 border-2 border-white/10 p-1 rounded-2xl shadow-inner min-w-[130px] md:min-w-[360px] font-black uppercase">
@@ -771,7 +753,7 @@ export default function App() {
                             <span className="text-[#fbbf24] text-xs md:text-2xl font-mono mr-1">$</span>
                             <input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0), Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-10 md:w-32 bg-transparent text-center font-mono text-xs md:text-3xl text-[#fbbf24] outline-none font-black" />
                         </div>
-                        <button onClick={()=>handleAction('RAISE', Number(raiseInput))} className="flex-1 h-10 md:h-14 bg-gradient-to-b from-emerald-500 to-emerald-700 border-2 border-emerald-400/30 rounded-xl flex items-center justify-center hover:brightness-110 active:scale-90">
+                        <button onClick={()=>handleAction('RAISE', Number(raiseInput))} className="flex-1 h-10 md:h-14 bg-gradient-to-b from-emerald-500 to-emerald-700 border-2 border-emerald-400/30 rounded-xl flex items-center justify-center hover:brightness-110 active:scale-90 uppercase">
                             <Zap size={20} className="md:mr-3 text-white hidden md:block" /> RAISE
                         </button>
                     </div>
@@ -791,15 +773,15 @@ export default function App() {
                                     <div className="flex flex-col items-center z-10">
                                         <div className="text-[#fbbf24] font-black text-4xl md:text-7xl tracking-tighter drop-shadow-2xl uppercase animate-winner-name-shimmer">{String(winner.name)}</div>
                                         <div className="flex items-center gap-4 mt-3">
-                                            <div className="text-emerald-400 font-mono text-3xl md:text-5xl font-black drop-shadow-md">+${Number(winner.amount || 0).toLocaleString()}</div>
-                                            <div className="text-white text-[12px] md:text-lg tracking-[0.2em] uppercase font-black px-6 py-2 bg-yellow-600 rounded-full border-2 border-yellow-400 shadow-xl">{String(winner.rank)}</div>
+                                            <div className="text-emerald-400 font-mono text-3xl md:text-5xl font-black drop-shadow-md uppercase">+${Number(winner.amount || 0).toLocaleString()}</div>
+                                            <div className="text-white text-[12px] md:text-lg tracking-[0.2em] uppercase font-black px-6 py-2 bg-yellow-600 rounded-full border-2 border-yellow-400 shadow-xl uppercase">{String(winner.rank)}</div>
                                         </div>
                                     </div>
                                     <div className="flex gap-2 z-10 mt-4 animate-in zoom-in duration-1000 delay-300">
                                       {(winner.hand || []).map((c, ci) => (
                                         <div key={ci} className="w-16 h-24 md:w-20 md:h-32 bg-white rounded-xl flex flex-col items-center justify-center text-black shadow-2xl relative ring-2 ring-black/10 overflow-hidden">
                                           <div className="absolute inset-0 opacity-5 bg-black mix-blend-overlay" />
-                                          <span className="text-xl md:text-2xl font-black absolute top-1.5 left-2 leading-none">{String(c.value)}</span>
+                                          <span className="text-xl md:text-2xl font-black absolute top-1.5 left-2 leading-none uppercase">{String(c.value)}</span>
                                           <span className={`text-5xl md:text-7xl ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
                                         </div>
                                       ))}
@@ -812,14 +794,14 @@ export default function App() {
                     <div className="flex flex-col items-center gap-3 animate-in fade-in duration-700 font-black">
                         {phase === PHASES.IDLE ? (
                              <div className="flex flex-col items-center gap-3">
-                                <span className="text-white/30 tracking-[0.6em] text-xs md:text-lg font-black italic uppercase">ARENA IDLE</span>
+                                <span className="text-white/30 tracking-[0.6em] text-xs md:text-lg font-black italic uppercase uppercase">ARENA IDLE</span>
                              </div>
                         ) : (
                             <div className="flex flex-col items-center gap-1">
                                 <div className="flex items-center gap-3 text-cyan-400 animate-pulse mb-1">
-                                    <span className="text-[10px] md:text-sm font-black tracking-[0.4em]">WAITING ON</span>
+                                    <span className="text-[10px] md:text-sm font-black tracking-[0.4em] uppercase">WAITING ON</span>
                                 </div>
-                                <span className="text-xl md:text-3xl font-black text-white tracking-tighter drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)]">{String(players[activeIdx]?.name || "OPPONENT")}</span>
+                                <span className="text-xl md:text-3xl font-black text-white tracking-tighter drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)] uppercase">{String(players[activeIdx]?.name || "OPPONENT")}</span>
                             </div>
                         )}
                     </div>
@@ -830,8 +812,8 @@ export default function App() {
 
         <div className="flex-1 flex flex-col overflow-hidden text-[13px] font-mono tracking-widest font-black uppercase bg-black/60 shadow-inner">
             <div className="text-white/40 mb-1 flex items-center justify-between border-b border-white/10 py-1.5 px-4 uppercase shrink-0">
-                <div className="flex items-center gap-2 text-[10px] md:text-xs tracking-[0.2em] font-black"><Eye size={14} className="text-[#fbbf24]"/> INTELLIGENCE</div>
-                <div className="flex items-center gap-2 text-emerald-500 animate-pulse text-[10px] font-black"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]" /> LIVE FEED</div>
+                <div className="flex items-center gap-2 text-[10px] md:text-xs tracking-[0.2em] font-black uppercase"><Eye size={14} className="text-[#fbbf24]"/> INTELLIGENCE</div>
+                <div className="flex items-center gap-2 text-emerald-500 animate-pulse text-[10px] font-black uppercase"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]" /> LIVE FEED</div>
             </div>
             <div className="flex-1 space-y-1 overflow-y-auto scrollbar-hide font-black px-4 py-2">
                 {(logs || []).map(l => (
@@ -845,7 +827,7 @@ export default function App() {
                                 l.type === 'phase' ? 'bg-cyan-500/20 text-cyan-400 ring-1 ring-cyan-500/30' :
                                 'bg-yellow-500/20 text-[#fbbf24] ring-1 ring-yellow-500/30'
                             }`}>{String(l.name)}</span>
-                            <span className="text-white/50 lowercase tracking-tight text-[11px] font-black truncate">{String(l.action)}</span>
+                            <span className="text-white/50 lowercase tracking-tight text-[11px] font-black truncate uppercase">{String(l.action)}</span>
                         </div>
                     </div>
                 ))}
@@ -897,6 +879,7 @@ export default function App() {
           }
           .animate-winner-name-shimmer { animation-name: winner-name-shimmer; animation-duration: 2.5s; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
           ::-webkit-scrollbar { display: none; }
+          
           @keyframes bounce-short {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-8px); }
