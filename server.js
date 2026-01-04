@@ -42,57 +42,108 @@ const combinations = (array, k) => {
   return result;
 };
 
+// Standard High Hand Ranking
 const rankHand = (cards) => {
   if (!cards || cards.length < 5) return { power: 0, name: "High Card", cards: [] };
   const sorted = [...cards].sort((a, b) => VM[b.value] - VM[a.value]);
   const ranks = sorted.map(c => VM[c.value]);
   const counts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
   const groups = Object.entries(counts).map(([rank, count]) => ({ r: parseInt(rank), c: count })).sort((a, b) => b.c - a.c || b.r - a.r);
+  
   let compArr = [];
   groups.forEach(g => { for (let i = 0; i < g.c; i++) compArr.push(g.r); });
   const vc = groups.map(x => x.c);
+  
   const isFlush = new Set(sorted.map(c => c.suit)).size === 1;
   const uniqueRanks = [...new Set(ranks)].sort((a, b) => b - a);
   let isStraight = false;
+  let straightHigh = 0;
+
   for (let i = 0; i <= uniqueRanks.length - 5; i++) {
-    if (uniqueRanks[i] === uniqueRanks[i + 4] + 4) { isStraight = true; break; }
+    if (uniqueRanks[i] === uniqueRanks[i + 4] + 4) { 
+      isStraight = true; 
+      straightHigh = uniqueRanks[i];
+      break; 
+    }
   }
   if (!isStraight && uniqueRanks.includes(14) && uniqueRanks.includes(5) && uniqueRanks.includes(4) && uniqueRanks.includes(3) && uniqueRanks.includes(2)) {
-    isStraight = true; compArr = [5, 4, 3, 2, 1]; 
+    isStraight = true; 
+    straightHigh = 5;
+    compArr = [5, 4, 3, 2, 1]; 
   }
+
   let score = 0, name = "High Card";
-  if (isStraight && isFlush) score = 8, name = "Straight Flush";
-  else if (vc[0] === 4) score = 7, name = "Four of a Kind";
-  else if (vc[0] === 3 && vc[1] === 2) score = 6, name = "Full House";
-  else if (isFlush) score = 5, name = "Flush";
-  else if (isStraight) score = 4, name = "Straight";
-  else if (vc[0] === 3) score = 3, name = "Three of a Kind";
-  else if (vc[0] === 2 && vc[1] === 2) score = 2, name = "Two Pair";
-  else if (vc[0] === 2) score = 1, name = "Pair";
+  if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
+  else if (vc[0] === 4) { score = 7; name = "Four of a Kind"; }
+  else if (vc[0] === 3 && vc[1] === 2) { score = 6; name = "Full House"; }
+  else if (isFlush) { score = 5; name = "Flush"; }
+  else if (isStraight) { score = 4; name = "Straight"; }
+  else if (vc[0] === 3) { score = 3; name = "Three of a Kind"; }
+  else if (vc[0] === 2 && vc[1] === 2) { score = 2; name = "Two Pair"; }
+  else if (vc[0] === 2) { score = 1; name = "Pair"; }
+
   const power = score * Math.pow(15, 7) + compArr.reduce((acc, v, i) => acc + (v * Math.pow(15, 6 - i)), 0);
   return { power, name, cards: sorted.slice(0, 5) };
+};
+
+// Low Hand Ranking (8-or-better)
+const rankLowHand = (cards) => {
+    const uniqueRanks = [...new Set(cards.map(c => VM[c.value]))].filter(r => r <= 8).sort((a, b) => b - a);
+    if (uniqueRanks.length < 5) return null;
+    // Power is based on the highest card down. Lower is better, but for sorting we use descending comparison.
+    const power = uniqueRanks.slice(0, 5).reduce((acc, v, i) => acc + (v * Math.pow(10, i)), 0);
+    return { power, name: "Low Hand", cards: cards.filter(c => uniqueRanks.slice(0, 5).includes(VM[c.value])).slice(0, 5) };
 };
 
 const getBestHand = (hole, comm, variantId) => {
   if (!hole || hole.length === 0) return null;
   const full = [...hole, ...comm];
-  if (variantId === 'OMAHA' || variantId === 'HILOW') {
-    let best = null;
+  
+  // Omaha / Hi-Low: Must use 2 from hole, 3 from community
+  if (variantId === 'OMAHA' || variantId === 'HILOW' || variantId === 'REDSBLACKS') {
+    let bestHigh = null;
+    let bestLow = null;
+
     combinations(hole, 2).forEach(h => {
         combinations(comm, Math.min(comm.length, 3)).forEach(c => {
-            const res = rankHand([...h, ...c]);
-            if (!best || res.power > best.power) best = res;
+            const high = rankHand([...h, ...c]);
+            if (!bestHigh || high.power > bestHigh.power) bestHigh = high;
+            
+            if (variantId === 'HILOW') {
+                const low = rankLowHand([...h, ...c]);
+                if (low && (!bestLow || low.power < bestLow.power)) bestLow = low;
+            }
         });
     });
-    return best;
+
+    // Special Reds & Blacks "Joker" Logic
+    if (variantId === 'REDSBLACKS') {
+        const redCount = hole.filter(c => c.suit === '♥' || c.suit === '♦').length;
+        const blackCount = hole.filter(c => c.suit === '♣' || c.suit === '♠').length;
+        // If player has 4 of same color, they get a "Joker" boost (Flush equivalent power minimum)
+        if (redCount === 4 || blackCount === 4) {
+            bestHigh.power += 5 * Math.pow(15, 7); 
+            bestHigh.name = "Color Joker (" + bestHigh.name + ")";
+        }
+    }
+
+    return { high: bestHigh, low: bestLow };
   }
-  let best = null;
-  const pickSize = Math.min(full.length, 5);
-  combinations(full, pickSize).forEach(c => {
-    const res = rankHand(c);
-    if (!best || res.power > best.power) best = res;
+
+  // Hold'em / Pineapple / Muflis
+  let bestHigh = null;
+  const useCards = (variantId === 'PINEAPPLE') ? combinations(hole, 2) : [hole]; // In Pineapple, effectively choose best 2 hole cards to pair with comm
+  
+  useCards.forEach(hCombo => {
+      const combined = [...hCombo, ...comm];
+      const pickSize = Math.min(combined.length, 5);
+      combinations(combined, pickSize).forEach(c => {
+        const high = rankHand(c);
+        if (!bestHigh || high.power > bestHigh.power) bestHigh = high;
+      });
   });
-  return best;
+
+  return { high: bestHigh, low: null };
 };
 
 const calculateBotAction = (room, player) => {
@@ -102,10 +153,15 @@ const calculateBotAction = (room, player) => {
     const isMuflis = variantId === 'MUFLIS';
     
     const evalRes = getBestHand(player.hand, room.community, variantId);
-    let power = evalRes ? evalRes.power : 0;
+    let highPower = evalRes.high ? evalRes.high.power : 0;
     const maxPower = 9 * Math.pow(15, 7);
-    let strength = power / maxPower;
+    
+    let strength = highPower / maxPower;
     if (isMuflis) strength = 1.0 - strength;
+    
+    // Bots consider Low hand potential in Hi-Low
+    if (variantId === 'HILOW' && evalRes.low) strength = Math.max(strength, 0.7); 
+
     const rand = Math.random();
 
     if (room.phase === PHASES.PRE_FLOP) {
@@ -115,12 +171,12 @@ const calculateBotAction = (room, player) => {
         if (highCard >= 10 || toCall <= room.bb || rand > 0.4) return { type: 'CALL' };
         return { type: 'FOLD' };
     }
-    if (strength > 0.45) {
-        const raiseAmt = room.highestBet + Math.floor(pot * 0.4);
+    
+    if (strength > 0.6) {
+        const raiseAmt = room.highestBet + Math.floor(pot * 0.5);
         return { type: 'RAISE', amount: Math.min(player.chips + player.currentBet, raiseAmt) };
     }
-    if (strength > 0.15 || toCall < pot * 0.5) {
-        if (toCall === 0) return { type: 'CALL' };
+    if (strength > 0.25 || toCall < pot * 0.3) {
         return { type: 'CALL' };
     }
     if (toCall === 0) return { type: 'CALL' };
@@ -252,19 +308,55 @@ const processShowdown = (roomId) => {
     const active = room.players.filter(p => p && !p.isFolded);
     const variantId = room.activeVariant?.id || 'HOLDEM';
     const isMuflis = variantId === 'MUFLIS';
-    const evals = active.map(p => ({ i: room.players.indexOf(p), res: getBestHand(p.hand, room.community, variantId) }));
+    const isHiLow = variantId === 'HILOW';
     
+    const evals = active.map(p => ({ 
+        i: room.players.indexOf(p), 
+        res: getBestHand(p.hand, room.community, variantId) 
+    }));
+    
+    room.showdownWinners = [];
+    const totalPot = Number(room.potData[0].amount);
+
     if (evals.length > 0) {
-        const sorted = evals.sort((a, b) => isMuflis ? a.res.power - b.res.power : b.res.power - a.res.power);
-        const winners = sorted.filter(e => e.res.power === sorted[0].res.power);
-        const share = Math.floor(Number(room.potData[0].amount) / winners.length);
-        room.showdownWinners = winners.map(w => ({ name: room.players[w.i].name, rank: w.res.name, hand: w.res.cards, amount: share }));
+        // High Hand Winners
+        const sortedHigh = [...evals].sort((a, b) => isMuflis ? a.res.high.power - b.res.high.power : b.res.high.power - a.res.high.power);
+        const highWinners = sortedHigh.filter(e => e.res.high.power === sortedHigh[0].res.high.power);
         
-        winners.forEach(w => { 
+        // Low Hand Winners (for Hi-Lo)
+        let lowWinners = [];
+        if (isHiLow) {
+            const lowEvals = evals.filter(e => e.res.low !== null);
+            if (lowEvals.length > 0) {
+                const sortedLow = lowEvals.sort((a, b) => a.res.low.power - b.res.low.power);
+                lowWinners = sortedLow.filter(e => e.res.low.power === sortedLow[0].res.low.power);
+            }
+        }
+
+        const highShare = lowWinners.length > 0 ? Math.floor(totalPot / 2) : totalPot;
+        const lowShare = lowWinners.length > 0 ? Math.floor(totalPot / 2) : 0;
+
+        // Distribute High
+        const highAward = Math.floor(highShare / highWinners.length);
+        highWinners.forEach(w => {
             const p = room.players[w.i];
-            p.chips = Number(p.chips) + share; p.isWinner = true; 
-            io.to(roomId).emit('log', { name: p.name, action: `WON $${share.toLocaleString()} (${w.res.name.toUpperCase()})`, type: 'win', cards: w.res.cards });
+            p.chips += highAward;
+            p.isWinner = true;
+            room.showdownWinners.push({ name: p.name, rank: w.res.high.name, hand: w.res.high.cards, amount: highAward });
+            io.to(roomId).emit('log', { name: p.name, action: `WON HIGH $${highAward.toLocaleString()}`, type: 'win' });
         });
+
+        // Distribute Low
+        if (lowWinners.length > 0) {
+            const lowAward = Math.floor(lowShare / lowWinners.length);
+            lowWinners.forEach(w => {
+                const p = room.players[w.i];
+                p.chips += lowAward;
+                p.isWinner = true;
+                room.showdownWinners.push({ name: p.name, rank: "LOW HAND", hand: w.res.low.cards, amount: lowAward });
+                io.to(roomId).emit('log', { name: p.name, action: `WON LOW $${lowAward.toLocaleString()}`, type: 'win' });
+            });
+        }
     }
     
     room.phase = PHASES.SHOWDOWN;
