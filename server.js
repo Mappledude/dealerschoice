@@ -1,12 +1,16 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
 
 const app = express();
 app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
+
+// --- VERSION & METADATA ---
+const VERSION = "v0.1";
+const APP_NAME = "Dealers Choice";
 
 // --- CONSTANTS ---
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -131,7 +135,6 @@ const runIgnition = (roomId) => {
 
 const nextPhase = (roomId) => {
   const room = rooms[roomId];
-  // Collect all bets into pot
   const roundTotal = room.players.reduce((acc, p) => acc + (p?.currentBet || 0), 0);
   room.potData[0].amount += roundTotal;
   room.players.forEach(p => { if (p) { p.currentBet = 0; p.lastAction = null; } });
@@ -246,11 +249,9 @@ io.on('connection', (socket) => {
       player.lastAction = "RAISE";
     }
 
-    // Turn Logic
     const seated = room.players.map((p, i) => (p && !p.isFolded) ? i : null).filter(x => x !== null);
     const nextIdx = seated[(seated.indexOf(room.activeIdx) + 1) % seated.length];
     
-    // Simple check if betting round is over
     const allMatched = room.players.every(p => !p || p.isFolded || p.currentBet === room.highestBet);
     if (allMatched && nextIdx === seated[0]) nextPhase(roomId);
     else {
@@ -273,6 +274,7 @@ io.on('connection', (socket) => {
   socket.on('adminDeleteRoom', (id) => { delete rooms[id]; io.emit('lobbyUpdate', Object.values(rooms)); });
   socket.on('adminAddBot', ({ roomId }) => {
       const room = rooms[roomId];
+      if (!room) return;
       const emptyIdx = room.players.findIndex(p => p === null);
       if (emptyIdx !== -1) {
           room.players[emptyIdx] = { name: "BOT_"+Math.random().toString(36).slice(2,5).toUpperCase(), chips: 2000, uid: 'bot_'+Math.random(), isBot: true };
