@@ -143,11 +143,15 @@ const Seat = ({
                     {player.hand.map((c, ci) => {
                         const mid = (player.hand.length - 1) / 2;
                         const offset = ci - mid;
+                        // INCREASED FANNING: Horizontal spread and rotation
+                        const fanRotation = offset * (player.hand.length > 2 ? 18 : 28);
+                        const fanTranslation = offset * (player.hand.length > 2 ? 2.2 : 3.5);
+                        
                         return (
                           <div key={c.id || ci} 
                               className={`w-[5.5vw] md:w-[3vw] h-[8vw] md:h-[5vw] rounded-[4px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
                               style={{ 
-                                  transform: `translateX(${offset * (player.hand.length > 2 ? 1.4 : 2.5)}vw) rotate(${offset * (player.hand.length > 2 ? 4 : 8)}deg) scale(${1.5 * currentCardScale})`, 
+                                  transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${1.5 * currentCardScale})`, 
                                   transformOrigin: 'bottom center', 
                                   top: player.hand.length > 2 ? '15px' : '45px',
                                   animationDelay: `${seatIdx * 0.15}s`
@@ -241,8 +245,13 @@ const App = () => {
   const handleAllIn = useCallback(() => {
     if (!heroPlayerObj) return;
     const totalStack = heroPlayerObj.chips + heroPlayerObj.currentBet;
-    if (totalStack <= highestBet) { handleAction('CALL'); } 
-    else { handleAction('RAISE', totalStack); }
+    // Server expects CALL if the stack can't match the current bet, or RAISE if it exceeds it.
+    if (totalStack <= highestBet) { 
+      handleAction('CALL'); 
+    } 
+    else { 
+      handleAction('RAISE', totalStack); 
+    }
   }, [heroPlayerObj, highestBet, handleAction]);
 
   const addBot = useCallback(() => { 
@@ -414,7 +423,11 @@ const App = () => {
         </div>
         <div className="bg-white/5 border border-white/10 px-4 py-1.5 rounded-xl flex items-center gap-4 shadow-inner font-black uppercase"><span className="hidden sm:inline text-white/40 text-[9px] tracking-widest uppercase font-black">On my deal:</span><select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-[#fbbf24] outline-none text-xs cursor-pointer font-black">{Object.entries(VARIANTS).map(([k,v])=><option key={k} value={k} className="bg-slate-900 font-black">{v.name}</option>)}</select></div>
         <div className="hidden sm:flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl mr-2 font-mono text-[11px] shadow-inner animate-in fade-in slide-in-from-right duration-500"><TrendingUp size={14} className="text-cyan-400 animate-pulse" /><span className="text-white/40 uppercase text-[9px] font-black tracking-tighter shrink-0">Prob:</span><span className="text-[#fbbf24] font-black min-w-[35px] text-right">{Math.round(heroWinProb || 0)}%</span></div>
-        <div className="flex gap-2 font-black uppercase items-center"><button onClick={addBot} className="text-indigo-400 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-indigo-400/20 font-black" title="Bot"><Bot size={20}/></button><button onClick={handleNuclear} className={`p-2 border border-white/10 rounded-xl transition-all ${nuclearConfirm ? 'bg-red-600 text-white animate-pulse shadow-[0_0_15px_red]' : 'bg-white/5 text-red-500 hover:bg-red-500/10'}`}>{nuclearConfirm ? <Bomb size={20}/> : <ShieldAlert size={20}/>}</button><button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-red-500/20 font-black"><LogOut size={20}/></button></div>
+        <div className="flex gap-2 font-black uppercase items-center">
+            <button onClick={addBot} className="text-indigo-400 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-indigo-400/20 font-black" title="Bot"><Bot size={20}/></button>
+            <button onClick={handleNuclear} className={`p-2 border border-white/10 rounded-xl transition-all ${nuclearConfirm ? 'bg-red-600 text-white animate-pulse shadow-[0_0_15px_red]' : 'bg-white/5 text-red-500 hover:bg-red-500/10'}`}>{nuclearConfirm ? <Bomb size={20}/> : <ShieldAlert size={20}/>}</button>
+            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-red-500/20 font-black"><LogOut size={20}/></button>
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-emerald-950/20 to-transparent overflow-hidden px-2 py-2 font-black uppercase">
@@ -435,8 +448,27 @@ const App = () => {
         <div className="flex-1 flex flex-col justify-center px-4 md:px-10 relative bg-white/5 shadow-inner py-3 font-black uppercase">
           {activeIdx === heroIdx && phase !== PHASES.SHOWDOWN && phase !== PHASES.IDLE && heroPlayerObj ? (
             <div className="flex flex-col gap-3 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase"><div className="absolute top-2 right-4 animate-in slide-in-from-right duration-500"><div className="flex flex-col items-end"><span className="text-[7px] text-white/40 tracking-[0.2em] font-black uppercase">Current Hand</span><span className="text-[12px] md:text-[14px] text-purple-400 font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span></div></div>
-                {heroPlayerObj.chips > 0 ? (<><div className="flex gap-2 w-full max-w-[600px] font-black uppercase"><button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-[12px] hover:bg-white/20 transition-all font-black">1/2 POT</button><button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-[12px] hover:bg-white/20 transition-all font-black">POT</button><button onClick={handleAllIn} className="flex-1 py-2 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black">ALL-IN</button></div>
-                        <div className="flex gap-3 md:gap-6 w-full items-center justify-center font-black"><button onClick={()=>handleAction('FOLD')} className="w-16 md:w-32 h-14 md:h-16 bg-red-950/60 border-2 border-red-500/50 rounded-2xl tracking-[0.2em] hover:brightness-125 transition-all font-black text-xs shadow-xl">FOLD</button><button onClick={()=>handleAction('CALL')} className="flex-1 max-w-[360px] h-14 md:h-16 bg-indigo-900/60 border-2 border-indigo-400/50 rounded-2xl text-sm md:text-xl tracking-[0.3em] hover:brightness-125 font-black shadow-xl">{highestBet > heroPlayerObj.currentBet ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `CALL ALL-IN $${heroPlayerObj.chips.toLocaleString()}` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) : 'CHECK'}</button><div className="flex gap-2 items-center bg-black/60 border border-white/10 p-1 md:p-2 rounded-2xl shadow-inner min-w-[120px] md:min-w-[320px] font-black uppercase"><div className="flex items-center bg-black/40 px-3 md:px-5 rounded-xl border border-white/5 h-12 md:h-14 font-black uppercase"><span className="text-[#fbbf24] text-[12px] md:text-xl font-mono mr-1">$</span><input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(heroPlayerObj.chips + heroPlayerObj.currentBet, Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-10 md:w-28 bg-transparent text-center font-mono text-sm md:text-2xl text-[#fbbf24] outline-none font-black" /></div><button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-12 md:h-14 bg-emerald-600/60 border border-emerald-400/50 rounded-xl flex items-center justify-center hover:brightness-125 font-black uppercase text-xs md:text-xl shadow-xl"><Zap size={20} className="md:mr-2 text-emerald-400"/> RAISE</button></div></div></>
+                {heroPlayerObj.chips > 0 ? (<>
+                        <div className="flex gap-2 w-full max-w-[600px] font-black uppercase">
+                            <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-[12px] hover:bg-white/20 transition-all font-black">1/2 POT</button>
+                            <button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-[12px] hover:bg-white/20 transition-all font-black">POT</button>
+                            {/* DYNAMIC ALL-IN FEEDBACK */}
+                            <button onClick={handleAllIn} className="flex-1 py-2 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black">
+                              ALL-IN (${(heroPlayerObj.chips + heroPlayerObj.currentBet).toLocaleString()})
+                            </button>
+                        </div>
+                        <div className="flex gap-3 md:gap-6 w-full items-center justify-center font-black">
+                            <button onClick={()=>handleAction('FOLD')} className="w-16 md:w-32 h-14 md:h-16 bg-red-950/60 border-2 border-red-500/50 rounded-2xl tracking-[0.2em] hover:brightness-125 transition-all font-black text-xs shadow-xl">FOLD</button>
+                            <button onClick={()=>handleAction('CALL')} className="flex-1 max-w-[360px] h-14 md:h-16 bg-indigo-900/60 border-2 border-indigo-400/50 rounded-2xl text-sm md:text-xl tracking-[0.3em] hover:brightness-125 font-black shadow-xl">
+                                {highestBet > heroPlayerObj.currentBet 
+                                  ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `CALL ALL-IN $${heroPlayerObj.chips.toLocaleString()}` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) 
+                                  : 'CHECK'}
+                            </button>
+                            <div className="flex gap-2 items-center bg-black/60 border border-white/10 p-1 md:p-2 rounded-2xl shadow-inner min-w-[120px] md:min-w-[320px] font-black uppercase">
+                                <div className="flex items-center bg-black/40 px-3 md:px-5 rounded-xl border border-white/5 h-12 md:h-14 font-black uppercase"><span className="text-[#fbbf24] text-[12px] md:text-xl font-mono mr-1">$</span><input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(heroPlayerObj.chips + heroPlayerObj.currentBet, Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-10 md:w-28 bg-transparent text-center font-mono text-sm md:text-2xl text-[#fbbf24] outline-none font-black" /></div>
+                                <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-12 md:h-14 bg-emerald-600/60 border border-emerald-400/50 rounded-xl flex items-center justify-center hover:brightness-125 font-black uppercase text-xs md:text-xl shadow-xl"><Zap size={20} className="md:mr-2 text-emerald-400"/> RAISE</button>
+                            </div>
+                        </div></>
                 ) : ( <div className="flex flex-col items-center gap-2 animate-pulse"><ShieldCheck size={48} className="text-cyan-400 mb-2" /><span className="text-2xl md:text-4xl font-black text-white tracking-tighter uppercase">ALL-IN POSITION</span></div> )}
             </div>
           ) : (
@@ -492,7 +524,6 @@ const App = () => {
           @keyframes card-flip { 0% { transform: rotateY(90deg) scale(0.5); opacity: 0; } 100% { transform: rotateY(0deg) scale(1); opacity: 1; } }
           @keyframes bet-splash { 0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
           .animate-bet-splash { animation: bet-splash 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-          
           @keyframes deal-card { 
             0% { 
               top: 40%; 
@@ -504,9 +535,7 @@ const App = () => {
               opacity: 1; 
             } 
           }
-          .animate-deal-card { 
-            animation: deal-card 0.5s cubic-bezier(0.2, 0.8, 0.2, 1.1) forwards; 
-          }
+          .animate-deal-card { animation: deal-card 0.5s cubic-bezier(0.2, 0.8, 0.2, 1.1) forwards; }
       `}</style>
     </div>
   );
