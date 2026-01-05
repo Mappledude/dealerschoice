@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.4.6-PRO";
+const VERSION = "v1.4.7-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -107,12 +107,10 @@ const getBestHand = (hole, comm, variantId) => {
               if (res.power > bestHigh.power) bestHigh = res;
               
               if (variantId === 'HILOW') {
-                  // Low Hand logic: Aces are 1, only ranks 8 or lower qualify
                   const ranksForLow = [...h, ...b].map(c => c.value === 'A' ? 1 : VM[c.value]);
                   const uniqueRanks = [...new Set(ranksForLow)].filter(r => r <= 8).sort((x, y) => x - y);
                   
                   if (uniqueRanks.length >= 5) {
-                      // Power is calculated such that lower power is better (e.g. 5-4-3-2-A is best)
                       const lowPower = uniqueRanks.slice(0, 5).reduce((acc, v, i) => acc + (v * Math.pow(15, i)), 0);
                       if (!bestLow || lowPower < bestLow.power) {
                           bestLow = { power: lowPower, name: `Low ${V_LABEL[uniqueRanks[4]]}-High` };
@@ -203,7 +201,8 @@ const processShowdown = (roomId) => {
     if (active.length === 1) {
         const winner = active[0];
         winner.chips += totalPot;
-        room.showdownWinners.push({ name: String(winner.name), rank: "WIN BY DEFAULT", hand: [], amount: totalPot });
+        // Simplified rank for default win
+        room.showdownWinners.push({ name: String(winner.name), rank: "!", hand: [], amount: totalPot });
     } else {
         const evals = active.map(p => ({ player: p, res: getBestHand(p.hand, room.community, variantId) }));
         
@@ -262,9 +261,13 @@ const processShowdown = (roomId) => {
 
     room.phase = PHASES.SHOWDOWN;
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
-    room.showdownWinners.forEach(w => io.to(roomId).emit('log', { name: w.name, action: `WON $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}`, type: 'win' }));
+    
+    // Log emission logic for simplified win messages
+    room.showdownWinners.forEach(w => {
+      const actionText = w.rank === "!" ? `WON!` : `WON $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}`;
+      io.to(roomId).emit('log', { name: w.name, action: actionText, type: 'win' });
+    });
 
-    // Extended timeout to allow for sequential winner animation (6s total) plus buffer
     const nextHandDelay = variantId === 'HILOW' ? 8000 : 6000;
     setTimeout(() => {
         const seated = room.players.map((p, i) => (p && Number(p.chips) > 0.50) ? i : null).filter(x => x !== null);
