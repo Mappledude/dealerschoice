@@ -175,22 +175,22 @@ const App = () => {
   const [showVisualControls, setShowVisualControls] = useState(false);
   const [intelExpanded, setIntelExpanded] = useState(false);
 
-  // Responsive UI Constants
+  // Responsive UI Constant Detection
   const isMobile = window.innerWidth < 768;
   const headerHeight = isMobile ? 48 : 64; 
 
-  // Layout Adjustment States - LOCKED IN CUSTOM DEFAULTS
+  // Layout Adjustment States - LOCKED IN CUSTOM DEFAULTS FOR ALL PLATFORMS
   const [visuals, setVisuals] = useState({
-    heroCardScale: isMobile ? 2.2 : 2.2,
-    heroCardY: isMobile ? -9 : 45,
-    oppCardScale: isMobile ? 1.0 : 1.0,
-    oppCardY: isMobile ? -25 : 45,
-    commCardScale: isMobile ? 1.3 : 1.8,
-    commCardY: isMobile ? -25 : 0,
-    betScale: isMobile ? 0.7 : 1.0,
+    heroCardScale: 2.2,
+    heroCardY: -9,
+    oppCardScale: 1.0,
+    oppCardY: -25,
+    commCardScale: isMobile ? 1.5 : 1.8,
+    commCardY: isMobile ? -20 : 0,
+    betScale: isMobile ? 0.8 : 1.0,
     betY: isMobile ? -5 : 0,
     badgeY: isMobile ? 85 : 100,
-    footerHeight: isMobile ? 162 : 320 // LOCKED: 162px for mobile footer
+    footerHeight: 180 // Increased to accommodate larger mobile buttons
   });
 
   const footerHeight = visuals.footerHeight;
@@ -531,7 +531,7 @@ const App = () => {
           </div>
       )}
 
-      <header style={{ height: `${headerHeight}px` }} className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black">
+      <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black" style={{ height: `${headerHeight}px` }}>
         <div className="flex items-center gap-1 overflow-hidden flex-1">
             <div className="bg-white/5 px-1.5 py-1 md:py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[55px] md:min-w-[80px] h-full">
               <span className="text-[#fbbf24] text-[5px] md:text-[8px] leading-none mb-0.5 uppercase">This Hand:</span>
@@ -589,26 +589,29 @@ const App = () => {
       </main>
 
       <footer style={{ height: `${footerHeight}px` }} className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-hidden">
-        <div className="flex-1 flex flex-col justify-center px-2 md:px-10 relative bg-white/5 shadow-inner py-1 md:py-3 font-black uppercase">
+        <div className="flex-1 flex flex-col justify-center px-2 md:px-10 relative bg-white/5 shadow-inner py-1.5 md:py-3 font-black uppercase">
           {activeIdx === heroIdx && phase !== PHASES.IDLE && heroPlayerObj ? (
-            <div className="flex flex-col gap-0.5 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
-                <div className="absolute top-0 right-3 animate-in slide-in-from-right duration-500"><div className="flex flex-col items-end"><span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Strength</span><span className="text-[7px] md:text-[14px] text-purple-400 font-black uppercase leading-none">{String(heroPlayerObj.strength || "High Card")}</span></div></div>
+            <div className="flex flex-col gap-2 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
+                <div className="absolute top-0 right-1.5 animate-in slide-in-from-right duration-500"><div className="flex flex-col items-end"><span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Strength</span><span className="text-[7px] md:text-[14px] text-purple-400 font-black uppercase leading-none">{String(heroPlayerObj.strength || "High Card")}</span></div></div>
                 {Number(heroPlayerObj.chips) > 0 ? (<>
-                        <div className="flex gap-1 md:gap-2 w-full max-w-[600px] font-black uppercase">
-                            <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-5 md:py-2 bg-white/5 border border-white/10 rounded-md text-[5px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button>
-                            <button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-5 md:py-2 bg-white/5 border border-white/10 rounded-md text-[5px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button>
-                            <button onClick={handleAllIn} className="flex-1 h-5 md:py-2 bg-red-900/30 border border-red-500/50 rounded-md text-[5px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center">ALL-IN</button>
+                        <div className="flex gap-1.5 md:gap-2 w-full max-w-[600px] font-black uppercase">
+                            <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-8 md:h-10 bg-white/5 border border-white/10 rounded-md text-[9px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button>
+                            <button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-8 md:h-10 bg-white/5 border border-white/10 rounded-md text-[9px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button>
+                            <button onClick={handleAllIn} className="flex-1 h-8 md:h-10 bg-red-900/30 border border-red-500/50 rounded-md text-[9px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center">ALL-IN</button>
                         </div>
-                        <div className="flex flex-col md:flex-row gap-1 md:gap-6 w-full items-center justify-center font-black">
-                            <div className="flex gap-1 w-full md:w-auto md:flex-1 justify-center">
-                              <button onClick={()=>handleAction('FOLD')} className="flex-1 md:w-32 h-9 md:h-16 bg-red-950/60 border border-red-500/50 rounded-xl tracking-[0.1em] hover:brightness-125 transition-all font-black text-[8px] md:text-xs shadow-xl uppercase">FOLD</button>
-                              <button onClick={()=>handleAction('CALL')} className="flex-2 md:flex-1 md:max-w-[360px] h-9 md:h-16 bg-indigo-900/60 border border-indigo-400/50 rounded-xl text-[9px] md:text-xl tracking-[0.1em] hover:brightness-125 font-black shadow-xl uppercase px-2 truncate">
+                        <div className="flex flex-col md:flex-row gap-2 md:gap-6 w-full items-center justify-center font-black">
+                            <div className="flex gap-1.5 w-full md:w-auto md:flex-1 justify-center">
+                              <button onClick={()=>handleAction('FOLD')} className="flex-1 md:w-32 h-14 md:h-16 bg-red-950/60 border border-red-500/50 rounded-xl tracking-[0.1em] hover:brightness-125 transition-all font-black text-[10px] md:text-sm shadow-xl uppercase">FOLD</button>
+                              <button onClick={()=>handleAction('CALL')} className="flex-[2] md:flex-1 md:max-w-[360px] h-14 md:h-16 bg-indigo-900/60 border border-indigo-400/50 rounded-xl text-[11px] md:text-xl tracking-[0.1em] hover:brightness-125 font-black shadow-xl uppercase px-2 truncate">
                                   {highestBet > heroPlayerObj.currentBet ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `ALL-IN` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) : 'CHECK'}
                               </button>
                             </div>
-                            <div className="flex gap-1 items-center bg-black/60 border border-white/10 p-0.5 md:p-1 rounded-xl shadow-inner w-full md:min-w-[320px] md:w-auto font-black uppercase">
-                                <div className="flex items-center bg-black/40 px-1.5 md:px-5 rounded-lg border border-white/5 h-9 md:h-14 font-black uppercase flex-1 md:flex-none"><span className="text-[#fbbf24] text-[10px] md:text-xl font-mono mr-0.5">$</span><input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-full md:w-28 bg-transparent text-center font-mono text-sm md:text-2xl text-[#fbbf24] outline-none font-black" /></div>
-                                <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-9 md:h-14 bg-emerald-600/60 border border-emerald-400/50 rounded-lg flex items-center justify-center hover:brightness-125 font-black uppercase text-[9px] md:text-xl shadow-xl"><Zap size={12} className="mr-1 text-emerald-400"/> RAISE</button>
+                            <div className="flex gap-1.5 items-center bg-black/60 border border-white/10 p-1 md:p-1.5 rounded-xl shadow-inner w-full md:min-w-[320px] md:w-auto font-black uppercase">
+                                <div className="flex items-center bg-black/40 px-2 md:px-5 rounded-lg border border-white/5 h-12 md:h-14 font-black uppercase flex-1 md:flex-none">
+                                  <span className="text-[#fbbf24] text-[12px] md:text-xl font-mono mr-0.5">$</span>
+                                  <input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-full md:w-28 bg-transparent text-center font-mono text-sm md:text-2xl text-[#fbbf24] outline-none font-black" />
+                                </div>
+                                <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-12 md:h-14 bg-emerald-600/60 border border-emerald-400/50 rounded-lg flex items-center justify-center hover:brightness-125 font-black uppercase text-[11px] md:text-xl shadow-xl"><Zap size={12} className="mr-1 text-emerald-400"/> RAISE</button>
                             </div>
                         </div></>
                 ) : ( <div className="flex flex-col items-center gap-1 animate-pulse"><span className="text-lg md:text-4xl font-black text-white tracking-tighter uppercase">ALL-IN POSITION</span></div> )}
