@@ -114,7 +114,6 @@ const getBestHand = (hole, comm, variantId) => {
       const blacks = hole.filter(c => c.suit === '♣' || c.suit === '♠');
       let possibleJokerHands = [];
       hole.forEach((fourthCard, idx) => {
-          const others = hole.filter((_, i) => i !== idx);
           if ((reds.length >= 2 && blacks.length >= 1) || (blacks.length >= 2 && reds.length >= 1)) {
               boardCombos.forEach(b => { for (let v of VALUES) { for (let s of SUITS) {
                           const res = rankHand([{value: v, suit: s}, fourthCard, ...b]);
@@ -249,7 +248,6 @@ const processShowdown = (roomId) => {
     });
 
     setTimeout(() => {
-        // Reset mid-hand joins
         room.players.forEach(p => { if (p) p.waitingForNextHand = false; });
         const seated = room.players.map((p, i) => (p && p.chips > Number(room.bb)) ? i : null).filter(x => x !== null);
         if (seated.length >= 2) {
@@ -269,7 +267,6 @@ const performAction = (roomId, type, amount) => {
     if (room.timer) clearInterval(room.timer);
     const player = room.players[room.activeIdx];
     
-    // Safety check for players leaving mid-turn
     if (!player) {
         moveToNextPlayer(roomId);
         return;
@@ -410,7 +407,6 @@ const runIgnition = (roomId) => {
   if (room.ignitionTimer) clearTimeout(room.ignitionTimer);
   room.ignitionTimer = null;
   
-  // Clear waiting status for seated players
   room.players.forEach(p => { if (p) p.waitingForNextHand = false; });
   
   const seated = room.players.map((p, i) => (p && p.chips > Number(room.bb)) ? i : null).filter(x => x !== null);
@@ -457,12 +453,9 @@ const removePlayerGlobally = (uid) => {
             const p = room.players[idx];
             const prof = profiles.find(x => x.uid === uid);
             if (prof) prof.chips += (Number(p.chips) + Number(p.currentBet || 0));
-            
-            // If it was their turn, progress the game before removing
             if (room.activeIdx === idx) {
-                performAction(room.id, 'FOLD', 0);
+                moveToNextPlayer(room.id);
             }
-            
             room.players[idx] = null;
             io.to(room.id).emit('roomUpdate', serializeRoom(room));
         }
@@ -484,7 +477,6 @@ io.on('connection', (socket) => {
 
   socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
     const room = rooms[roomId]; if (!room) return callback({ status: 'error' });
-    
     const alreadySeated = Object.values(rooms).some(r => r.players.some(p => p && p.uid === profile.uid));
     if (alreadySeated) return callback({ status: 'error', message: 'ALREADY_SEATED' });
 
@@ -504,7 +496,7 @@ io.on('connection', (socket) => {
         currentBet: 0, 
         totalContribution: 0, 
         isFolded: false, 
-        waitingForNextHand: room.gameInProgress, // Mark as waiting if game is live
+        waitingForNextHand: room.gameInProgress,
         pendingVariant: globalProfile.pendingVariant || profile.pendingVariant || 'HOLDEM' 
     };
     
@@ -527,7 +519,7 @@ io.on('connection', (socket) => {
     if (player && player.chips <= 1) {
         profile.chips -= Number(amount);
         player.chips += Number(amount);
-        player.waitingForNextHand = room.gameInProgress; // Wait if mid-hand
+        player.waitingForNextHand = room.gameInProgress;
         io.to(roomId).emit('log', { name: player.name, action: `REBOUGHT FOR $${amount.toFixed(2)}`, type: 'phase' });
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
         io.emit('profilesUpdate', profiles);
@@ -587,6 +579,7 @@ io.on('connection', (socket) => {
 
   socket.on('adminNuclearReset', () => { rooms = {}; profiles = profiles.filter(p => p.role === 'admin'); io.emit('lobbyUpdate', []); io.emit('profilesUpdate', profiles); io.emit('roomUpdate', null); });
   socket.on('adminCreatePlayer', (p) => { profiles.push({ ...p, chips: Number(p.chips) }); io.emit('profilesUpdate', profiles); });
+  
   socket.on('adminEditChips', ({ uid, chips }) => {
     const p = profiles.find(x => x.uid === uid);
     if (p) {
@@ -601,6 +594,14 @@ io.on('connection', (socket) => {
         io.emit('profilesUpdate', profiles);
     }
   });
+
+  socket.on('adminDeleteRoom', (roomId) => {
+    if (rooms[roomId]) {
+        delete rooms[roomId];
+        io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom));
+    }
+  });
+
   socket.on('adminCreateRoom', (data) => { 
     const defaultData = { sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 };
     rooms[data.id] = { ...defaultData, ...data, players: Array(10).fill(null), phase: PHASES.IDLE, community: [], potData: [{amount:0}], dealerIdx: 0, timeRemaining: 20, gameInProgress: false }; 
