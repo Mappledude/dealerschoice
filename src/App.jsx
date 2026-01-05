@@ -438,13 +438,85 @@ const App = () => {
 
   return (
     <div className="h-screen bg-[#020408] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter">
-      {/* HUD ELEMENTS, TABLE, FOOTER REMAINS AS DEFINED PREVIOUSLY FOR v1.8.0 ... */}
+      {intelExpanded && (
+        <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-md p-6 pt-[100px] flex flex-col animate-in fade-in duration-300">
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[800px] mx-auto bg-slate-900/90 border border-yellow-500/20 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4 shrink-0">
+               <div className="flex items-center gap-2"><Eye className="text-[#fbbf24]" size={20} /><h3 className="text-xl text-[#fbbf24] font-black uppercase font-mono tracking-widest italic">Intelligence Access</h3></div>
+               <button onClick={() => setIntelExpanded(false)} className="text-white/40 hover:text-white"><X size={24} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-3 scrollbar-hide font-mono">
+                {groupedLogs.map((hand) => (
+                    <div key={hand.id} className="flex flex-col border border-white/5 rounded-2xl bg-black/40 overflow-hidden mb-4">
+                      <button onClick={() => toggleHandExpansion(hand.id)} className={`flex flex-col items-start p-3 gap-1 transition-colors ${expandedHands.has(hand.id) ? 'bg-white/5' : 'hover:bg-white/5'}`}>
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-3"><span className="text-[11px] font-black uppercase text-cyan-400 tracking-widest">{hand.variantName}</span></div>
+                          {hand.isOngoing && <span className="text-[8px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded animate-pulse">LIVE</span>}
+                        </div>
+                        <div className="flex flex-col w-full pl-6 mt-1 gap-1">
+                          {hand.summaries.map((s, si) => (
+                            <div key={si} className="flex flex-wrap items-baseline gap-2 text-left">
+                              <span className="text-[12px] font-black text-white uppercase">{String(s.name)}</span>
+                              <span className="text-[12px] font-black text-emerald-400">{String(s.amount)}</span>
+                              <span className="text-[10px] font-black text-white/40 uppercase italic">/ {String(s.rank)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showVisualControls && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+            <div className="w-full max-w-[1000px] h-[90vh] bg-slate-900 border-2 border-yellow-500/20 rounded-[3rem] p-10 flex flex-col gap-6 overflow-y-auto scrollbar-hide relative">
+                <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                    <h3 className="text-2xl text-yellow-400 font-black uppercase font-mono">Arena Calibration</h3>
+                    <button onClick={() => setShowVisualControls(false)} className="text-white/20 hover:text-white"><X size={32}/></button>
+                </div>
+                <div className="space-y-8 font-mono uppercase">
+                    {[
+                      { label: "Player Hole Cards", scale: 'heroCardScale', y: 'heroCardY', maxScale: 6 },
+                      { label: "Player Name HUD", scale: 'badgeScale', y: 'badgeY', maxScale: 3 },
+                      { label: "Total Pot $", scale: 'potScale', y: 'potY', maxScale: 4 },
+                      { label: "Community Cards", scale: 'commCardScale', y: 'commCardY', maxScale: 4 },
+                      { label: "Chip Bet Satellites", scale: 'betScale', y: 'betY', maxScale: 3 },
+                    ].map((cfg, idx) => (
+                      <div key={idx} className="flex flex-col gap-4 bg-black/40 p-6 rounded-2xl border border-white/5 shadow-inner">
+                        <h4 className="text-yellow-500 font-black">{cfg.label}</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="flex flex-col gap-2">
+                            <label className="text-[10px] text-white/40">Size Scale ({visuals[cfg.scale]?.toFixed(2) || '1.0'})</label>
+                            <input type="range" min="0.5" max={cfg.maxScale} step="0.05" value={visuals[cfg.scale] || 1} onChange={(e) => setVisuals({...visuals, [cfg.scale]: Number(e.target.value)})} className="accent-yellow-500" />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <label className="text-[10px] text-white/40">Y-Axis Offset ({visuals[cfg.y]}px)</label>
+                            <input type="range" min="-300" max="300" step="1" value={visuals[cfg.y]} onChange={(e) => setVisuals({...visuals, [cfg.y]: Number(e.target.value)})} className="accent-yellow-500" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+                <button onClick={() => setShowVisualControls(false)} className="w-full py-6 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-2xl text-black font-black">SAVE ARENA CONFIG</button>
+            </div>
+        </div>
+      )}
+
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)]" style={{ height: `calc(${headerHeight}px + env(safe-area-inset-top))` }}>
         <div className="flex items-center gap-1.5 overflow-hidden flex-1">
             <button onClick={() => setShowRulesModal(true)} className="bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left">
               <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1">This Hand: <Info size={8} /></span>
               <span className="text-white text-[10px] md:text-sm truncate leading-none font-mono italic">{String(activeVariant?.name || "Hold'em")}</span>
             </button>
+            <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]">
+              <span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span>
+              <select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile?.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full font-mono italic">
+                {Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>))}
+              </select>
+            </div>
         </div>
         <div className="flex items-center gap-1.5 md:gap-4">
           <div className="flex gap-1 md:gap-2.5 items-center">
@@ -570,7 +642,7 @@ const App = () => {
                                 </div>
                                 {heroPlayerObj && !heroPlayerObj.isFolded && activeVariant?.id !== 'HILOW' && (
                                   <div className="flex items-center gap-4 md:gap-8 bg-slate-950/60 p-3 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-white/5 shadow-2xl">
-                                      <div className="flex flex-col items-end">
+                                      <div className="flex flex-col">
                                           <span className="text-[15px] md:text-[24px] text-purple-400 font-black uppercase tracking-tight italic mb-1 font-mono">{String(heroPlayerObj.strength || "...")}</span>
                                           <span className="text-yellow-400 text-sm md:text-lg font-mono tracking-tighter italic font-black">{Math.round(heroWinProb)}% Win Prob.</span>
                                       </div>
