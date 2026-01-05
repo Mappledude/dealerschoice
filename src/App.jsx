@@ -113,8 +113,11 @@ const Seat = ({
     const currentCardY = isHero ? visuals.heroCardY : visuals.oppCardY;
 
     return (
-        <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'}`}>
-            {player.lastAction && !isActiveTurn && !isCollectingBets && (
+        <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'} ${player.waitingForNextHand ? 'opacity-50' : ''}`}>
+            {player.waitingForNextHand && (
+                <div className="absolute top-[-20px] bg-slate-800 text-white text-[8px] px-2 py-0.5 rounded border border-white/20 uppercase font-black tracking-widest z-[150]">Waiting...</div>
+            )}
+            {player.lastAction && !isActiveTurn && !isCollectingBets && !player.waitingForNextHand && (
               <div className="absolute top-[-30px] animate-bounce-short z-[200]">
                 <span className={`text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg uppercase border border-white/20 ${
                   player.lastAction === 'FOLD' ? 'bg-red-600 text-white' : 
@@ -154,7 +157,7 @@ const Seat = ({
                     <span className={`text-[11px] md:text-[17px] font-mono font-black ${player.chips <= 1 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                 </div>
             </div>
-            {player.hand && Array.isArray(player.hand) && !player.isFolded && (
+            {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div className="relative z-10 flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible">
                     {player.hand.map((c, ci) => {
                         const mid = (player.hand.length - 1) / 2;
@@ -163,7 +166,7 @@ const Seat = ({
                         const fanTranslation = offset * (player.hand.length > 2 ? 2.0 : 3.5);
                         return (
                           <div key={c.id || ci} 
-                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
+                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_200px_#fbbf24]' : 'border-white/20'}`} 
                               style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${seatIdx * 0.1}s` }}>
                               {(isShowdown || isHero) && ( <><span className="text-[9px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
                           </div>
@@ -249,10 +252,10 @@ const App = () => {
     if (!heroPlayerObj) return false;
     const isOutOfChips = Number(heroPlayerObj.chips) <= 1;
     const hasNoActiveBet = Number(heroPlayerObj.currentBet) <= 0;
-    return isOutOfChips && hasNoActiveBet;
-  }, [heroPlayerObj]);
+    const isHandResolved = phase === PHASES.IDLE;
+    return isOutOfChips && hasNoActiveBet && isHandResolved;
+  }, [heroPlayerObj, phase]);
 
-  // High-fidelity parser for the Intelligence Feed
   const groupedLogs = useMemo(() => {
     const hands = [];
     let currentHand = { id: 'init-hand', actions: [], summaries: [], variantName: 'Standard', isOngoing: true, winnerSummary: "In Progress..." };
@@ -414,6 +417,12 @@ const App = () => {
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
+    
+    socket.on('initialDataResponse', (data) => {
+      if (data.rooms) setActiveTables(data.rooms);
+      if (data.profiles) setAllProfiles(data.profiles);
+    });
+
     const handleRoomUpdate = (d) => {
         if (!d) {
           setPlayers(INITIAL_PLAYERS); setPhase(PHASES.IDLE); setCommunity([]); setPotAmount(0);
@@ -457,13 +466,23 @@ const App = () => {
     };
     socket.on('roomUpdate', handleRoomUpdate);
     socket.on('lobbyUpdate', (list) => setActiveTables(list || []));
-    socket.on('profilesUpdate', (list) => { setAllProfiles(list || []); setUserProfile(prev => { if (!prev) return prev; const me = list?.find(p => p.uid === prev.uid || p.name === prev.name); return me ? { ...prev, chips: me.chips } : prev; }); });
+    socket.on('profilesUpdate', (list) => { 
+        setAllProfiles(list || []); 
+        setUserProfile(prev => { 
+            if (!prev) return prev; 
+            const me = list?.find(p => p.uid === prev.uid || p.name === prev.name); 
+            return me ? { ...prev, chips: me.chips } : prev; 
+        }); 
+    });
     socket.on('loginSuccess', (p) => { setUserProfile(p); setPendingVariantId(p.pendingVariant || 'HOLDEM'); setCurrentView(VIEWS.LOBBY); socket.emit('getInitialData'); });
     socket.on('log', (d) => setLogs(prev => [...prev, { id: Math.random() + '-' + Date.now(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), ...d }].slice(-100)));
+    
     socket.emit('getInitialData');
+    
     return () => { 
       socket.off('connect'); socket.off('disconnect');
-      socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); 
+      socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); 
+      socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); 
     };
   }, []);
 
@@ -501,7 +520,7 @@ const App = () => {
                         {allProfiles.map(p => (
                             <div key={p.uid} className="flex justify-between p-3 md:p-4 border-b border-white/5 items-center hover:bg-white/5">
                                 <span className="text-[10px] md:text-sm font-black truncate max-w-[100px]">{String(p.name)}</span>
-                                <div className="flex gap-2 md:gap-4 items-center"><span className="text-emerald-400 font-mono text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span><button onClick={()=>{const n = prompt("NEW WALLET", p.chips); if(n !== null && n !== "") socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400"><Edit3 size={14}/></button><button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500"><Trash2 size={14}/></button></div>
+                                <div className="flex gap-2 md:gap-4 items-center"><span className="text-emerald-400 font-mono text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span><button onClick={()=>{const n = prompt("NEW WALLET", String(p.chips || 0)); if(n !== null && n !== "") socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400"><Edit3 size={14}/></button><button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500"><Trash2 size={14}/></button></div>
                             </div>
                         ))}
                     </div>
