@@ -5,7 +5,7 @@ import {
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
   Zap, Target, DollarSign, User, Lock, DoorOpen, LayoutGrid, ShieldAlert, PlusCircle,
   Users, Layers, Edit3, ScrollText, ArrowLeft, Key, Save, AlertTriangle, Monitor, Bot,
-  Timer, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3, Settings, Maximize, Minimize, Copy, Check
+  Timer, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3, Settings, Maximize, Minimize, Copy, Check, Activity
 } from 'lucide-react';
 import io from 'socket.io-client';
 
@@ -14,7 +14,7 @@ const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:
 
 const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
 
-const VERSION = "v1.1.7-PRO";
+const VERSION = "v1.1.8-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -38,8 +38,6 @@ const VARIANTS = {
   HILOW: { id: 'HILOW', name: 'Hi-Low Split', desc: '4 Hole Cards' },
   REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', desc: '4 Hole Cards (Joker logic)' }
 };
-
-const VM = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
@@ -151,6 +149,7 @@ const App = () => {
   const [showVisualControls, setShowVisualControls] = useState(false);
   const [intelExpanded, setIntelExpanded] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 5000, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 10, bb: 20, minBuy: 400, maxBuy: 2000, pendingVariant: 'HOLDEM' });
@@ -225,7 +224,12 @@ const App = () => {
     setNewTable({ name: '', sb: 10, bb: 20, minBuy: 400, maxBuy: 2000, pendingVariant: 'HOLDEM' });
   }, [newTable]);
 
-  const addBot = useCallback(() => { if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); }, [currentRoomId]);
+  const addBot = useCallback(() => { 
+    if (currentRoomId && isConnected) {
+      socket.emit('adminAddBot', { roomId: currentRoomId });
+      setLogs(prev => [...prev, { id: Date.now(), time: new Date().toLocaleTimeString(), name: 'LOCAL', action: 'DEPLOYING BOT TO ARENA...', type: 'phase' }].slice(-100));
+    }
+  }, [currentRoomId, isConnected]);
 
   const handleNuclear = useCallback(() => {
       if (!nuclearConfirm) {
@@ -261,11 +265,18 @@ const App = () => {
   const joinRoom = useCallback(() => {
     if (!selectedTableForJoin || !userProfile) return;
     socket.emit('joinRoom', { roomId: selectedTableForJoin.id, profile: { ...userProfile, pendingVariant: pendingVariantId }, buyIn: buyInAmount }, (res) => {
-        if (res?.status === 'ok') { setCurrentRoomId(selectedTableForJoin.id); setCurrentView(VIEWS.GAME); setSelectedTableForJoin(null); }
+        if (res?.status === 'ok') { 
+            setCurrentRoomId(selectedTableForJoin.id); 
+            setCurrentView(VIEWS.GAME); 
+            setSelectedTableForJoin(null); 
+        }
     });
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
   useEffect(() => {
+    socket.on('connect', () => setIsConnected(true));
+    socket.on('disconnect', () => setIsConnected(false));
+
     const handleRoomUpdate = (d) => {
         if (!d) return;
         setPlayers(() => { const next = [...INITIAL_PLAYERS]; (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); return next; });
@@ -285,7 +296,10 @@ const App = () => {
     socket.on('loginSuccess', (p) => { setUserProfile(p); setPendingVariantId(p.pendingVariant || 'HOLDEM'); setCurrentView(VIEWS.LOBBY); socket.emit('getInitialData'); });
     socket.on('log', (d) => setLogs(prev => [...prev, { id: Math.random() + '-' + Date.now(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), ...d }].slice(-100)));
     socket.emit('getInitialData');
-    return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); };
+    return () => { 
+      socket.off('connect'); socket.off('disconnect');
+      socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); 
+    };
   }, []);
 
   if (currentView === VIEWS.LOGIN) return (
@@ -392,7 +406,7 @@ const App = () => {
                 {(logs || []).map(l => (
                     <div key={l.id} className="flex items-start gap-4 p-3 border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <span className="text-white/20 text-xs w-20 shrink-0 font-black">{String(l.time)}</span>
-                        <div className="flex flex-wrap items-center gap-2 overflow-hidden"><span className={`px-2 py-0.5 rounded-md text-xs font-black uppercase ${l.type === 'win' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : l.type === 'variant' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : l.type === 'fold' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : l.type === 'phase' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-[#fbbf24]/10 text-[#fbbf24] border border-[#fbbf24]/20'}`}>{String(l.name)}</span><span className="text-white/70 text-sm font-black tracking-tight uppercase">{String(l.action)}</span></div>
+                        <div className="flex flex-wrap items-center gap-2 overflow-hidden"><span className={`px-2 py-0.5 rounded-md text-xs font-black uppercase ${l.type === 'win' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : l.type === 'variant' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : l.type === 'fold' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : l.type === 'phase' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-400/30' : 'bg-[#fbbf24]/10 text-[#fbbf24] border border-[#fbbf24]/20'}`}>{String(l.name)}</span><span className="text-white/70 text-sm font-black tracking-tight uppercase">{String(l.action)}</span></div>
                     </div>
                 ))}
                 <div ref={logEndRef} />
@@ -404,13 +418,13 @@ const App = () => {
       {showVisualControls && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-[2px] p-4 md:p-12">
             <div className="w-full max-w-[1000px] h-[90vh] bg-slate-900/60 border-2 border-white/20 rounded-[3rem] p-10 md:p-20 flex flex-col gap-12 shadow-[0_0_100px_rgba(0,0,0,0.8)] overflow-y-auto scrollbar-hide relative">
-                <div className="flex items-center justify-between border-b-2 border-white/10 pb-10 sticky top-0 bg-transparent z-10"><h3 className="text-4xl md:text-7xl text-[#fbbf24] flex items-center gap-6 font-black uppercase tracking-tighter"><Settings2 size={64}/> Display Configuration</h3><button onClick={() => setShowVisualControls(false)} className="text-white/40 hover:text-white transition-colors p-4"><X size={64}/></button></div>
+                <div className="flex items-center justify-between border-b-2 border-white/10 pb-10 sticky top-0 bg-transparent z-10"><h3 className="text-2xl md:text-4xl text-[#fbbf24] flex items-center gap-6 font-black uppercase tracking-tighter"><Settings2 size={64}/> Display Configuration</h3><button onClick={() => setShowVisualControls(false)} className="text-white/40 hover:text-white transition-colors p-4"><X size={64}/></button></div>
                 <div className="flex flex-col gap-20 pb-20">
-                    <div className="flex flex-col gap-10"><h4 className="text-3xl md:text-5xl tracking-[0.2em] text-emerald-400 uppercase font-black border-l-8 border-emerald-400 pl-8">Arena Layout</h4><div className="flex flex-col gap-10"><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Table Zoom ({visuals.tableZoom.toFixed(2)})</label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-emerald-400 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Actions HUD Height ({visuals.footerHeight}px)</label><input type="range" min="40" max="600" step="1" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 h-8 cursor-pointer" /></div></div></div>
-                    <div className="flex flex-col gap-10"><h4 className="text-3xl md:text-5xl tracking-[0.2em] text-purple-400 uppercase font-black border-l-8 border-purple-400 pl-8">Hole Cards</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-12"><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">SIZE SCALE ({visuals.heroCardScale.toFixed(1)})</label><input type="range" min="1.0" max="6.0" step="0.1" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-purple-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Y POSITION ({visuals.heroCardY}px)</label><input type="range" min="-200" max="200" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-purple-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4 md:col-span-2"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">CARD FAN SPREAD ({visuals.holeCardFan} deg)</label><input type="range" min="0" max="60" step="1" value={visuals.holeCardFan} onChange={(e) => setVisuals({...visuals, holeCardFan: Number(e.target.value)})} className="accent-pink-500 h-8 cursor-pointer" /></div></div></div>
-                    <div className="flex flex-col gap-10"><h4 className="text-3xl md:text-5xl tracking-[0.2em] text-amber-500 uppercase font-black border-l-8 border-amber-500 pl-8">Action Labels</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-12"><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">TEXT SCALE ({visuals.betScale.toFixed(1)})</label><input type="range" min="0.5" max="4.0" step="0.1" value={visuals.betScale} onChange={(e) => setVisuals({...visuals, betScale: Number(e.target.value)})} className="accent-amber-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Y OFFSET ({visuals.betY}px)</label><input type="range" min="-300" max="300" step="1" value={visuals.betY} onChange={(e) => setVisuals({...visuals, betY: Number(e.target.value)})} className="accent-amber-500 h-8 cursor-pointer" /></div></div></div>
-                    <div className="flex flex-col gap-10"><h4 className="text-3xl md:text-5xl tracking-[0.2em] text-cyan-400 uppercase font-black border-l-8 border-cyan-400 pl-8">The Board</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-12"><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">SIZE SCALE ({visuals.commCardScale.toFixed(1)})</label><input type="range" min="1.0" max="4.0" step="0.1" value={visuals.commCardScale} onChange={(e) => setVisuals({...visuals, commCardScale: Number(e.target.value)})} className="accent-cyan-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Y OFFSET ({visuals.commCardY}px)</label><input type="range" min="-100" max="100" step="1" value={visuals.commCardY} onChange={(e) => setVisuals({...visuals, commCardY: Number(e.target.value)})} className="accent-cyan-500 h-8 cursor-pointer" /></div></div></div>
-                    <button onClick={() => setShowVisualControls(false)} className="w-full py-10 bg-emerald-600 rounded-[2rem] text-4xl md:text-6xl font-black uppercase shadow-2xl hover:brightness-125 transition-all active:scale-95">Accept & Save Changes</button>
+                    <div className="flex flex-col gap-10"><h4 className="text-lg md:text-3xl tracking-[0.2em] text-emerald-400 uppercase font-black border-l-8 border-emerald-400 pl-8">Arena Layout</h4><div className="flex flex-col gap-10"><div className="flex flex-col gap-4"><label className="text-sm md:text-2xl text-white/60 uppercase font-black">Table Zoom ({visuals.tableZoom.toFixed(2)})</label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-emerald-400 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-sm md:text-2xl text-white/60 uppercase font-black">Actions HUD Height ({visuals.footerHeight}px)</label><input type="range" min="40" max="600" step="1" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 h-8 cursor-pointer" /></div></div></div>
+                    <div className="flex flex-col gap-10"><h4 className="text-lg md:text-3xl tracking-[0.2em] text-purple-400 uppercase font-black border-l-8 border-purple-400 pl-8">Hole Cards</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-12"><div className="flex flex-col gap-4"><label className="text-sm md:text-2xl text-white/60 uppercase font-black">SIZE SCALE ({visuals.heroCardScale.toFixed(1)})</label><input type="range" min="1.0" max="6.0" step="0.1" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-purple-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-sm md:text-2xl text-white/60 uppercase font-black">Y POSITION ({visuals.heroCardY}px)</label><input type="range" min="-200" max="200" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-purple-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4 md:col-span-2"><label className="text-sm md:text-2xl text-white/60 uppercase font-black">CARD FAN SPREAD ({visuals.holeCardFan} deg)</label><input type="range" min="0" max="60" step="1" value={visuals.holeCardFan} onChange={(e) => setVisuals({...visuals, holeCardFan: Number(e.target.value)})} className="accent-pink-500 h-8 cursor-pointer" /></div></div></div>
+                    <div className="flex flex-col gap-10"><h4 className="text-lg md:text-3xl tracking-[0.2em] text-amber-500 uppercase font-black border-l-8 border-amber-500 pl-8">Action Labels</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-12"><div className="flex flex-col gap-4"><label className="text-sm md:text-2xl text-white/60 uppercase font-black">TEXT SCALE ({visuals.betScale.toFixed(1)})</label><input type="range" min="0.5" max="4.0" step="0.1" value={visuals.betScale} onChange={(e) => setVisuals({...visuals, betScale: Number(e.target.value)})} className="accent-amber-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-sm md:text-2xl text-white/60 uppercase font-black">Y OFFSET ({visuals.betY}px)</label><input type="range" min="-300" max="300" step="1" value={visuals.betY} onChange={(e) => setVisuals({...visuals, betY: Number(e.target.value)})} className="accent-amber-500 h-8 cursor-pointer" /></div></div></div>
+                    <div className="flex flex-col gap-10"><h4 className="text-lg md:text-3xl tracking-[0.2em] text-cyan-400 uppercase font-black border-l-8 border-cyan-400 pl-8">The Board</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-12"><div className="flex flex-col gap-4"><label className="text-sm md:text-2xl text-white/60 uppercase font-black">SIZE SCALE ({visuals.commCardScale.toFixed(1)})</label><input type="range" min="1.0" max="4.0" step="0.1" value={visuals.commCardScale} onChange={(e) => setVisuals({...visuals, commCardScale: Number(e.target.value)})} className="accent-cyan-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-sm md:text-2xl text-white/60 uppercase font-black">Y OFFSET ({visuals.commCardY}px)</label><input type="range" min="-100" max="100" step="1" value={visuals.commCardY} onChange={(e) => setVisuals({...visuals, commCardY: Number(e.target.value)})} className="accent-cyan-500 h-8 cursor-pointer" /></div></div></div>
+                    <button onClick={() => setShowVisualControls(false)} className="w-full py-10 bg-emerald-600 rounded-[2rem] text-2xl md:text-3xl font-black uppercase shadow-2xl hover:brightness-125 transition-all active:scale-95">Accept & Save Changes</button>
                 </div>
             </div>
         </div>
@@ -436,7 +450,13 @@ const App = () => {
         <div className="flex items-center gap-1.5 md:gap-4">
           <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 md:px-4 py-2 rounded-lg font-mono text-[10px] md:text-[13px] shadow-inner h-[40px] md:h-[52px]"><TrendingUp size={12} className="text-cyan-400" /><span className="text-[#fbbf24] font-black">{Math.round(heroWinProb)}%</span></div>
           <div className="flex gap-1 md:gap-2.5 items-center">
-              <button onClick={addBot} className="text-indigo-400 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><Bot size={18}/></button>
+              <button 
+                onClick={addBot} 
+                className={`${isConnected ? 'text-indigo-400' : 'text-white/20'} p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg active:scale-95`}
+                title={isConnected ? "Add Bot" : "Connecting..."}
+              >
+                {isConnected ? <Bot size={18}/> : <Activity size={18} className="animate-pulse" />}
+              </button>
               <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 md:p-3 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors`}><Eye size={18}/></button>
               <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><Settings size={18}/></button>
               <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><LogOut size={18}/></button>
