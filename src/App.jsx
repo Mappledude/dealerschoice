@@ -256,7 +256,6 @@ const App = () => {
     return isOutOfChips && hasNoActiveBet && isHandResolved;
   }, [heroPlayerObj, phase]);
 
-  // High-fidelity parser for the Intelligence Feed
   const groupedLogs = useMemo(() => {
     const hands = [];
     let currentHand = { id: 'init-hand', actions: [], summaries: [], variantName: 'Standard', isOngoing: true, winnerSummary: "In Progress..." };
@@ -355,7 +354,6 @@ const App = () => {
 
   const handleCreatePlayer = useCallback(() => {
     if (!newPlayer.name) return;
-    // Normalized to lowercase to ensure non-case sensitive passwords
     socket.emit('adminCreatePlayer', { ...newPlayer, password: newPlayer.password.toLowerCase(), uid: Math.random().toString(36).slice(2) });
     setNewPlayer({ name: '', chips: 100, password: '' });
   }, [newPlayer]);
@@ -394,7 +392,7 @@ const App = () => {
     if (passwordInput.toLowerCase().trim() === 'pass') { 
         setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin' }); 
         setCurrentView(VIEWS.ADMIN); socket.emit('getInitialData'); 
-    } else socket.emit('playerLogin', { password: passwordInput.toLowerCase() }); // Normalized to lowercase
+    } else socket.emit('playerLogin', { password: passwordInput.toLowerCase() });
   }, [passwordInput]);
 
   const joinRoom = useCallback(() => {
@@ -522,7 +520,25 @@ const App = () => {
                         {allProfiles.map(p => (
                             <div key={p.uid} className="flex justify-between p-3 md:p-4 border-b border-white/5 items-center hover:bg-white/5">
                                 <span className="text-[10px] md:text-sm font-black truncate max-w-[100px]">{String(p.name)}</span>
-                                <div className="flex gap-2 md:gap-4 items-center"><span className="text-emerald-400 font-mono text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span><button onClick={()=>{const n = prompt("NEW WALLET", String(p.chips || 0)); if(n !== null && n !== "") socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400"><Edit3 size={14}/></button><button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500"><Trash2 size={14}/></button></div>
+                                <div className="flex gap-2 md:gap-4 items-center">
+                                  <span className="text-emerald-400 font-mono text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span>
+                                  <button 
+                                    onClick={()=>{
+                                      const n = prompt("NEW WALLET", String(p.chips || 0)); 
+                                      if (n === null) return; 
+                                      const pass = prompt("NEW PASSWORD (LEAVE BLANK TO KEEP CURRENT)", "");
+                                      socket.emit('adminUpdatePlayer', {
+                                        uid: p.uid, 
+                                        chips: Number(n), 
+                                        password: pass !== "" ? pass.toLowerCase() : undefined
+                                      });
+                                    }} 
+                                    className="text-cyan-400"
+                                  >
+                                    <Edit3 size={14}/>
+                                  </button>
+                                  <button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500"><Trash2 size={14}/></button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -580,52 +596,62 @@ const App = () => {
             <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={16}/></button>
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase pb-32 scroll-smooth">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 max-w-[1400px] mx-auto">
-                {activeTables.length === 0 ? (
-                  <div className="col-span-full flex flex-col items-center justify-center p-20 text-white/20 gap-4 uppercase font-black"><ShieldAlert size={48} /><span className="text-sm tracking-[0.4em]">NO ACTIVE ARENAS</span></div>
-                ) : (
-                  activeTables.map((t) => (
-                    <div key={t.id} className="p-4 md:p-8 bg-slate-900/60 border border-white/10 rounded-2xl md:rounded-[2.5rem] flex flex-col gap-3 md:gap-6 shadow-2xl hover:border-[#fbbf24]/30 transition-all group relative overflow-hidden backdrop-blur-sm">
-                      <div className="flex justify-between items-start">
-                        <h3 className="text-base md:text-2xl tracking-tighter text-white group-hover:text-[#fbbf24] transition-colors uppercase font-black max-w-[70%] leading-tight">{String(t.name)}</h3>
-                        <div className="flex flex-col items-end">
-                            <span className="text-white/40 text-[7px] md:text-[9px] tracking-widest leading-none mb-1">STAKES</span>
-                            <span className="text-[#fbbf24] text-sm md:text-xl font-black leading-none">${t.sb}/${t.bb}</span>
+        {/* REDESIGNED LOBBY LIST - TABLE VIEW */}
+        <main className="flex-1 overflow-y-auto bg-[#06080c] scroll-smooth pt-4 px-2 md:px-12 pb-32">
+            <div className="max-w-[1200px] mx-auto">
+              {/* Table Header - Visible on Desktop */}
+              <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/10 text-white/40 text-[10px] tracking-[0.2em] font-black uppercase">
+                <div className="col-span-4">Arena Name</div>
+                <div className="col-span-2 text-center">Stakes</div>
+                <div className="col-span-2 text-center">Min Buy</div>
+                <div className="col-span-2 text-center">Seats</div>
+                <div className="col-span-2"></div>
+              </div>
+
+              {activeTables.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-20 text-white/20 gap-4 uppercase font-black">
+                  <ShieldAlert size={48} />
+                  <span className="text-sm tracking-[0.4em]">NO ACTIVE ARENAS</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 mt-2">
+                  {activeTables.map((t) => (
+                    <div key={t.id} className="bg-white/5 border border-white/5 rounded-xl md:rounded-2xl p-3 md:p-0 transition-all hover:bg-white/10 group">
+                      {/* Desktop Row Layout */}
+                      <div className="hidden md:grid grid-cols-12 items-center gap-4 px-6 py-4">
+                        <div className="col-span-4">
+                          <h3 className="text-lg text-white font-black truncate">{String(t.name)}</h3>
+                        </div>
+                        <div className="col-span-2 text-center">
+                          <span className="text-[#fbbf24] font-black">${t.sb}/${t.bb}</span>
+                        </div>
+                        <div className="col-span-2 text-center">
+                          <span className="text-emerald-400 font-mono font-black">${t.minBuy || 5}</span>
+                        </div>
+                        <div className="col-span-2 text-center">
+                          <span className="text-white/80 font-mono font-black">{t.players?.filter(p=>p).length || 0}/10</span>
+                        </div>
+                        <div className="col-span-2">
+                          <button onClick={()=>setSelectedTableForJoin(t)} className="w-full py-3 bg-emerald-600 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-500 transition-colors">Enter</button>
                         </div>
                       </div>
 
-                      <div className="bg-black/40 p-2 md:p-4 rounded-xl md:rounded-2xl flex justify-between items-center border border-white/5 shadow-inner">
-                        <div className="flex items-center gap-2">
-                           <Users size={12} className="text-white/30" />
-                           <span className="text-white/80 font-mono text-[10px] md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10 SEATS</span>
-                        </div>
-                        <div className="flex flex-col items-end">
-                            <span className="text-white/30 text-[7px] uppercase font-black">Min Buy-in</span>
-                            <span className="text-emerald-400 text-[10px] md:text-sm font-mono font-black">${t.minBuy || 5}</span>
-                        </div>
+                      {/* Mobile Row Layout - High Density */}
+                      <div className="flex md:hidden items-center justify-between gap-3">
+                         <div className="flex flex-col min-w-0 flex-1">
+                            <h3 className="text-[13px] text-white font-black truncate uppercase leading-tight">{String(t.name)}</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                               <span className="text-[#fbbf24] text-[10px] font-black">${t.sb}/${t.bb}</span>
+                               <span className="text-white/20 text-[10px]">|</span>
+                               <span className="text-white/60 text-[10px] font-mono">{t.players?.filter(p=>p).length || 0}/10 SEATS</span>
+                            </div>
+                         </div>
+                         <button onClick={()=>setSelectedTableForJoin(t)} className="px-5 py-3 bg-emerald-600 rounded-lg text-[10px] font-black uppercase shadow-lg active:scale-95 transition-transform">ENTER</button>
                       </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[7px] md:text-[8px] text-white/30 tracking-widest uppercase font-black ml-1">Live Arena Feed</span>
-                        <div className="bg-black/20 p-2 md:p-3 rounded-xl border border-white/5 max-h-[80px] md:max-h-[120px] overflow-y-auto custom-scrollbar">
-                          <div className="flex flex-wrap gap-1 md:gap-1.5">
-                            {t.players?.filter(p => p).length > 0 ? t.players.filter(p => p).map((p, idx) => (
-                              <div key={idx} className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md hover:bg-white/10 transition-colors">
-                                {p.isBot && <Bot size={8} className="text-indigo-400 shrink-0" />}
-                                <span className="text-[8px] md:text-[10px] text-white/90 uppercase font-black truncate max-w-[80px]">{String(p.name)}</span>
-                              </div>
-                            )) : <span className="text-[8px] text-white/20 italic ml-1">No players seated</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-4 md:p-6 bg-emerald-600 hover:bg-emerald-500 rounded-xl md:rounded-2xl tracking-[0.15em] shadow-[0_8px_20px_-5px_rgba(16,185,129,0.3)] hover:translate-y-[-2px] active:scale-[0.98] transition-all text-[10px] md:text-sm font-black uppercase text-white border border-emerald-400/20">
-                        ENTER ARENA
-                      </button>
                     </div>
-                  ))
-                )}
+                  ))}
+                </div>
+              )}
             </div>
         </main>
     </div>
