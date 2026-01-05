@@ -12,9 +12,13 @@ import io from 'socket.io-client';
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
-const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+const socket = io(SOCKET_URL, { 
+  transports: ['websocket', 'polling'],
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000 
+});
 
-const VERSION = "v1.3.9-PRO";
+const VERSION = "v1.4.2-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -125,13 +129,16 @@ const Seat = ({
               </div>
             )}
             {player.currentBet > 0 && (
-                <div className={`absolute z-[100] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot opacity-0 scale-0' : 'animate-bet-splash opacity-100'}`}
+                <div className={`absolute z-[100] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot' : 'animate-bet-splash'}`}
                     style={{ 
                       transform: `translate(calc(-50% + ${betOffset.x}px), ${betOffset.y + visuals.betY}px) scale(${visuals.betScale})`, 
                       left: '50%', 
                       top: '50%' 
                     }}>
-                    <div className="bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-black text-[9px] md:text-[12px] px-2 py-0.5 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.6)] border border-white/30 flex items-center gap-1 whitespace-nowrap"><Coins size={8} />${String(player.currentBet)}</div>
+                    <div className="bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-black text-[9px] md:text-[12px] px-2 py-0.5 rounded-full shadow-[0_4px_0_rgba(0,0,0,0.4),0_8px_15px_rgba(0,0,0,0.6)] border border-white/30 flex items-center gap-1 whitespace-nowrap">
+                        <Coins size={8} className="animate-pulse" />
+                        ${String(player.currentBet)}
+                    </div>
                 </div>
             )}
             <div style={{ transform: `translateY(${visuals.badgeY}px)` }}
@@ -325,7 +332,7 @@ const App = () => {
     socket.emit('joinRoom', { 
         roomId: selectedTableForJoin.id, 
         profile: { ...userProfile, pendingVariant: pendingVariantId }, 
-        buyIn: buyInAmount 
+        buyIn: Math.min(buyInAmount, userProfile.chips) 
     }, (res) => {
         if (res?.status === 'ok') { 
             setCurrentRoomId(selectedTableForJoin.id); 
@@ -440,8 +447,8 @@ const App = () => {
               <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-[#fbbf24]/30 rounded-3xl shadow-2xl flex flex-col gap-6 md:gap-10">
                 <h3 className="text-xl md:text-3xl text-center text-[#fbbf24] underline underline-offset-8 uppercase font-black">{String(selectedTableForJoin.name)}</h3>
                 <div className="space-y-4 font-black text-center uppercase">
-                  <div className="flex justify-between items-center text-[10px] text-white/40 tracking-widest font-black"><span>BUY-IN AMOUNT</span><span className="text-emerald-400 text-lg md:text-2xl font-mono">${buyInAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                  <input type="range" min={selectedTableForJoin.minBuy || 5} max={selectedTableForJoin.maxBuy || 10} step={0.25} value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#fbbf24]" />
+                  <div className="flex justify-between items-center text-[10px] text-white/40 tracking-widest font-black"><span>BUY-IN AMOUNT</span><span className="text-emerald-400 text-lg md:text-2xl font-mono">${Math.min(buyInAmount, userProfile?.chips || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                  <input type="range" min={selectedTableForJoin.minBuy || 5} max={Math.min(selectedTableForJoin.maxBuy || 10, userProfile?.chips || 10)} step={0.25} value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#fbbf24]" />
                 </div>
                 <div className="flex gap-4"><button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-3.5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all font-black text-[10px] uppercase">BACK</button><button onClick={joinRoom} disabled={isJoining} className={`flex-2 p-3.5 rounded-2xl shadow-lg transition-all text-[10px] tracking-widest font-black uppercase ${isJoining ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-emerald-600 hover:scale-105 active:scale-95'}`}>{isJoining ? 'Joining...' : 'SIT DOWN'}</button></div>
               </div>
@@ -649,7 +656,7 @@ const App = () => {
         <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center font-black">
             <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[3vw] md:border-[2vw] border-slate-900/60 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)] border-double font-black uppercase" />
             <div className="absolute inset-0 pointer-events-none z-20 font-black uppercase">
-              {(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} />); })}
+              {(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} />); })}
             </div>
             <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full h-full justify-center">
               {!potTransferring && ( <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}><div className={`text-[10vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div> )}
@@ -664,8 +671,40 @@ const App = () => {
 
       <footer 
         style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} 
-        className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]"
+        className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]"
       >
+        {/* SHOWDOWN OVERLAY - BRINGING TO TOP OF HUD FOR IPHONE VISIBILITY */}
+        {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 && (
+            <div className="absolute top-0 left-0 w-full -translate-y-full z-[1000] flex flex-col items-center pointer-events-none">
+                 <div className="w-full bg-gradient-to-t from-slate-900 to-transparent h-12" />
+                 <div className="bg-slate-900/95 backdrop-blur-2xl border-t-2 border-yellow-500/50 w-full py-4 md:py-6 shadow-[0_-20px_50px_rgba(0,0,0,0.8)] flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-2 text-yellow-400 animate-pulse font-black tracking-[0.2em] text-[10px] md:text-lg uppercase">
+                        <Trophy size={14} className="md:size-6" /> SHOWDOWN WINNERS
+                    </div>
+                    <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-6 px-4 md:px-10 justify-start md:justify-center no-scrollbar pb-2">
+                        {showdownWinners.map((winner, idx) => (
+                            <div key={idx} className="flex items-center gap-3 md:gap-6 bg-black/60 p-2 md:p-4 rounded-2xl md:rounded-[2.5rem] border border-yellow-500/30 shadow-2xl min-w-[180px] md:min-w-[340px] animate-showdown-card-pop shrink-0" style={{ animationDelay: `${idx * 0.1}s`, pointerEvents: 'auto' }}>
+                                <div className="flex flex-col items-center shrink-0">
+                                    <div className="text-[#fbbf24] font-black text-[11px] md:text-2xl drop-shadow-lg uppercase truncate max-w-[60px] md:max-w-none">{String(winner.name)}</div>
+                                    <div className="text-emerald-400 font-mono text-[11px] md:text-xl font-black">+${(winner.amount || 0).toLocaleString()}</div>
+                                    <div className="text-yellow-400/60 text-[6px] md:text-[9px] tracking-widest uppercase mt-0.5">{String(winner.rank)}</div>
+                                </div>
+                                <div className="flex gap-1 md:gap-1.5 items-center justify-center">
+                                    {(winner.hand || []).map((c, ci) => (
+                                        <div key={ci} className="w-6 md:w-14 h-9 md:h-20 bg-white rounded-sm md:rounded-lg flex flex-col items-center justify-center text-black shadow-2xl ring-1 ring-black/10 relative overflow-hidden" 
+                                             style={{ animation: `card-flip 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.3 + ci * 0.15}s`, opacity: 0 }}>
+                                            <span className="text-[8px] md:text-[16px] font-black absolute top-0.5 left-0.5 leading-none">{String(c.value)}</span>
+                                            <span className={`text-[12px] md:text-[28px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                 </div>
+            </div>
+        )}
+
         <div className="flex-1 flex flex-col justify-center px-2 md:px-10 relative bg-white/5 shadow-inner py-1.5 md:py-3 font-black uppercase">
           {activeIdx === heroIdx && phase !== PHASES.IDLE && heroPlayerObj ? (
             <div className="flex flex-col gap-2 md:gap-4 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
@@ -679,26 +718,18 @@ const App = () => {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full relative font-black uppercase">
-                {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
-                    <div className="flex flex-col items-center gap-1 md:gap-3 w-full h-full justify-center">
-                        <div className="flex items-center gap-1.5 text-yellow-400 animate-pulse font-black tracking-[0.2em] text-[7px] md:text-xs uppercase leading-none"><Trophy size={10} /> SHOWDOWN WINNERS</div>
-                        <div className="flex flex-wrap gap-1.5 md:gap-6 items-center justify-center animate-in fade-in zoom-in duration-700 w-full overflow-y-auto px-1">
-                            {showdownWinners.map((winner, idx) => (
-                                <div key={idx} className="flex items-center gap-2 md:gap-6 bg-black/60 p-1 md:p-4 rounded-xl md:rounded-[2rem] border border-yellow-500/30 shadow-[0_0_50px_rgba(251,191,36,0.4)] min-w-[150px] md:min-w-[320px] animate-showdown-card-pop" style={{ animationDelay: `${idx * 0.1}s` }}><div className="flex flex-col items-center shrink-0"><div className="text-[#fbbf24] font-black text-[9px] md:text-2xl drop-shadow-lg uppercase truncate max-w-[45px] md:max-w-none">{String(winner.name)}</div><div className="text-emerald-400 font-mono text-[9px] md:text-xl font-black">+${(winner.amount || 0).toLocaleString()}</div><div className="text-yellow-400 text-[5px] md:text-[8px] tracking-widest uppercase mt-0.5">{String(winner.rank)}</div></div><div className="flex gap-1 items-center justify-center">{(winner.hand || []).map((c, ci) => (<div key={ci} className="w-5 md:w-12 h-8 md:h-18 bg-white rounded-sm md:rounded-lg flex flex-col items-center justify-center text-black shadow-2xl ring-1 ring-black/10" style={{ animation: `card-flip 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.3 + ci * 0.15}s`, opacity: 0 }}><span className="text-[7px] md:text-[14px] font-black absolute top-0.5 left-0.5 leading-none">{String(c.value)}</span><span className={`text-[10px] md:text-2xl ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></div>))}</div></div>))}
-                        </div>
-                    </div>
-                ) : ( 
+                {phase === PHASES.SHOWDOWN ? null : ( 
                     <div className="flex flex-col items-center gap-1 md:gap-4 animate-in fade-in duration-500 font-black uppercase w-full max-w-[1000px]">
                       {phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3"><span className="text-white/40 tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase leading-none">Arena Idle</span></div>) : (
                         <div className="flex flex-col md:flex-row items-center justify-between w-full gap-4 px-4">
-                           <div className="flex flex-col items-center md:items-start"><span className="text-cyan-400 text-[8px] md:text-[12px] animate-pulse mb-1 font-black">PLAYER TURN</span><span className="text-white text-sm md:text-3xl font-black tracking-tighter drop-shadow-lg uppercase leading-none">{String(players[activeIdx]?.name || "OPPONENT")}</span></div>
-                           {heroPlayerObj && !heroPlayerObj.isFolded && (
+                            <div className="flex flex-col items-center md:items-start"><span className="text-cyan-400 text-[8px] md:text-[12px] animate-pulse mb-1 font-black">PLAYER TURN</span><span className="text-white text-sm md:text-3xl font-black tracking-tighter drop-shadow-lg uppercase leading-none">{String(players[activeIdx]?.name || "OPPONENT")}</span></div>
+                            {heroPlayerObj && !heroPlayerObj.isFolded && (
                               <div className="flex items-center gap-4 bg-white/5 p-3 md:p-4 rounded-2xl border border-white/10 shadow-inner">
-                                 <div className="flex flex-col"><span className="text-white/40 text-[7px] md:text-[10px] font-black">YOUR HAND</span><span className="text-purple-400 text-xs md:text-xl font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span></div>
-                                 <div className="h-6 md:h-10 w-px bg-white/10" />
-                                 <div className="flex flex-col items-end"><span className="text-white/40 text-[7px] md:text-[10px] font-black">WIN PROB.</span><span className="text-[#fbbf24] text-xs md:text-xl font-mono font-black">{Math.round(heroWinProb)}%</span></div>
+                                  <div className="flex flex-col"><span className="text-white/40 text-[7px] md:text-[10px] font-black">YOUR HAND</span><span className="text-purple-400 text-xs md:text-xl font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span></div>
+                                  <div className="h-6 md:h-10 w-px bg-white/10" />
+                                  <div className="flex flex-col items-end"><span className="text-white/40 text-[7px] md:text-[10px] font-black">WIN PROB.</span><span className="text-[#fbbf24] text-xs md:text-xl font-mono font-black">{Math.round(heroWinProb)}%</span></div>
                               </div>
-                           )}
+                            )}
                         </div>
                       )}
                     </div> 
@@ -709,37 +740,39 @@ const App = () => {
       </footer>
       <style>{`
           @keyframes fling-to-pot { 
-            0% { transform: translate(-50%, -100%) scale(1.5); filter: blur(0px) brightness(2); } 
-            20% { transform: translate(calc(-50% + 20px), -15vh) scale(1.2); }
-            100% { transform: translate(calc(-50% + ${Math.random() * 40 - 20}px), -35vh) scale(0) rotate(${Math.random() * 720}deg); filter: blur(8px); opacity: 0; } 
+            0% { transform: translate(calc(-50% + 0px), 0px) scale(2.0); filter: blur(0px) brightness(2); } 
+            15% { transform: translate(calc(-50% + 20px), -10vh) scale(1.4); filter: blur(1px) brightness(1.5); }
+            100% { transform: translate(calc(-50% + 10px), -45vh) scale(0) rotate(720deg); filter: blur(15px) grayscale(1); opacity: 0; } 
           }
           @keyframes pot-pulse { 
             0% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 
-            50% { transform: scale(1.1); filter: drop-shadow(0 0 30px #fbbf24) brightness(1.2); } 
+            50% { transform: scale(1.15); filter: drop-shadow(0 0 40px #fbbf24) brightness(1.3); } 
             100% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 
           }
           .animate-pot-pulse { animation: pot-pulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
           .animate-pulse-glow { animation: pulse-glow 1.5s infinite ease-in-out; }
           @keyframes pulse-glow { 0% { box-shadow: 0 0 5px rgba(34,211,238,0.2); } 50% { box-shadow: 0 0 25px rgba(34,211,238,0.6); } 100% { box-shadow: 0 0 5px rgba(34,211,238,0.2); } }
-          ::-webkit-scrollbar { display: none; }
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
           @keyframes bounce-short { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
           .animate-bounce-short { animation: bounce-short 1s ease-in-out infinite; }
           @keyframes showdown-pop { 
-            0% { transform: scale(0.5) translateY(100px) rotateX(-45deg); opacity: 0; filter: brightness(0); } 
-            70% { transform: scale(1.05) translateY(-10px) rotateX(5deg); opacity: 1; filter: brightness(1.5); }
+            0% { transform: scale(0.8) translateY(150px) rotateX(-60deg); opacity: 0; filter: brightness(0) blur(10px); } 
+            70% { transform: scale(1.05) translateY(-5px) rotateX(10deg); opacity: 1; filter: brightness(1.2) blur(0px); }
             100% { transform: scale(1) translateY(0) rotateX(0deg); opacity: 1; filter: brightness(1); } 
           }
           .animate-showdown-card-pop { animation: showdown-pop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
           @keyframes card-flip { 
-            0% { transform: rotateY(180deg) scale(0.5); opacity: 0; filter: blur(4px); } 
-            100% { transform: rotateY(0deg) scale(1); opacity: 1; filter: blur(0px); } 
+            0% { transform: rotateY(180deg) scale(0.3) translateY(40px); opacity: 0; filter: blur(8px); } 
+            100% { transform: rotateY(0deg) scale(1) translateY(0); opacity: 1; filter: blur(0px); } 
           }
           @keyframes bet-splash { 
-            0% { transform: translate(-50%, -50%) scale(0) rotate(-45deg); opacity: 0; filter: brightness(2); } 
-            60% { transform: translate(-50%, -50%) scale(1.2) rotate(10deg); opacity: 1; }
+            0% { transform: translate(-50%, -50%) scale(0) rotate(-180deg); opacity: 0; filter: brightness(3); } 
+            50% { transform: translate(-50%, -50%) scale(1.4) rotate(10deg); opacity: 1; filter: brightness(1.5); }
+            75% { transform: translate(-50%, -50%) scale(0.9) rotate(-5deg); }
             100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; } 
           }
-          .animate-bet-splash { animation: bet-splash 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          .animate-bet-splash { animation: bet-splash 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
           @keyframes deal-card { 
             0% { top: 40%; left: 50%; transform: translate(-50%, -50%) scale(0.1) rotate(1080deg); opacity: 0; filter: blur(10px); } 
             100% { opacity: 1; filter: blur(0px); } 
