@@ -32,8 +32,8 @@ const DISPLAY_POSITIONS = [
 ];
 
 const BET_OFFSETS = [
-  { x: 0, y: -160 },   { x: 100, y: -110 }, { x: 130, y: 0 },    { x: 100, y: 110 },  { x: 60, y: 130 },    
-  { x: 0, y: 150 },    { x: -60, y: 130 },  { x: -100, y: 110 }, { x: -130, y: 0 },   { x: -100, y: -110 } 
+  { x: 0, y: -180 },   { x: 120, y: -120 }, { x: 150, y: 0 },    { x: 120, y: 120 },  { x: 70, y: 150 },    
+  { x: 0, y: 170 },    { x: -70, y: 150 },  { x: -120, y: 120 }, { x: -150, y: 0 },   { x: -120, y: -120 } 
 ];
 
 const VARIANTS = { 
@@ -101,6 +101,48 @@ const VARIANTS = {
   }
 };
 
+const ProChip = ({ color, value, index }) => (
+  <div 
+    className="absolute w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center border-2 border-dashed border-white/20 shadow-lg"
+    style={{ 
+      backgroundColor: color,
+      transform: `translateY(-${index * 3}px)`,
+      zIndex: index,
+      boxShadow: `0 ${index + 1}px 0 rgba(0,0,0,0.5), inset 0 0 10px rgba(0,0,0,0.3)`
+    }}
+  >
+    <div className="w-4 h-4 md:w-6 md:h-6 rounded-full border border-white/10 flex items-center justify-center bg-black/10">
+      <div className="w-3 h-3 md:w-4 md:h-4 rounded-full border border-white/5 bg-gradient-to-tr from-white/10 to-transparent" />
+    </div>
+  </div>
+);
+
+const ChipStack = ({ amount }) => {
+  const getChipConfig = (val) => {
+    if (val >= 100) return { color: '#dc2626', count: 4 }; // Heavy Red
+    if (val >= 50) return { color: '#059669', count: 3 };  // Mid Green
+    if (val >= 10) return { color: '#2563eb', count: 2 };  // Low Blue
+    return { color: '#4b5563', count: 1 };               // Base Grey
+  };
+
+  const { color, count } = getChipConfig(amount);
+  
+  return (
+    <div className="relative flex flex-col items-center">
+      <div className="relative w-8 h-8 md:w-10 md:h-10 mb-2 flex items-center justify-center">
+        {[...Array(count)].map((_, i) => (
+          <ProChip key={i} color={color} index={i} />
+        ))}
+      </div>
+      <div className="bg-black/80 backdrop-blur-md px-2 py-0.5 rounded border border-white/10 shadow-2xl">
+        <span className="text-[9px] md:text-[13px] font-mono font-black text-white leading-none tracking-tighter">
+          ${Number(amount).toLocaleString()}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, 
   isDealer, potTransferring, timeRemaining, isHero, 
@@ -115,64 +157,65 @@ const Seat = ({
     return (
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'}`}>
             {(isHero || isShowdown) && !player.isFolded && phase !== PHASES.IDLE && player.winProbability > 0 && (
-              <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-300">
-                <div className="bg-slate-900/90 backdrop-blur-xl border border-cyan-500/50 px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
-                  <span className="text-[10px] font-black text-white font-mono">{Math.round(player.winProbability)}%</span>
+              <div className="absolute top-[-60px] left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-300">
+                <div className="bg-slate-950/90 backdrop-blur-xl border border-cyan-500/50 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-[0_0_25px_rgba(34,211,238,0.4)]">
+                  <span className="text-[10px] font-black text-cyan-400 font-mono tracking-widest">{Math.round(player.winProbability)}% WIN</span>
                 </div>
               </div>
             )}
+            
             {player.lastAction && !isActiveTurn && !isCollectingBets && (
-              <div className="absolute top-[-30px] animate-bounce-short z-[200]">
-                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg uppercase border border-white/20 ${
-                  player.lastAction === 'FOLD' ? 'bg-red-600 text-white' : 
-                  player.lastAction === 'RAISE' ? 'bg-amber-500 text-black' : 
-                  'bg-blue-600 text-white'
-                }`} style={{ transform: `scale(${visuals.betScale}) translateY(${visuals.betY}px)` }}>{String(player.lastAction)}</span>
+              <div className="absolute top-[-35px] animate-bounce-short z-[200]">
+                <span className={`text-[9px] font-black px-2 py-0.5 rounded shadow-xl uppercase border border-white/20 tracking-wider ${
+                  player.lastAction === 'FOLD' ? 'bg-gradient-to-b from-red-500 to-red-700 text-white' : 
+                  player.lastAction === 'RAISE' ? 'bg-gradient-to-b from-amber-400 to-amber-600 text-black' : 
+                  'bg-gradient-to-b from-indigo-500 to-indigo-700 text-white'
+                }`}>{String(player.lastAction)}</span>
               </div>
             )}
+
             {player.currentBet > 0 && (
-                <div className={`absolute z-[100] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot' : 'animate-bet-splash'}`}
+                <div className={`absolute z-[100] transition-all duration-1000 ${isCollectingBets ? 'animate-fling-to-pot' : 'animate-pro-bet-entry'}`}
                     style={{ 
-                      transform: `translate(calc(-50% + ${betOffset.x}px), ${betOffset.y + visuals.betY}px) scale(${visuals.betScale})`, 
+                      transform: `translate(calc(-50% + ${betOffset.x}px), ${betOffset.y}px)`, 
                       left: '50%', 
                       top: '50%' 
                     }}>
-                    <div className="bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-black text-[9px] md:text-[12px] px-2 py-0.5 rounded-full shadow-[0_4px_0_rgba(0,0,0,0.4),0_8px_15px_rgba(0,0,0,0.6)] border border-white/30 flex items-center gap-1 whitespace-nowrap">
-                        <Coins size={8} className="animate-pulse" />
-                        ${String(player.currentBet)}
-                    </div>
+                    <ChipStack amount={player.currentBet} />
                 </div>
             )}
+
             <div style={{ transform: `translateY(${visuals.badgeY}px)` }}
-                className={`relative z-50 flex flex-col items-center p-1 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[180px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-2 ring-cyan-400/40 scale-105 shadow-[0_0_200px_rgba(34,211,238,0.2)]' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 animate-pulse-glow' : ''}`}>
-                {isDealer && ( <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white shadow-[0_0_12px_rgba(220,38,38,0.9)] animate-pulse z-[110]" /> )}
+                className={`relative z-50 flex flex-col items-center p-1.5 rounded-2xl border bg-slate-950/95 backdrop-blur-lg transition-all duration-300 min-w-[90px] md:min-w-[190px] shadow-[0_20px_50px_rgba(0,0,0,0.6)] ${isActiveTurn ? 'border-cyan-400 ring-2 ring-cyan-400/40 scale-105 shadow-[0_0_100px_rgba(34,211,238,0.3)]' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 animate-pulse-glow' : ''}`}>
+                {isDealer && ( <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white rounded-full border-2 border-slate-900 shadow-xl flex items-center justify-center text-slate-950 text-[8px] font-black z-[110]">D</div> )}
                 {isActiveTurn && timeRemaining > 0 && (
-                    <div className="absolute -top-1 w-full px-1.5 h-1 z-[60]">
+                    <div className="absolute -top-1 w-full px-2 h-1.5 z-[60]">
                         <div className="w-full h-full bg-black/40 rounded-full overflow-hidden">
-                            <div className="h-full bg-cyan-400 transition-all duration-1000 linear" style={{ width: `${(timeRemaining / 15) * 100}%` }} />
+                            <div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-1000 linear" style={{ width: `${(timeRemaining / 15) * 100}%` }} />
                         </div>
                     </div>
                 )}
-                <div className="flex flex-col items-center gap-0 w-full">
-                    <div className="flex items-center gap-1">
-                      {player.isBot && <Bot size={8} className="text-indigo-400" />}
-                      <span className="text-[8.5px] md:text-[14.5px] font-black text-white/90 uppercase tracking-tight truncate max-w-[60px] md:max-w-[100px]">{String(player.name || "Anon")}</span>
+                <div className="flex flex-col items-center gap-0.5 w-full">
+                    <div className="flex items-center gap-1.5">
+                      {player.isBot && <Bot size={10} className="text-indigo-400" />}
+                      <span className="text-[10px] md:text-[15px] font-black text-white/95 uppercase tracking-tighter truncate max-w-[70px] md:max-w-110px]">{String(player.name || "Anon")}</span>
                     </div>
-                    <span className={`text-[11px] md:text-[17px] font-mono font-black ${player.chips <= 1 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                    <span className={`text-[12px] md:text-[19px] font-mono font-black ${player.chips <= 1 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                 </div>
             </div>
+
             {player.hand && Array.isArray(player.hand) && !player.isFolded && (
-                <div className="relative z-10 flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible">
+                <div className="relative z-10 flex items-center justify-center w-[12vw] h-[6vw] mt-5 overflow-visible">
                     {player.hand.map((c, ci) => {
                         const mid = (player.hand.length - 1) / 2;
                         const offset = ci - mid;
                         const fanRotation = offset * visuals.holeCardFan;
-                        const fanTranslation = offset * (player.hand.length > 2 ? 2.0 : 3.5);
+                        const fanTranslation = offset * (player.hand.length > 2 ? 2.5 : 4.0);
                         return (
                           <div key={c.id || ci} 
-                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
+                              className={`w-[5.5vw] md:w-[3.5vw] h-[7.5vw] md:h-[5.5vw] rounded-lg flex flex-col items-start p-1 border shadow-2xl absolute transition-all duration-500 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-900'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_#fbbf24]' : 'border-white/10'}`} 
                               style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${seatIdx * 0.1}s` }}>
-                              {(isShowdown || isHero) && ( <><span className="text-[9px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
+                              {(isShowdown || isHero) && ( <><span className="text-[10px] md:text-[14px] font-black leading-none">{String(c.value)}</span><span className={`text-[12px] md:text-[18px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
                           </div>
                         );
                     })}
@@ -196,7 +239,7 @@ const App = () => {
   const [dealerIdx, setDealerIdx] = useState(-1);
   const [highestBet, setHighestBet] = useState(0);
   const [winning5Ids, setWinning5Ids] = useState([]);
-  const [logs, setLogs] = useState([{ id: 'init', time: new Date().toLocaleTimeString(), name: 'SYSTEM', action: 'INTELLIGENCE LINK ESTABLISHED', type: 'phase' }]);
+  const [logs, setLogs] = useState([{ id: 'init', time: new Date().toLocaleTimeString(), name: 'SYSTEM', action: 'SECURE LINK ESTABLISHED', type: 'phase' }]);
   const [potAmount, setPotAmount] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(15); 
   const [activeTables, setActiveTables] = useState([]);
@@ -263,7 +306,6 @@ const App = () => {
       const bb = 0.50; return Math.max(highestBet + bb, highestBet * 2);
   }, [highestBet]);
 
-  // Group logs by hand with detailed summary logic
   const groupedLogs = useMemo(() => {
     const hands = [];
     let currentHand = { id: 'init-hand', actions: [], summaries: [], variantName: 'Unknown', isOngoing: true };
@@ -397,10 +439,8 @@ const App = () => {
 
   const joinRoom = useCallback(() => {
     if (!selectedTableForJoin || !userProfile || joinLock.current) return;
-    
     joinLock.current = true;
     setIsJoining(true);
-
     socket.emit('joinRoom', { 
         roomId: selectedTableForJoin.id, 
         profile: { ...userProfile, pendingVariant: pendingVariantId }, 
@@ -422,7 +462,6 @@ const App = () => {
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
-
     const handleRoomUpdate = (d) => {
         if (!d) return;
         setPlayers(() => { 
@@ -433,16 +472,13 @@ const App = () => {
         setPhase(d.phase); setCommunity(d.community || []); setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
         setActiveIdx(d.activeIdx ?? -1); setHighestBet(d.highestBet || 0); setDealerIdx(d.dealerIdx ?? -1);
         setTimeRemaining(d.timeRemaining !== undefined ? Math.max(0, d.timeRemaining) : 0);
-        
         if (d.activeVariant) {
             const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
             setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId, rules: [] });
         }
-
         if (d.phase === PHASES.SHOWDOWN) {
             setPotTransferring(true);
             setCurrentShowdownIdx(0);
-            
             const rawWinners = d.showdownWinners || [];
             const sortedWinners = [...rawWinners].sort((a, b) => {
                const aLow = String(a.rank).toUpperCase().includes('LOW');
@@ -453,15 +489,13 @@ const App = () => {
             });
             setShowdownWinners(sortedWinners);
             setWinning5Ids(d.winning5Ids || []);
-
             const isHiLow = (d.activeVariant?.id || d.activeVariant) === 'HILOW';
-            const durationPerWinner = isHiLow ? 3000 : (4000 / Math.max(1, sortedWinners.length));
-            const totalDuration = isHiLow ? 6000 : 4000;
-
+            const durationPerWinner = isHiLow ? 4000 : (4000 / Math.max(1, sortedWinners.length));
+            const totalDuration = isHiLow ? 8000 : 4000;
             if (sortedWinners.length > 1) {
                 const timers = [];
                 for (let i = 1; i < sortedWinners.length; i++) {
-                   timers.push(setTimeout(() => setCurrentShowdownIdx(i), i * durationPerWinner));
+                    timers.push(setTimeout(() => setCurrentShowdownIdx(i), i * durationPerWinner));
                 }
                 setTimeout(() => setPotTransferring(false), totalDuration);
             } else {
@@ -483,11 +517,11 @@ const App = () => {
   }, []);
 
   if (currentView === VIEWS.LOGIN) return (
-    <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
-        <div className="w-full max-w-[400px] p-8 md:p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8">
-            <Lock size={32} className="text-[#fbbf24]" />
-            <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-center tracking-[0.5em] text-[#fbbf24] outline-none text-xl font-black uppercase"/>
-            <button onClick={handleLogin} className="w-full p-6 bg-[#fbbf24] text-black rounded-2xl font-black text-lg transition-transform uppercase">SIT AT TABLE</button>
+    <div className="h-screen bg-[#020408] flex items-center justify-center p-6 text-white uppercase font-black">
+        <div className="w-full max-w-[400px] p-10 md:p-14 bg-black/80 border border-white/10 rounded-[3rem] backdrop-blur-3xl shadow-[0_0_100px_rgba(0,0,0,1)] flex flex-col items-center gap-10">
+            <Lock size={44} className="text-[#fbbf24] animate-pulse" />
+            <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="ARENA KEY" className="w-full bg-white/5 border border-white/10 p-6 rounded-2xl text-center tracking-[0.8em] text-[#fbbf24] outline-none text-2xl font-black uppercase"/>
+            <button onClick={handleLogin} className="w-full p-6 bg-gradient-to-r from-amber-400 to-yellow-600 text-black rounded-2xl font-black text-xl transition-all hover:scale-[1.02] active:scale-95 shadow-2xl uppercase">AUTHENTICATE</button>
         </div>
     </div>
   );
@@ -571,7 +605,6 @@ const App = () => {
                   <div className="flex flex-col font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">STAKES</span><span className="text-[#fbbf24] text-base md:text-xl font-black">${t.sb}/${t.bb}</span></div>
                   <div className="flex flex-col items-end font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">SEATS</span><span className="text-white/80 font-mono text-[10px] md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
                 </div>
-                {/* Seated Players List */}
                 <div className="bg-black/40 p-3 rounded-2xl border border-white/5 flex flex-col gap-2 min-h-[60px]">
                   <span className="text-[8px] text-white/30 tracking-widest uppercase font-black">Seated Players</span>
                   <div className="flex flex-wrap gap-1.5">
@@ -591,7 +624,7 @@ const App = () => {
   );
 
   return (
-    <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter">
+    <div className="h-screen bg-[#020408] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter">
       {intelExpanded && (
         <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[800px] mx-auto bg-slate-900/80 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
@@ -624,7 +657,6 @@ const App = () => {
                           </div>
                           {hand.isOngoing && !hand.summaries.length && <span className="text-[8px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded animate-pulse">Ongoing</span>}
                         </div>
-                        
                         <div className="flex flex-col w-full pl-6 mt-1 gap-1">
                           {hand.summaries.length > 0 ? (
                             hand.summaries.map((s, si) => (
@@ -640,7 +672,6 @@ const App = () => {
                           {hand.isOngoing && hand.summaries.length === 0 && <span className="text-[10px] text-white/20 italic">Live Actions in Progress...</span>}
                         </div>
                       </button>
-
                       {isExpanded && (
                         <div className="flex flex-col border-t border-white/5 bg-black/40 animate-in slide-in-from-top-2 duration-200">
                           {hand.actions.map(l => (
@@ -778,127 +809,105 @@ const App = () => {
 
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)]" style={{ height: `calc(${headerHeight}px + env(safe-area-inset-top))` }}>
         <div className="flex items-center gap-1.5 overflow-hidden flex-1">
-            <button 
-                onClick={() => setShowRulesModal(true)}
-                className="bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left"
-            >
-              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1">
-                This Hand: <Info size={8} />
-              </span>
-              <span className="text-white text-[10px] md:text-sm truncate leading-none">
-                {String(activeVariant?.name || "Hold'em")}
-              </span>
+            <button onClick={() => setShowRulesModal(true)} className="bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left">
+              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1">This Hand: <Info size={8} /></span>
+              <span className="text-white text-[10px] md:text-sm truncate leading-none">{String(activeVariant?.name || "Hold'em")}</span>
             </button>
-            <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-lg md:rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]"><span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span><select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full">{Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>))}</select></div>
+            <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]"><span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span><select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full">{Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>))}</select></div>
         </div>
         <div className="flex items-center gap-1.5 md:gap-4">
           <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 md:px-4 py-2 rounded-lg font-mono text-[10px] md:text-[13px] shadow-inner h-[40px] md:h-[52px]"><TrendingUp size={12} className="text-cyan-400" /><span className="text-[#fbbf24] font-black">{Math.round(heroWinProb)}%</span></div>
           <div className="flex gap-1 md:gap-2.5 items-center">
-              <button 
-                onClick={addBot} 
-                className={`${isConnected ? 'text-indigo-400' : 'text-white/20'} p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg active:scale-95`}
-                title={isConnected ? "Add Bot" : "Connecting..."}
-              >
-                {isConnected ? <Bot size={18}/> : <Activity size={18} className="animate-pulse" />}
-              </button>
-              <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 md:p-3 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors`}><Eye size={18}/></button>
-              <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><Settings size={18}/></button>
-              <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><LogOut size={18}/></button>
+              <button onClick={addBot} className={`${isConnected ? 'text-indigo-400' : 'text-white/20'} p-2 md:p-3 bg-white/5 border border-white/10 rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg active:scale-95`} title={isConnected ? "Add Bot" : "Connecting..."}>{isConnected ? <Bot size={18}/> : <Activity size={18} className="animate-pulse" />}</button>
+              <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 md:p-3 border border-white/10 rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors`}><Eye size={18}/></button>
+              <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-2 md:p-3 bg-white/5 border border-white/10 rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><Settings size={18}/></button>
+              <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 md:p-3 bg-white/5 border border-white/10 rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><LogOut size={18}/></button>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-emerald-950/20 to-transparent overflow-hidden px-1 py-1 font-black uppercase">
+      <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-[#0f3d2e]/40 to-black overflow-hidden px-1 py-1 font-black uppercase">
         <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center font-black">
-            <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[3vw] md:border-[2vw] border-slate-900/60 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)] border-double font-black uppercase" />
+            <div className="absolute inset-0 bg-[#0f3d2e]/60 rounded-[50%] border-[3vw] md:border-[2.5vw] border-slate-900/80 shadow-[inset_0_0_20vw_rgba(0,0,0,0.9),0_20px_100px_rgba(0,0,0,0.5)] border-double font-black uppercase overflow-hidden">
+                <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/felt.png')]" />
+            </div>
             <div className="absolute inset-0 pointer-events-none z-20 font-black uppercase">
               {(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} />); })}
             </div>
             <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full h-full justify-center">
-              {!potTransferring && ( <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}><div className={`text-[10vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div> )}
+              {!potTransferring && ( <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}><div className={`text-[12vw] md:text-[6vw] font-black text-yellow-500 font-mono tracking-tighter drop-shadow-[0_0_30px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div> )}
               {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS', 'REDSBLACKS'].includes(activeVariant?.id) && (
-                <div className="flex gap-1.5 md:gap-4 mt-4 md:mt-12 font-black uppercase transition-transform" style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
-                  {(community || []).map((c, j) => (<div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[3px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}><span className="text-[10px] md:text-[0.9vw] font-black leading-none">{String(c.value)}</span><span className={`text-[13px] md:text-[2.2vw] font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></div>))}
+                <div className="flex gap-2 md:gap-4 mt-6 md:mt-14 font-black uppercase transition-transform" style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
+                  {(community || []).map((c, j) => (<div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-lg border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-500 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-115 z-30 shadow-[0_0_50px_rgba(251,191,36,0.8)]' : 'border-white/10 shadow-2xl'}`}><span className="text-[11px] md:text-[1vw] font-black leading-none">{String(c.value)}</span><span className={`text-[14px] md:text-[2.5vw] font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></div>))}
                 </div>
               )}
             </div>
         </div>
       </main>
 
-      <footer 
-        style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} 
-        className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]"
-      >
-        <div className="flex-1 flex flex-col justify-start pt-3 md:pt-6 pb-2 px-2 md:px-10 relative bg-white/5 shadow-inner font-black uppercase">
+      <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-[#05070a]/95 backdrop-blur-3xl border-t border-white/5 flex flex-col z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]">
+        <div className="flex-1 flex flex-col justify-center pt-2 md:pt-4 pb-2 px-3 md:px-10 relative bg-white/[0.02] shadow-inner font-black uppercase overflow-visible">
           {activeIdx === heroIdx && phase !== PHASES.IDLE && heroPlayerObj ? (
-            <div className="flex flex-col gap-2 md:gap-4 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
-                {/* Strength Displays (Dual for Hi-Low) */}
-                <div className="absolute top-2 left-1.5 animate-in slide-in-from-left duration-500">
+            <div className="flex flex-col gap-3 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
+                <div className="absolute top-2 left-2 animate-in slide-in-from-left duration-500">
                     {activeVariant?.id === 'HILOW' && (
-                        <div className="flex flex-col items-start">
-                            <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Low Strength</span>
-                            <span className="text-[9px] md:text-[18px] text-emerald-400 font-black uppercase leading-none">{String(heroPlayerObj.lowStrength || "Pre-flop")}</span>
+                        <div className="flex flex-col items-start bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-500/20 shadow-xl">
+                            <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">Low Hand Strength</span>
+                            <span className="text-[10px] md:text-[20px] text-emerald-400 font-black uppercase leading-none">{String(heroPlayerObj.lowStrength || "Pre-flop")}</span>
                         </div>
                     )}
                 </div>
-                <div className="absolute top-2 right-1.5 animate-in slide-in-from-right duration-500">
-                    <div className="flex flex-col items-end">
-                        <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">
-                            {activeVariant?.id === 'HILOW' ? 'High Strength' : 'Strength'}
-                        </span>
-                        <span className="text-[9px] md:text-[18px] text-purple-400 font-black uppercase leading-none">
-                            {String(heroPlayerObj.strength || "Pre-flop")}
-                        </span>
+                <div className="absolute top-2 right-2 animate-in slide-in-from-right duration-500">
+                    <div className="flex flex-col items-end bg-purple-950/40 px-3 py-1 rounded-lg border border-purple-500/20 shadow-xl">
+                        <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">{activeVariant?.id === 'HILOW' ? 'High Hand Strength' : 'Hand Strength'}</span>
+                        <span className="text-[10px] md:text-[20px] text-purple-400 font-black uppercase leading-none">{String(heroPlayerObj.strength || "Pre-flop")}</span>
                     </div>
                 </div>
 
                 {Number(heroPlayerObj.chips) > 0 ? (<>
-                        <div className="flex gap-1 w-full max-w-[600px] font-black uppercase"><button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button><button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button><button onClick={handleAllIn} className="flex-1 h-7 md:h-10 bg-red-900/30 border border-red-500/50 rounded-md text-[8px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center">ALL-IN</button></div>
-                        <div className="flex flex-row gap-1 w-full items-center justify-center font-black">
-                            <button onClick={()=>handleAction('FOLD')} className="flex-1 h-10 md:h-16 bg-red-950/60 border border-red-500/50 rounded-lg tracking-[0.1em] hover:brightness-125 transition-all font-black text-[10px] md:text-sm shadow-xl uppercase">FOLD</button>
-                            <button onClick={()=>handleAction('CALL')} className="flex-1 h-10 md:h-16 bg-indigo-900/60 border border-indigo-400/50 rounded-xl text-[10px] md:text-xl tracking-[0.1em] hover:brightness-125 font-black shadow-xl uppercase px-1 truncate">{highestBet > heroPlayerObj.currentBet ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `ALL-IN` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) : 'CHECK'}</button>
-                            <div className="flex-[2] flex gap-1 items-center bg-black/60 border border-white/10 p-0.5 md:p-1.5 rounded-lg shadow-inner font-black uppercase overflow-hidden">
-                                <div className="flex items-center bg-black/40 px-1 md:px-5 rounded-md border border-white/5 h-9 md:h-14 font-black uppercase flex-1">
-                                    <span className="text-[#fbbf24] text-[10px] md:text-xl font-mono mr-0.5">$</span>
-                                    <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center font-mono text-xs md:text-2xl text-[#fbbf24] outline-none font-black" />
+                        <div className="flex gap-2 w-full max-w-[700px] font-black uppercase"><button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-[14px] hover:bg-white/15 transition-all font-black uppercase flex items-center justify-center tracking-widest">1/2 POT</button><button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-[14px] hover:bg-white/15 transition-all font-black uppercase flex items-center justify-center tracking-widest">POT</button><button onClick={handleAllIn} className="flex-1 h-8 md:h-12 bg-red-950/50 border border-red-500/40 rounded-lg text-[9px] md:text-[14px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center tracking-widest shadow-lg">ALL-IN</button></div>
+                        <div className="flex flex-row gap-2 w-full items-center justify-center font-black">
+                            <button onClick={()=>handleAction('FOLD')} className="flex-1 h-12 md:h-20 bg-gradient-to-b from-red-950/80 to-red-900/60 border border-red-500/30 rounded-xl tracking-widest hover:brightness-125 transition-all font-black text-[11px] md:text-lg shadow-2xl uppercase">FOLD</button>
+                            <button onClick={()=>handleAction('CALL')} className="flex-1 h-12 md:h-20 bg-gradient-to-b from-indigo-950/80 to-indigo-900/60 border border-indigo-400/30 rounded-xl text-[11px] md:text-2xl tracking-widest hover:brightness-125 font-black shadow-2xl uppercase px-2 truncate">{highestBet > heroPlayerObj.currentBet ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `ALL-IN` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) : 'CHECK'}</button>
+                            <div className="flex-[2] flex gap-2 items-center bg-black/80 border border-white/5 p-1 md:p-2 rounded-xl shadow-inner font-black uppercase overflow-hidden">
+                                <div className="flex items-center bg-black/60 px-2 md:px-6 rounded-lg border border-white/5 h-10 md:h-16 font-black uppercase flex-1 shadow-inner">
+                                    <span className="text-[#fbbf24] text-[12px] md:text-2xl font-mono mr-1.5">$</span>
+                                    <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center font-mono text-sm md:text-3xl text-[#fbbf24] outline-none font-black" />
                                 </div>
-                                <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-9 md:h-14 bg-emerald-600/60 border border-400/50 rounded-md flex items-center justify-center hover:brightness-125 font-black uppercase text-[9px] md:text-xl shadow-xl"><Zap size={10} className="mr-0.5 text-emerald-400"/> RAISE</button>
+                                <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-10 md:h-16 bg-emerald-700/80 border border-emerald-400/30 rounded-lg flex items-center justify-center hover:brightness-125 font-black uppercase text-[10px] md:text-2xl shadow-2xl tracking-tighter"><Zap size={14} className="mr-1 text-emerald-400 animate-pulse"/> RAISE</button>
                             </div>
-                        </div></>) : ( <div className="flex flex-col items-center gap-1 animate-pulse"><span className="text-lg md:text-4xl font-black text-white tracking-tighter uppercase">ALL-IN POSITION</span></div> )}
+                        </div></>) : ( <div className="flex flex-col items-center gap-1 animate-pulse"><span className="text-xl md:text-5xl font-black text-white tracking-widest uppercase opacity-20">ALL-IN POSITION</span></div> )}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-start h-full relative font-black uppercase">
+            <div className="flex flex-col items-center justify-center h-full relative font-black uppercase overflow-visible">
                 {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
-                    <div className="w-full h-full flex flex-col items-center gap-2 md:gap-4 animate-in fade-in zoom-in duration-700 relative overflow-visible">
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-1 md:gap-3 animate-in fade-in zoom-in duration-700 relative overflow-visible">
                         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                            {[...Array(12)].map((_, i) => (
-                                <div key={i} className={`sparkle-particle sparkle-${i} absolute w-1 h-1 bg-yellow-400 rounded-full opacity-0`} />
+                            {[...Array(16)].map((_, i) => (
+                                <div key={i} className={`sparkle-particle sparkle-${i} absolute w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-0 shadow-[0_0_10px_#fbbf24]`} />
                             ))}
                         </div>
-
-                        <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.2em] text-[10px] md:text-2xl uppercase text-center px-4 drop-shadow-[0_0_15px_rgba(251,191,36,0.6)]">
+                        <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.2em] text-[10px] md:text-xl uppercase text-center px-4 drop-shadow-[0_0_20px_rgba(251,191,36,0.7)] bg-yellow-400/5 py-1 rounded-full border border-yellow-400/10">
                             <Trophy size={14} className="md:size-6" /> 
                             {showdownWinners.length === 1 
-                              ? (showdownWinners[0].rank === "!" ? `${showdownWinners[0].name} won!` : `${showdownWinners[0].name} won with ${showdownWinners[0].rank}`)
+                              ? (showdownWinners[0].rank === "!" ? `${showdownWinners[0].name} SWEEPS POT!` : `${showdownWinners[0].name} WINS WITH ${showdownWinners[0].rank}`)
                               : `POT SPLIT: ${showdownWinners[currentShowdownIdx].name} - ${showdownWinners[currentShowdownIdx].rank}`
                             }
                         </div>
-
-                        <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-8 px-2 md:px-16 justify-center no-scrollbar pb-1">
-                            {/* Display only ONE winner at a time based on currentShowdownIdx */}
+                        <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-8 px-4 justify-center no-scrollbar pb-1 overflow-visible">
                             {showdownWinners[currentShowdownIdx] && (
-                                <div key={currentShowdownIdx} className="flex items-center gap-3 md:gap-8 bg-black/70 p-2 md:p-6 rounded-[1.5rem] md:rounded-[3.5rem] border-2 border-yellow-500/40 shadow-2xl min-w-[200px] md:min-w-[450px] animate-showdown-card-pop shrink-0">
+                                <div key={currentShowdownIdx} className="flex items-center gap-4 md:gap-8 bg-slate-950/90 p-3 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border-2 border-yellow-500/40 shadow-[0_0_60px_rgba(0,0,0,0.8)] min-w-[240px] md:min-w-[500px] animate-showdown-card-pop shrink-0">
                                     <div className="flex flex-col items-center shrink-0">
-                                        <div className="text-white font-black text-[12px] md:text-3xl drop-shadow-lg uppercase truncate max-w-[80px] md:max-w-none mb-0.5">{String(showdownWinners[currentShowdownIdx].name)}</div>
-                                        <div className="bg-yellow-500 text-black px-2 py-0.5 rounded-full font-mono text-[10px] md:text-2xl font-black shadow-inner">+${(showdownWinners[currentShowdownIdx].amount || 0).toLocaleString()}</div>
-                                        <div className="text-yellow-400/80 text-[6px] md:text-[10px] tracking-widest uppercase mt-1.5 font-black italic">{showdownWinners[currentShowdownIdx].rank === "!" ? "Pot Swept" : String(showdownWinners[currentShowdownIdx].rank)}</div>
+                                        <div className="text-white font-black text-[12px] md:text-2xl drop-shadow-2xl uppercase truncate max-w-[100px] md:max-w-none mb-0.5 tracking-tighter">{String(showdownWinners[currentShowdownIdx].name)}</div>
+                                        <div className="bg-gradient-to-r from-yellow-400 to-amber-600 text-black px-3 py-0.5 rounded-full font-mono text-[10px] md:text-xl font-black shadow-inner tracking-widest">+${(showdownWinners[currentShowdownIdx].amount || 0).toLocaleString()}</div>
+                                        <div className="text-yellow-400/70 text-[6px] md:text-[10px] tracking-[0.2em] uppercase mt-2 font-black italic">{showdownWinners[currentShowdownIdx].rank === "!" ? "Pot Swept" : String(showdownWinners[currentShowdownIdx].rank)}</div>
                                     </div>
                                     <div className="flex gap-1 md:gap-2 items-center justify-center">
                                         {(showdownWinners[currentShowdownIdx].hand || []).map((c, ci) => (
-                                            <div key={ci} className="w-6 md:w-16 h-9 md:h-24 bg-white rounded-sm md:rounded-xl flex flex-col items-center justify-center text-black shadow-lg ring-1 ring-black/5 relative overflow-hidden" 
-                                                 style={{ animation: `card-flip-hero 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.4 + ci * 0.2}s`, opacity: 0 }}>
-                                                <span className="text-[8px] md:text-[20px] font-black absolute top-0.5 left-1 leading-none">{String(c.value)}</span>
-                                                <span className={`text-[12px] md:text-[36px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                            <div key={ci} className="w-7 md:w-16 h-10 md:h-24 bg-white rounded-md md:rounded-xl flex flex-col items-center justify-center text-black shadow-2xl ring-1 ring-black/5 relative overflow-hidden" 
+                                                 style={{ animation: `card-flip-hero 1.0s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.4 + ci * 0.2}s`, opacity: 0 }}>
+                                                <span className="text-[9px] md:text-[20px] font-black absolute top-0.5 left-1 leading-none">{String(c.value)}</span>
+                                                <span className={`text-[14px] md:text-[36px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -907,28 +916,28 @@ const App = () => {
                         </div>
                     </div>
                 ) : ( 
-                    <div className="flex flex-col items-center justify-start pt-4 relative font-black uppercase w-full">
+                    <div className="flex flex-col items-center justify-center relative font-black uppercase w-full">
                         <div className="flex flex-col items-center gap-1 md:gap-4 animate-in fade-in duration-500 font-black uppercase w-full max-w-[1000px]">
-                          {phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3 pt-4"><span className="text-white/40 tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase leading-none">Arena Idle</span></div>) : (
-                            <div className="flex flex-row items-center justify-between w-full gap-2 md:gap-4 px-2 md:px-4 animate-in fade-in duration-500 font-black uppercase">
-                                <div className="flex flex-col items-start">
-                                    <span className="text-cyan-400 text-[8px] md:text-[12px] animate-pulse mb-0.5 font-black">PLAYER TURN</span>
-                                    <span className="text-white text-xs md:text-3xl font-black tracking-tighter drop-shadow-lg uppercase leading-none truncate max-w-[80px] md:max-w-none">{String(players[activeIdx]?.name || "OPPONENT")}</span>
+                          {phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3"><span className="text-white/20 tracking-[0.5em] text-[11px] md:text-xl font-black italic uppercase leading-none animate-pulse">Waiting for Dealer...</span></div>) : (
+                            <div className="flex flex-row items-center justify-between w-full gap-4 md:gap-10 px-4 md:px-8 animate-in fade-in duration-500 font-black uppercase">
+                                <div className="flex flex-col items-start bg-cyan-950/20 px-5 py-2 rounded-2xl border border-cyan-500/10">
+                                    <span className="text-cyan-400 text-[9px] md:text-[13px] animate-pulse mb-1 font-black tracking-widest">ACTIVE TURN</span>
+                                    <span className="text-white text-sm md:text-4xl font-black tracking-tighter drop-shadow-2xl uppercase leading-none truncate max-w-[100px] md:max-w-none">{String(players[activeIdx]?.name || "OPPONENT")}</span>
                                 </div>
                                 {heroPlayerObj && !heroPlayerObj.isFolded && (
-                                  <div className="flex items-center gap-2 md:gap-4 bg-white/5 p-2 md:p-4 rounded-xl md:rounded-2xl border border-white/10 shadow-inner">
+                                  <div className="flex items-center gap-4 md:gap-8 bg-slate-950/60 p-3 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-white/5 shadow-2xl">
                                       <div className="flex flex-col">
-                                          <span className="text-white/40 text-[6px] md:text-[10px] font-black">YOUR HAND</span>
-                                          <span className="text-[13px] md:text-[20px] text-purple-400 font-black uppercase">
+                                          <span className="text-white/30 text-[7px] md:text-[11px] font-black tracking-widest">MY HAND</span>
+                                          <span className="text-[15px] md:text-[24px] text-purple-400 font-black uppercase tracking-tight">
                                               {activeVariant?.id === 'HILOW' 
                                                 ? `${heroPlayerObj.strength || "Pre-flop"} / ${heroPlayerObj.lowStrength || "Pre-flop"}`
                                                 : (heroPlayerObj.strength || "Pre-flop")}
                                           </span>
                                       </div>
-                                      <div className="h-6 md:h-10 w-px bg-white/10" />
+                                      <div className="h-8 md:h-14 w-px bg-white/10" />
                                       <div className="flex flex-col items-end">
-                                          <span className="text-white/40 text-[6px] md:text-[10px] font-black">WIN PROB.</span>
-                                          <span className="text-[#fbbf24] text-xs md:text-xl font-mono font-black">{Math.round(heroWinProb)}%</span>
+                                          <span className="text-white/30 text-[7px] md:text-[11px] font-black tracking-widest">WIN %</span>
+                                          <span className="text-[#fbbf24] text-sm md:text-2xl font-mono font-black">{Math.round(heroWinProb)}%</span>
                                       </div>
                                   </div>
                                 )}
@@ -943,57 +952,56 @@ const App = () => {
       </footer>
       <style>{`
           @keyframes fling-to-pot { 
-            0% { transform: translate(calc(-50% + 0px), 0px) scale(2.0); filter: blur(0px) brightness(2); } 
-            15% { transform: translate(calc(-50% + 20px), -10vh) scale(1.4); filter: blur(1px) brightness(1.5); }
-            100% { transform: translate(calc(-50% + 10px), -45vh) scale(0) rotate(720deg); filter: blur(15px) grayscale(1); opacity: 0; } 
+            0% { transform: translate(calc(-50% + 0px), 0px) scale(1.0); filter: blur(0px) brightness(1.5); } 
+            20% { transform: translate(calc(-50% + 10px), -5vh) scale(1.1); filter: brightness(2.0); }
+            100% { transform: translate(calc(-50% + 5px), -45vh) scale(0) rotate(360deg); filter: blur(20px); opacity: 0; } 
           }
+          @keyframes pro-bet-entry {
+            0% { transform: translate(-50%, 0px) scale(0.5); opacity: 0; filter: blur(10px); }
+            60% { transform: translate(calc(-50% + var(--target-x, 0px)), -50px) scale(1.1); opacity: 1; filter: blur(0px); }
+            100% { transform: translate(calc(-50% + var(--target-x, 0px)), 0px) scale(1.0); opacity: 1; }
+          }
+          .animate-pro-bet-entry { animation: pro-bet-entry 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+          
           @keyframes pot-pulse { 
-            0% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 
-            50% { transform: scale(1.15); filter: drop-shadow(0 0 40px #fbbf24) brightness(1.3); } 
-            100% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 
+            0% { transform: scale(1); filter: drop-shadow(0 0 10px #fbbf24); } 
+            50% { transform: scale(1.1); filter: drop-shadow(0 0 50px #fbbf24) brightness(1.4); } 
+            100% { transform: scale(1); filter: drop-shadow(0 0 10px #fbbf24); } 
           }
-          .animate-pot-pulse { animation: pot-pulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-          .animate-pulse-glow { animation: pulse-glow 1.5s infinite ease-in-out; }
-          @keyframes pulse-glow { 0% { box-shadow: 0 0 5px rgba(251,191,36,0.2); } 50% { box-shadow: 0 0 35px rgba(251,191,36,0.7); } 100% { box-shadow: 0 0 5px rgba(251,191,36,0.2); } }
+          .animate-pot-pulse { animation: pot-pulse 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+          .animate-pulse-glow { animation: pulse-glow 2s infinite ease-in-out; }
+          @keyframes pulse-glow { 0% { box-shadow: 0 0 10px rgba(251,191,36,0.2); } 50% { box-shadow: 0 0 50px rgba(251,191,36,0.8); } 100% { box-shadow: 0 0 10px rgba(251,191,36,0.2); } }
           
           .no-scrollbar::-webkit-scrollbar { display: none; }
           .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
           
           @keyframes showdown-pop { 
-            0% { transform: scale(0.9) translateY(40px); opacity: 0; filter: brightness(0); } 
-            100% { transform: scale(1) translateY(0); opacity: 1; filter: brightness(1); } 
+            0% { transform: scale(0.8) translateY(20px); opacity: 0; filter: brightness(0) blur(10px); } 
+            100% { transform: scale(1) translateY(0); opacity: 1; filter: brightness(1) blur(0px); } 
           }
           .animate-showdown-card-pop { animation: showdown-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
           
           @keyframes card-flip-hero { 
-            0% { transform: rotateY(180deg) scale(0.2); opacity: 0; filter: blur(10px); } 
+            0% { transform: rotateY(180deg) scale(0.1); opacity: 0; filter: blur(20px); } 
             100% { transform: rotateY(0deg) scale(1); opacity: 1; filter: blur(0px); } 
           }
           
           @keyframes sparkle {
             0% { transform: translate(0,0) scale(0); opacity: 0; }
             50% { opacity: 1; }
-            100% { transform: translate(var(--x), var(--y)) scale(1.5); opacity: 0; }
+            100% { transform: translate(var(--x), var(--y)) scale(2.0); opacity: 0; }
           }
-          .sparkle-particle { animation: sparkle 1.5s ease-out infinite; }
-          .sparkle-0 { --x: 50px; --y: -50px; left: 50%; top: 20%; animation-delay: 0.1s; }
-          .sparkle-1 { --x: -60px; --y: -40px; left: 45%; top: 30%; animation-delay: 0.3s; }
-          .sparkle-2 { --x: 70px; --y: -30px; left: 55%; top: 25%; animation-delay: 0.5s; }
-          .sparkle-3 { --x: -40px; --y: -70px; left: 50%; top: 35%; animation-delay: 0.7s; }
-          .sparkle-4 { --x: 30px; --y: -80px; left: 48%; top: 15%; animation-delay: 0.9s; }
-          .sparkle-5 { --x: -80px; --y: -20px; left: 52%; top: 40%; animation-delay: 1.1s; }
-          .sparkle-6 { --x: 10px; --y: -90px; left: 40%; top: 10%; animation-delay: 0.2s; }
-          .sparkle-7 { --x: -20px; --y: -55px; left: 60%; top: 18%; animation-delay: 0.4s; }
+          .sparkle-particle { animation: sparkle 2s ease-out infinite; }
+          .sparkle-0 { --x: 80px; --y: -80px; left: 50%; top: 20%; animation-delay: 0.1s; }
+          .sparkle-1 { --x: -90px; --y: -60px; left: 45%; top: 30%; animation-delay: 0.3s; }
+          .sparkle-2 { --x: 100px; --y: -40px; left: 55%; top: 25%; animation-delay: 0.5s; }
+          .sparkle-3 { --x: -60px; --y: -100px; left: 50%; top: 35%; animation-delay: 0.7s; }
+          .sparkle-4 { --x: 40px; --y: -120px; left: 48%; top: 15%; animation-delay: 0.9s; }
+          .sparkle-5 { --x: -110px; --y: -30px; left: 52%; top: 40%; animation-delay: 1.1s; }
+          .sparkle-6 { --x: 20px; --y: -130px; left: 40%; top: 10%; animation-delay: 0.2s; }
+          .sparkle-7 { --x: -30px; --y: -75px; left: 60%; top: 18%; animation-delay: 0.4s; }
           
-          @keyframes bet-splash { 
-            0% { transform: translate(-50%, -50%) scale(0) rotate(-180deg); opacity: 0; filter: brightness(3); } 
-            50% { transform: translate(-50%, -50%) scale(1.4) rotate(10deg); opacity: 1; filter: brightness(1.5); }
-            75% { transform: translate(-50%, -50%) scale(0.9) rotate(-5deg); }
-            100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; } 
-          }
-          .animate-bet-splash { animation: bet-splash 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-          
-          html, body { overscroll-behavior-y: contain; height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; }
+          html, body { overscroll-behavior-y: contain; height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #020408; }
       `}</style>
     </div>
   );
