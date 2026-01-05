@@ -43,13 +43,6 @@ const VM = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
-const calculateAccurateEquity = (heroHand, community) => {
-    if (!heroHand || community.length < 3) return 0;
-    const sorted = [...heroHand, ...community].sort((a, b) => VM[b.value] - VM[a.value]);
-    const highCard = VM[sorted[0].value];
-    return Math.min(99, Math.max(5, (highCard / 14) * 80 + (Math.random() * 10)));
-};
-
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, 
   isDealer, strengthLabel, potTransferring, timeRemaining, isHero, 
@@ -58,17 +51,15 @@ const Seat = ({
     if (!player || !displayPos) return null;
     const isShowdown = phase === PHASES.SHOWDOWN;
     const betOffset = BET_OFFSETS[relativeIdx] || { x: 0, y: 0 };
-    const TURN_LIMIT = 15;
-
     const currentCardScale = isHero ? visuals.heroCardScale : visuals.oppCardScale;
     const currentCardY = isHero ? visuals.heroCardY : visuals.oppCardY;
 
     return (
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'}`}>
-            {(isHero || isShowdown) && !player.isFolded && phase !== PHASES.IDLE && player.winProbability !== undefined && (
+            {(isHero || isShowdown) && !player.isFolded && phase !== PHASES.IDLE && player.winProbability > 0 && (
               <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-300">
                 <div className="bg-slate-900/90 backdrop-blur-xl border border-cyan-500/50 px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
-                  <span className="text-[10px] font-black text-white font-mono">{Math.round(player.winProbability || 0)}%</span>
+                  <span className="text-[10px] font-black text-white font-mono">{Math.round(player.winProbability)}%</span>
                 </div>
               </div>
             )}
@@ -93,21 +84,14 @@ const Seat = ({
             )}
             <div style={{ transform: `translateY(${visuals.badgeY}px)` }}
                 className={`relative z-50 flex flex-col items-center p-1 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[70px] md:min-w-[150px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-2 ring-cyan-400/40 scale-105 shadow-[0_0_200px_rgba(34,211,238,0.2)]' : 'border-white/10'} ${player.isWinner && isShowdown ? 'border-yellow-400 animate-pulse-glow' : ''}`}>
-                
-                {isDealer && ( 
-                  <div className="absolute -top-1 -right-1 flex items-center justify-center z-[110]">
-                    <div className="w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white shadow-[0_0_12px_rgba(220,38,38,0.9)] animate-pulse" />
-                  </div> 
-                )}
-
+                {isDealer && ( <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white shadow-[0_0_12px_rgba(220,38,38,0.9)] animate-pulse z-[110]" /> )}
                 {isActiveTurn && timeRemaining > 0 && (
                     <div className="absolute -top-1 w-full px-1.5 h-1 z-[60]">
                         <div className="w-full h-full bg-black/40 rounded-full overflow-hidden">
-                            <div className="h-full bg-cyan-400 transition-all duration-1000 linear" style={{ width: `${(timeRemaining / TURN_LIMIT) * 100}%` }} />
+                            <div className="h-full bg-cyan-400 transition-all duration-1000 linear" style={{ width: `${(timeRemaining / 15) * 100}%` }} />
                         </div>
                     </div>
                 )}
-
                 <div className="flex flex-col items-center gap-0 w-full">
                     <div className="flex items-center gap-1">
                       {player.isBot && <Bot size={6} className="text-indigo-400" />}
@@ -121,17 +105,12 @@ const Seat = ({
                     {player.hand.map((c, ci) => {
                         const mid = (player.hand.length - 1) / 2;
                         const offset = ci - mid;
-                        const fanRotation = offset * (player.hand.length > 2 ? 18 : 25);
+                        const fanRotation = offset * visuals.holeCardFan;
                         const fanTranslation = offset * (player.hand.length > 2 ? 2.0 : 3.5);
                         return (
                           <div key={c.id || ci} 
                               className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
-                              style={{ 
-                                  transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, 
-                                  transformOrigin: 'bottom center', 
-                                  top: `${currentCardY}px`,
-                                  animationDelay: `${seatIdx * 0.1}s`
-                              }}>
+                              style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${seatIdx * 0.1}s` }}>
                               {(isShowdown || isHero) && ( <><span className="text-[9px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
                           </div>
                         );
@@ -163,9 +142,6 @@ const App = () => {
   const [allProfiles, setAllProfiles] = useState([]);
   const [selectedTableForJoin, setSelectedTableForJoin] = useState(null);
   const [buyInAmount, setBuyInAmount] = useState(1000);
-  const [isCollectingBets, setIsCollectingBets] = useState(false);
-  const [newPlayer, setNewPlayer] = useState({ name: '', chips: 5000, password: '' });
-  const [newTable, setNewTable] = useState({ name: '', sb: 10, bb: 20, minBuy: 400, maxBuy: 2000, pendingVariant: 'HOLDEM' });
   const [raiseInput, setRaiseInput] = useState(0);
   const [currentRoomId, setCurrentRoomId] = useState(null);
   const [potAnimating, setPotAnimating] = useState(false);
@@ -174,29 +150,22 @@ const App = () => {
   const [nuclearConfirm, setNuclearConfirm] = useState(false);
   const [showVisualControls, setShowVisualControls] = useState(false);
   const [intelExpanded, setIntelExpanded] = useState(false);
+  
+  // Missing states from previous turn
+  const [newPlayer, setNewPlayer] = useState({ name: '', chips: 5000, password: '' });
+  const [newTable, setNewTable] = useState({ name: '', sb: 10, bb: 20, minBuy: 400, maxBuy: 2000, pendingVariant: 'HOLDEM' });
 
-  // Responsive UI Constant Detection
   const isMobile = window.innerWidth < 768;
-  const headerHeight = isMobile ? 56 : 72; // Increased header height to fit larger text
+  const headerHeight = isMobile ? 56 : 72; 
 
-  // Layout Adjustment States
   const [visuals, setVisuals] = useState({
-    heroCardScale: 2.2,
-    heroCardY: -9,
-    oppCardScale: 1.0,
-    oppCardY: -25,
-    commCardScale: isMobile ? 1.5 : 1.8,
-    commCardY: isMobile ? -20 : 0,
-    betScale: isMobile ? 0.8 : 1.0,
-    betY: isMobile ? -5 : 0,
-    badgeY: isMobile ? 85 : 100,
-    footerHeight: 180,
-    tableZoom: isMobile ? 0.6 : 0.85 
+    heroCardScale: 4.0, heroCardY: 22, oppCardScale: 1.0, oppCardY: -25,
+    commCardScale: 1.8, commCardY: -7, betScale: 2.0, betY: 47,
+    badgeY: 85, footerHeight: 230, tableZoom: 0.85, holeCardFan: 25
   });
 
   const footerHeight = visuals.footerHeight;
   const tableZoom = visuals.tableZoom;
-
   const logEndRef = useRef(null);
 
   const heroIdx = useMemo(() => {
@@ -205,44 +174,34 @@ const App = () => {
   }, [players, userProfile]);
 
   const heroPlayerObj = useMemo(() => heroIdx !== -1 ? players[heroIdx] : null, [players, heroIdx]);
-
-  const heroWinProb = useMemo(() => {
-    if (!heroPlayerObj || heroPlayerObj.isFolded || community.length < 3) return 0;
-    return calculateAccurateEquity(heroPlayerObj.hand, community);
-  }, [heroPlayerObj, community]);
+  const heroWinProb = useMemo(() => heroPlayerObj?.winProbability || 0, [heroPlayerObj]);
 
   const totalDisplayPot = useMemo(() => {
     const currentBetsSum = players.reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
     return Number(potAmount) + currentBetsSum;
   }, [potAmount, players]);
 
-  const isBrokeStatus = useMemo(() => {
-    return heroPlayerObj && Number(heroPlayerObj.chips) <= 0 && phase !== PHASES.SHOWDOWN && phase !== PHASES.IDLE;
-  }, [heroPlayerObj, phase]);
+  const isBrokeStatus = useMemo(() => heroPlayerObj && Number(heroPlayerObj.chips) <= 0 && phase !== PHASES.SHOWDOWN && phase !== PHASES.IDLE, [heroPlayerObj, phase]);
 
   const minRaiseAllowed = useMemo(() => {
       const bb = 20; return Math.max(highestBet + bb, highestBet * 2);
   }, [highestBet]);
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (intelExpanded) logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs, intelExpanded]);
 
   const handleAction = useCallback((type, amt = 0) => {
-    const roomId = currentRoomId; if (!roomId) return;
-    socket.emit('playerAction', { roomId, type, amount: type === 'RAISE' ? Number(amt || raiseInput) : 0 });
+    if (currentRoomId) socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(amt || raiseInput) : 0 });
   }, [currentRoomId, raiseInput]);
 
   const handleAllIn = useCallback(() => {
     if (!heroPlayerObj) return;
     const totalStack = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
-    if (totalStack <= highestBet) { handleAction('CALL'); } 
-    else { handleAction('RAISE', totalStack); }
+    if (totalStack <= highestBet) handleAction('CALL'); else handleAction('RAISE', totalStack);
   }, [heroPlayerObj, highestBet, handleAction]);
 
-  const addBot = useCallback(() => { 
-    if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); 
-  }, [currentRoomId]);
+  const addBot = useCallback(() => { if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); }, [currentRoomId]);
 
   const handleNuclear = useCallback(() => {
       if (!nuclearConfirm) { setNuclearConfirm(true); setTimeout(() => setNuclearConfirm(false), 3000); return; }
@@ -265,73 +224,37 @@ const App = () => {
     if (passwordInput.toLowerCase().trim() === 'pass') { 
         setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin' }); 
         setCurrentView(VIEWS.ADMIN); socket.emit('getInitialData'); 
-    } 
-    else { socket.emit('playerLogin', { password: passwordInput }); }
+    } else socket.emit('playerLogin', { password: passwordInput });
   }, [passwordInput]);
 
   const joinRoom = useCallback(() => {
     if (!selectedTableForJoin || !userProfile) return;
     socket.emit('joinRoom', { roomId: selectedTableForJoin.id, profile: { ...userProfile, pendingVariant: pendingVariantId }, buyIn: buyInAmount }, (res) => {
-        if (res?.status === 'ok') { 
-          setCurrentRoomId(selectedTableForJoin.id); 
-          setCurrentView(VIEWS.GAME); 
-          setSelectedTableForJoin(null); 
-        }
+        if (res?.status === 'ok') { setCurrentRoomId(selectedTableForJoin.id); setCurrentView(VIEWS.GAME); setSelectedTableForJoin(null); }
     });
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
   useEffect(() => {
     const handleRoomUpdate = (d) => {
         if (!d) return;
-        setPlayers(() => { 
-            const next = [...INITIAL_PLAYERS]; (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); return next; 
-        });
+        setPlayers(() => { const next = [...INITIAL_PLAYERS]; (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); return next; });
         setPhase(d.phase); setCommunity(d.community || []); setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
-        setActiveIdx(d.activeIdx ?? -1); setHighestBet(d.highestBet || 0);
-        setDealerIdx(d.dealerIdx ?? -1);
+        setActiveIdx(d.activeIdx ?? -1); setHighestBet(d.highestBet || 0); setDealerIdx(d.dealerIdx ?? -1);
         setTimeRemaining(d.timeRemaining !== undefined ? Math.max(0, d.timeRemaining) : 0);
-        
         if (d.activeVariant) {
             const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
             setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId });
         }
-        if (d.phase === PHASES.SHOWDOWN) {
-            setPotTransferring(true); setShowdownWinners(d.showdownWinners || null);
-            setTimeout(() => setPotTransferring(false), 4000);
-        }
+        if (d.phase === PHASES.SHOWDOWN) { setPotTransferring(true); setShowdownWinners(d.showdownWinners || null); setTimeout(() => setPotTransferring(false), 4000); }
     };
-    
-    const handleProfilesUpdate = (list) => {
-        setAllProfiles(list || []);
-        setUserProfile(prev => {
-            if (!prev) return prev;
-            const me = list?.find(p => p.uid === prev.uid || p.name === prev.name);
-            return me ? { ...prev, chips: me.chips } : prev;
-        });
-    };
-
-    const handleLog = (d) => {
-        const entry = { 
-          id: Math.random() + '-' + Date.now(), 
-          time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), 
-          ...d 
-        };
-        setLogs(prev => [...prev, entry].slice(-100));
-    };
-    
     socket.on('roomUpdate', handleRoomUpdate);
     socket.on('lobbyUpdate', (list) => setActiveTables(list || []));
-    socket.on('profilesUpdate', handleProfilesUpdate);
+    socket.on('profilesUpdate', (list) => { setAllProfiles(list || []); setUserProfile(prev => { if (!prev) return prev; const me = list?.find(p => p.uid === prev.uid || p.name === prev.name); return me ? { ...prev, chips: me.chips } : prev; }); });
     socket.on('initialDataResponse', (d) => { if (d.profiles) setAllProfiles(d.profiles); if (d.rooms) setActiveTables(d.rooms); });
     socket.on('loginSuccess', (p) => { setUserProfile(p); setPendingVariantId(p.pendingVariant || 'HOLDEM'); setCurrentView(VIEWS.LOBBY); socket.emit('getInitialData'); });
-    socket.on('log', handleLog);
+    socket.on('log', (d) => setLogs(prev => [...prev, { id: Math.random() + '-' + Date.now(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), ...d }].slice(-100)));
     socket.emit('getInitialData');
-
-    return () => { 
-      socket.off('roomUpdate'); socket.off('lobbyUpdate'); 
-      socket.off('profilesUpdate'); socket.off('initialDataResponse'); 
-      socket.off('loginSuccess'); socket.off('log'); 
-    };
+    return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); };
   }, []);
 
   if (currentView === VIEWS.LOGIN) return (
@@ -392,7 +315,7 @@ const App = () => {
   );
 
   if (currentView === VIEWS.LOBBY) return (
-    <div className="h-screen bg-[#06080c] flex flex-col text-white font-black uppercase overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+    <div className="h-screen bg-[#06080c] flex flex-col text-white font-black uppercase overflow-hidden">
         {selectedTableForJoin && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md px-6">
               <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-[#fbbf24]/30 rounded-3xl shadow-2xl flex flex-col gap-6 md:gap-10">
@@ -405,7 +328,7 @@ const App = () => {
               </div>
             </div>
         )}
-        <header className="h-14 md:h-20 border-b border-white/10 flex items-center justify-between px-5 md:px-12 bg-black/40 backdrop-blur-md shadow-xl z-50 shrink-0">
+        <header className="h-14 md:h-20 border-b border-white/10 flex items-center justify-between px-5 md:px-12 bg-black/40 backdrop-blur-md shadow-xl shrink-0">
           <h2 className="tracking-[0.2em] md:tracking-[0.4em] text-xs md:text-xl flex items-center gap-2 md:gap-4 font-black"><LayoutGrid className="text-[#fbbf24] w-3 md:w-6"/> LOBBY</h2>
           <div className="flex items-center gap-3 md:gap-10 font-black">
             <div className="flex flex-col items-end"><span className="text-[7px] text-white/40 uppercase italic truncate max-w-[50px] md:max-w-none">{String(userProfile?.name || "??")}</span><span className="text-emerald-400 font-mono text-xs md:text-2xl tracking-tighter">${Number(userProfile?.chips || 0).toLocaleString()}</span></div>
@@ -419,107 +342,38 @@ const App = () => {
   );
 
   return (
-    <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-      
-      {/* Visual Adjustments Overlay */}
+    <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter">
+      {intelExpanded && (
+        <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-[800px] mx-auto bg-slate-900/80 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4 shrink-0">
+               <div className="flex items-center gap-2"><Eye className="text-[#fbbf24]" size={20} /><h3 className="text-xl text-[#fbbf24] font-black uppercase tracking-widest">Intelligence Access</h3></div>
+               <div className="flex items-center gap-2"><div className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30 animate-pulse font-black uppercase">Live Link Active</div><X size={20} className="text-white/40" /></div>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide font-mono">
+                {(logs || []).map(l => (
+                    <div key={l.id} className="flex items-start gap-4 p-3 border-b border-white/5 hover:bg-white/5 transition-colors group">
+                        <span className="text-white/20 text-xs w-20 shrink-0 font-black">{String(l.time)}</span>
+                        <div className="flex flex-wrap items-center gap-2 overflow-hidden"><span className={`px-2 py-0.5 rounded-md text-xs font-black uppercase ${l.type === 'win' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : l.type === 'variant' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : l.type === 'fold' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : l.type === 'phase' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-[#fbbf24]/10 text-[#fbbf24] border border-[#fbbf24]/20'}`}>{String(l.name)}</span><span className="text-white/70 text-sm font-black tracking-tight uppercase">{String(l.action)}</span></div>
+                    </div>
+                ))}
+                <div ref={logEndRef} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {showVisualControls && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-[2px] p-4">
-            <div className="w-full max-w-[500px] bg-slate-900/60 border border-white/10 rounded-3xl p-6 md:p-8 flex flex-col gap-5 shadow-2xl max-h-[80vh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                    <h3 className="text-base md:text-xl text-[#fbbf24] flex items-center gap-2 font-black uppercase">Arena Display Settings</h3>
-                    <button onClick={() => setShowVisualControls(false)} className="text-white/40 hover:text-white"><X size={18}/></button>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-[2px] p-4 md:p-12">
+            <div className="w-full max-w-[1000px] h-[90vh] bg-slate-900/60 border-2 border-white/20 rounded-[3rem] p-10 md:p-20 flex flex-col gap-12 shadow-[0_0_100px_rgba(0,0,0,0.8)] overflow-y-auto scrollbar-hide relative">
+                <div className="flex items-center justify-between border-b-2 border-white/10 pb-10 sticky top-0 bg-transparent z-10"><h3 className="text-4xl md:text-7xl text-[#fbbf24] flex items-center gap-6 font-black uppercase tracking-tighter"><Settings2 size={64}/> Display Configuration</h3><button onClick={() => setShowVisualControls(false)} className="text-white/40 hover:text-white transition-colors p-4"><X size={64}/></button></div>
+                <div className="flex flex-col gap-20 pb-20">
+                    <div className="flex flex-col gap-10"><h4 className="text-3xl md:text-5xl tracking-[0.2em] text-emerald-400 uppercase font-black border-l-8 border-emerald-400 pl-8">Arena Layout</h4><div className="flex flex-col gap-10"><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Table Zoom ({visuals.tableZoom.toFixed(2)})</label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-emerald-400 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Actions HUD Height ({visuals.footerHeight}px)</label><input type="range" min="40" max="600" step="1" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 h-8 cursor-pointer" /></div></div></div>
+                    <div className="flex flex-col gap-10"><h4 className="text-3xl md:text-5xl tracking-[0.2em] text-purple-400 uppercase font-black border-l-8 border-purple-400 pl-8">Hole Cards</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-12"><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">SIZE SCALE ({visuals.heroCardScale.toFixed(1)})</label><input type="range" min="1.0" max="6.0" step="0.1" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-purple-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Y POSITION ({visuals.heroCardY}px)</label><input type="range" min="-200" max="200" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-purple-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4 md:col-span-2"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">CARD FAN SPREAD ({visuals.holeCardFan} deg)</label><input type="range" min="0" max="60" step="1" value={visuals.holeCardFan} onChange={(e) => setVisuals({...visuals, holeCardFan: Number(e.target.value)})} className="accent-pink-500 h-8 cursor-pointer" /></div></div></div>
+                    <div className="flex flex-col gap-10"><h4 className="text-3xl md:text-5xl tracking-[0.2em] text-amber-500 uppercase font-black border-l-8 border-amber-500 pl-8">Action Labels</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-12"><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">TEXT SCALE ({visuals.betScale.toFixed(1)})</label><input type="range" min="0.5" max="4.0" step="0.1" value={visuals.betScale} onChange={(e) => setVisuals({...visuals, betScale: Number(e.target.value)})} className="accent-amber-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Y OFFSET ({visuals.betY}px)</label><input type="range" min="-300" max="300" step="1" value={visuals.betY} onChange={(e) => setVisuals({...visuals, betY: Number(e.target.value)})} className="accent-amber-500 h-8 cursor-pointer" /></div></div></div>
+                    <div className="flex flex-col gap-10"><h4 className="text-3xl md:text-5xl tracking-[0.2em] text-cyan-400 uppercase font-black border-l-8 border-cyan-400 pl-8">The Board</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-12"><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">SIZE SCALE ({visuals.commCardScale.toFixed(1)})</label><input type="range" min="1.0" max="4.0" step="0.1" value={visuals.commCardScale} onChange={(e) => setVisuals({...visuals, commCardScale: Number(e.target.value)})} className="accent-cyan-500 h-8 cursor-pointer" /></div><div className="flex flex-col gap-4"><label className="text-2xl md:text-4xl text-white/60 uppercase font-black">Y OFFSET ({visuals.commCardY}px)</label><input type="range" min="-100" max="100" step="1" value={visuals.commCardY} onChange={(e) => setVisuals({...visuals, commCardY: Number(e.target.value)})} className="accent-cyan-500 h-8 cursor-pointer" /></div></div></div>
+                    <button onClick={() => setShowVisualControls(false)} className="w-full py-10 bg-emerald-600 rounded-[2rem] text-4xl md:text-6xl font-black uppercase shadow-2xl hover:brightness-125 transition-all active:scale-95">Accept & Save Changes</button>
                 </div>
-                
-                <div className="space-y-5">
-                    {/* TABLE ZOOM CONTROL */}
-                    <div className="space-y-3">
-                        <h4 className="text-[8px] md:text-[10px] tracking-widest text-emerald-400 uppercase">Arena Layout</h4>
-                        <div className="flex flex-col gap-1">
-                            <label className="text-[8px] text-white/40 uppercase">Table Zoom ({visuals.tableZoom.toFixed(2)})</label>
-                            <input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-emerald-400 h-1" />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                            <label className="text-[8px] text-white/40 uppercase">Actions HUD Height ({visuals.footerHeight}px)</label>
-                            <input type="range" min="40" max="400" step="1" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 h-1" />
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <h4 className="text-[8px] md:text-[10px] tracking-widest text-amber-400 uppercase">On My Deal:</h4>
-                        <div className="bg-black/40 border border-white/10 p-2 rounded-xl">
-                            <select 
-                                value={pendingVariantId} 
-                                onChange={(e) => { 
-                                    setPendingVariantId(e.target.value); 
-                                    socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); 
-                                }} 
-                                className="w-full bg-transparent text-white outline-none text-xs font-black uppercase"
-                            >
-                                {Object.entries(VARIANTS).map(([k,v]) => (
-                                    <option key={k} value={k} className="bg-slate-900">{v.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <h4 className="text-[8px] md:text-[10px] tracking-widest text-emerald-400 uppercase">Hero Cards</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[8px] text-white/40">SIZE SCALE ({visuals.heroCardScale.toFixed(1)})</label>
-                                <input type="range" min="1.0" max="4.0" step="0.1" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-emerald-500 h-1" />
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[8px] text-white/40">Y POSITION ({visuals.heroCardY}px)</label>
-                                <input type="range" min="-100" max="150" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-emerald-500 h-1" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <h4 className="text-[8px] md:text-[10px] tracking-widest text-indigo-400 uppercase">Opponent Cards</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[8px] text-white/40">SIZE SCALE ({visuals.oppCardScale.toFixed(1)})</label>
-                                <input type="range" min="0.5" max="3.0" step="0.1" value={visuals.oppCardScale} onChange={(e) => setVisuals({...visuals, oppCardScale: Number(e.target.value)})} className="accent-indigo-500 h-1" />
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[8px] text-white/40">Y POSITION ({visuals.oppCardY}px)</label>
-                                <input type="range" min="-100" max="150" step="1" value={visuals.oppCardY} onChange={(e) => setVisuals({...visuals, oppCardY: Number(e.target.value)})} className="accent-indigo-500 h-1" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <h4 className="text-[8px] md:text-[10px] tracking-widest text-amber-500 uppercase">Bet & Action Labels</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[8px] text-white/40">SIZE SCALE ({visuals.betScale.toFixed(1)})</label>
-                                <input type="range" min="0.5" max="2.5" step="0.1" value={visuals.betScale} onChange={(e) => setVisuals({...visuals, betScale: Number(e.target.value)})} className="accent-amber-500 h-1" />
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[8px] text-white/40">Y OFFSET ({visuals.betY}px)</label>
-                                <input type="range" min="-300" max="300" step="1" value={visuals.betY} onChange={(e) => setVisuals({...visuals, betY: Number(e.target.value)})} className="accent-amber-500 h-1" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <h4 className="text-[8px] md:text-[10px] tracking-widest text-cyan-400 uppercase">Community Cards</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[8px] text-white/40">SIZE SCALE ({visuals.commCardScale.toFixed(1)})</label>
-                                <input type="range" min="1.0" max="3.0" step="0.1" value={visuals.commCardScale} onChange={(e) => setVisuals({...visuals, commCardScale: Number(e.target.value)})} className="accent-cyan-500 h-1" />
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[8px] text-white/40">Y OFFSET ({visuals.commCardY}px)</label>
-                                <input type="range" min="-100" max="100" step="1" value={visuals.commCardY} onChange={(e) => setVisuals({...visuals, commCardY: Number(e.target.value)})} className="accent-cyan-500 h-1" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <button onClick={() => setShowVisualControls(false)} className="w-full p-3.5 bg-emerald-600 rounded-xl font-black mt-2 text-[10px] uppercase shadow-lg">Close Settings</button>
             </div>
         </div>
       )}
@@ -538,35 +392,14 @@ const App = () => {
 
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black" style={{ height: `${headerHeight}px` }}>
         <div className="flex items-center gap-1.5 overflow-hidden flex-1">
-            <div className="bg-white/5 px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]">
-              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">This Hand:</span>
-              <span className="text-white text-[10px] md:text-sm truncate leading-none">{String(activeVariant?.name || "Hold'em")}</span>
-            </div>
-            
-            <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-lg md:rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]">
-                <span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span>
-                <select 
-                    value={pendingVariantId} 
-                    onChange={(e) => { 
-                        setPendingVariantId(e.target.value); 
-                        socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); 
-                    }} 
-                    className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full"
-                >
-                    {Object.entries(VARIANTS).map(([k,v]) => (
-                        <option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>
-                    ))}
-                </select>
-            </div>
+            <div className="bg-white/5 px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]"><span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">This Hand:</span><span className="text-white text-[10px] md:text-sm truncate leading-none">{String(activeVariant?.name || "Hold'em")}</span></div>
+            <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-lg md:rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]"><span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span><select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full">{Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>))}</select></div>
         </div>
-        
         <div className="flex items-center gap-1.5 md:gap-4">
-          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 md:px-4 py-2 rounded-lg font-mono text-[10px] md:text-[13px] shadow-inner h-[40px] md:h-[52px]">
-            <TrendingUp size={12} className="text-cyan-400" />
-            <span className="text-[#fbbf24] font-black">{Math.round(heroWinProb || 0)}%</span>
-          </div>
+          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 md:px-4 py-2 rounded-lg font-mono text-[10px] md:text-[13px] shadow-inner h-[40px] md:h-[52px]"><TrendingUp size={12} className="text-cyan-400" /><span className="text-[#fbbf24] font-black">{Math.round(heroWinProb)}%</span></div>
           <div className="flex gap-1 md:gap-2.5 items-center">
               <button onClick={addBot} className="text-indigo-400 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><Bot size={18}/></button>
+              <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 md:p-3 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors`}><Eye size={18}/></button>
               <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><Settings size={18}/></button>
               <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><LogOut size={18}/></button>
           </div>
@@ -582,14 +415,8 @@ const App = () => {
             <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full h-full justify-center">
               {!potTransferring && ( <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}><div className={`text-[10vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot || 0).toLocaleString()}</div></div> )}
               {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS', 'REDSBLACKS'].includes(activeVariant?.id) && (
-                <div className="flex gap-1.5 md:gap-4 mt-4 md:mt-12 font-black uppercase transition-transform" 
-                     style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
-                  {(community || []).map((c, j) => (
-                    <div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[3px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}>
-                      <span className="text-[10px] md:text-[0.9vw] font-black leading-none">{String(c.value)}</span>
-                      <span className={`text-[13px] md:text-[2.2vw] font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
-                    </div>
-                  ))}
+                <div className="flex gap-1.5 md:gap-4 mt-4 md:mt-12 font-black uppercase transition-transform" style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
+                  {(community || []).map((c, j) => (<div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[3px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}><span className="text-[10px] md:text-[0.9vw] font-black leading-none">{String(c.value)}</span><span className={`text-[13px] md:text-[2.2vw] font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></div>))}
                 </div>
               )}
             </div>
@@ -602,27 +429,11 @@ const App = () => {
             <div className="flex flex-col gap-2 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
                 <div className="absolute top-0 right-1.5 animate-in slide-in-from-right duration-500"><div className="flex flex-col items-end"><span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Strength</span><span className="text-[7px] md:text-[14px] text-purple-400 font-black uppercase leading-none">{String(heroPlayerObj.strength || "High Card")}</span></div></div>
                 {Number(heroPlayerObj.chips) > 0 ? (<>
-                        <div className="flex gap-1.5 md:gap-2 w-full max-w-[600px] font-black uppercase">
-                            <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-8 md:h-10 bg-white/5 border border-white/10 rounded-md text-[9px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button>
-                            <button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-8 md:h-10 bg-white/5 border border-white/10 rounded-md text-[9px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button>
-                            <button onClick={handleAllIn} className="flex-1 h-8 md:h-10 bg-red-900/30 border border-red-500/50 rounded-md text-[9px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center">ALL-IN</button>
-                        </div>
+                        <div className="flex gap-1.5 md:gap-2 w-full max-w-[600px] font-black uppercase"><button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-8 md:h-10 bg-white/5 border border-white/10 rounded-md text-[9px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button><button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-8 md:h-10 bg-white/5 border border-white/10 rounded-md text-[9px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button><button onClick={handleAllIn} className="flex-1 h-8 md:h-10 bg-red-900/30 border border-red-500/50 rounded-md text-[9px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center">ALL-IN</button></div>
                         <div className="flex flex-col md:flex-row gap-2 md:gap-6 w-full items-center justify-center font-black">
-                            <div className="flex gap-1.5 w-full md:w-auto md:flex-1 justify-center">
-                              <button onClick={()=>handleAction('FOLD')} className="flex-1 md:w-32 h-14 md:h-16 bg-red-950/60 border border-red-500/50 rounded-xl tracking-[0.1em] hover:brightness-125 transition-all font-black text-[10px] md:text-sm shadow-xl uppercase">FOLD</button>
-                              <button onClick={()=>handleAction('CALL')} className="flex-[2] md:flex-1 md:max-w-[360px] h-14 md:h-16 bg-indigo-900/60 border border-indigo-400/50 rounded-xl text-[11px] md:text-xl tracking-[0.1em] hover:brightness-125 font-black shadow-xl uppercase px-2 truncate">
-                                  {highestBet > heroPlayerObj.currentBet ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `ALL-IN` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) : 'CHECK'}
-                              </button>
-                            </div>
-                            <div className="flex gap-1.5 items-center bg-black/60 border border-white/10 p-1 md:p-1.5 rounded-xl shadow-inner w-full md:min-w-[320px] md:w-auto font-black uppercase">
-                                <div className="flex items-center bg-black/40 px-2 md:px-5 rounded-lg border border-white/5 h-12 md:h-14 font-black uppercase flex-1 md:flex-none">
-                                  <span className="text-[#fbbf24] text-[12px] md:text-xl font-mono mr-0.5">$</span>
-                                  <input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(minRaiseAllowed, Number(e.target.value))))} className="w-full md:w-28 bg-transparent text-center font-mono text-sm md:text-2xl text-[#fbbf24] outline-none font-black" />
-                                </div>
-                                <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-12 md:h-14 bg-emerald-600/60 border border-emerald-400/50 rounded-lg flex items-center justify-center hover:brightness-125 font-black uppercase text-[11px] md:text-xl shadow-xl"><Zap size={12} className="mr-1 text-emerald-400"/> RAISE</button>
-                            </div>
-                        </div></>
-                ) : ( <div className="flex flex-col items-center gap-1 animate-pulse"><span className="text-lg md:text-4xl font-black text-white tracking-tighter uppercase">ALL-IN POSITION</span></div> )}
+                            <div className="flex gap-1.5 w-full md:w-auto md:flex-1 justify-center"><button onClick={()=>handleAction('FOLD')} className="flex-1 md:w-32 h-14 md:h-16 bg-red-950/60 border border-red-500/50 rounded-xl tracking-[0.1em] hover:brightness-125 transition-all font-black text-[10px] md:text-sm shadow-xl uppercase">FOLD</button><button onClick={()=>handleAction('CALL')} className="flex-[2] md:flex-1 md:max-w-[360px] h-14 md:h-16 bg-indigo-900/60 border border-indigo-400/50 rounded-xl text-[11px] md:text-xl tracking-[0.1em] hover:brightness-125 font-black shadow-xl uppercase px-2 truncate">{highestBet > heroPlayerObj.currentBet ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `ALL-IN` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) : 'CHECK'}</button></div>
+                            <div className="flex gap-1.5 items-center bg-black/60 border border-white/10 p-1 md:p-1.5 rounded-xl shadow-inner w-full md:min-w-[320px] md:w-auto font-black uppercase"><div className="flex items-center bg-black/40 px-2 md:px-5 rounded-lg border border-white/5 h-12 md:h-14 font-black uppercase flex-1 md:flex-none"><span className="text-[#fbbf24] text-[12px] md:text-xl font-mono mr-0.5">$</span><input type="number" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(0, Number(e.target.value))))} className="w-full md:w-28 bg-transparent text-center font-mono text-sm md:text-2xl text-[#fbbf24] outline-none font-black" /></div><button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-12 md:h-14 bg-emerald-600/60 border border-emerald-400/50 rounded-lg flex items-center justify-center hover:brightness-125 font-black uppercase text-[11px] md:text-xl shadow-xl"><Zap size={12} className="mr-1 text-emerald-400"/> RAISE</button></div>
+                        </div></>) : ( <div className="flex flex-col items-center gap-1 animate-pulse"><span className="text-lg md:text-4xl font-black text-white tracking-tighter uppercase">ALL-IN POSITION</span></div> )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full relative font-black uppercase">
@@ -631,38 +442,19 @@ const App = () => {
                         <div className="flex items-center gap-1.5 text-yellow-400 animate-pulse font-black tracking-[0.2em] text-[7px] md:text-xs uppercase leading-none"><Trophy size={10} /> SHOWDOWN WINNERS</div>
                         <div className="flex flex-wrap gap-1.5 md:gap-6 items-center justify-center animate-in fade-in zoom-in duration-700 w-full overflow-y-auto px-1">
                             {showdownWinners.map((winner, idx) => (
-                                <div key={idx} className="flex items-center gap-2 md:gap-6 bg-black/60 p-1 md:p-4 rounded-xl md:rounded-[2rem] border border-yellow-500/30 shadow-[0_0_30px_rgba(251,191,36,0.2)] min-w-[150px] md:min-w-[320px] animate-showdown-card-pop" style={{ animationDelay: `${idx * 0.1}s` }}><div className="flex flex-col items-center shrink-0"><div className="text-[#fbbf24] font-black text-[9px] md:text-2xl drop-shadow-lg uppercase truncate max-w-[45px] md:max-w-none">{String(winner.name)}</div><div className="text-emerald-400 font-mono text-[9px] md:text-xl font-black">+${(winner.amount || 0).toLocaleString()}</div><div className="text-yellow-400 text-[5px] md:text-[8px] tracking-widest uppercase mt-0.5">{String(winner.rank)}</div></div><div className="flex gap-1 items-center justify-center">{(winner.hand || []).map((c, ci) => (<div key={ci} className="w-5 md:w-12 h-8 md:h-18 bg-white rounded-sm md:rounded-lg flex flex-col items-center justify-center text-black shadow-xl" style={{ animation: `card-flip 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards`, animationDelay: `${0.2 + ci * 0.1}s`, opacity: 0 }}><span className="text-[7px] md:text-[14px] font-black absolute top-0.5 left-0.5 leading-none">{String(c.value)}</span><span className={`text-[10px] md:text-2xl ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></div>))}</div></div>
-                            ))}
+                                <div key={idx} className="flex items-center gap-2 md:gap-6 bg-black/60 p-1 md:p-4 rounded-xl md:rounded-[2rem] border border-yellow-500/30 shadow-[0_0_30px_rgba(251,191,36,0.2)] min-w-[150px] md:min-w-[320px] animate-showdown-card-pop" style={{ animationDelay: `${idx * 0.1}s` }}><div className="flex flex-col items-center shrink-0"><div className="text-[#fbbf24] font-black text-[9px] md:text-2xl drop-shadow-lg uppercase truncate max-w-[45px] md:max-w-none">{String(winner.name)}</div><div className="text-emerald-400 font-mono text-[9px] md:text-xl font-black">+${(winner.amount || 0).toLocaleString()}</div><div className="text-yellow-400 text-[5px] md:text-[8px] tracking-widest uppercase mt-0.5">{String(winner.rank)}</div></div><div className="flex gap-1 items-center justify-center">{(winner.hand || []).map((c, ci) => (<div key={ci} className="w-5 md:w-12 h-8 md:h-18 bg-white rounded-sm md:rounded-lg flex flex-col items-center justify-center text-black shadow-xl" style={{ animation: `card-flip 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards`, animationDelay: `${0.2 + ci * 0.1}s`, opacity: 0 }}><span className="text-[7px] md:text-[14px] font-black absolute top-0.5 left-0.5 leading-none">{String(c.value)}</span><span className={`text-[10px] md:text-2xl ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></div>))}</div></div>))}
                         </div>
                     </div>
                 ) : ( 
                     <div className="flex flex-col items-center gap-1 md:gap-4 animate-in fade-in duration-500 font-black uppercase w-full max-w-[1000px]">
-                      {phase === PHASES.IDLE ? (
-                        <div className="flex flex-col items-center gap-1 md:gap-3">
-                          <span className="text-white/40 tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase leading-none">Arena Idle</span>
-                        </div>
-                      ) : (
+                      {phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3"><span className="text-white/40 tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase leading-none">Arena Idle</span></div>) : (
                         <div className="flex flex-col md:flex-row items-center justify-between w-full gap-4 px-4">
-                           {/* Action Status */}
-                           <div className="flex flex-col items-center md:items-start">
-                              <span className="text-cyan-400 text-[8px] md:text-[12px] animate-pulse mb-1 font-black">PLAYER TURN</span>
-                              <span className="text-white text-sm md:text-3xl font-black tracking-tighter drop-shadow-lg uppercase leading-none">
-                                {String(players[activeIdx]?.name || "OPPONENT")}
-                              </span>
-                           </div>
-
-                           {/* Hand Strength / Probability HUD */}
+                           <div className="flex flex-col items-center md:items-start"><span className="text-cyan-400 text-[8px] md:text-[12px] animate-pulse mb-1 font-black">PLAYER TURN</span><span className="text-white text-sm md:text-3xl font-black tracking-tighter drop-shadow-lg uppercase leading-none">{String(players[activeIdx]?.name || "OPPONENT")}</span></div>
                            {heroPlayerObj && !heroPlayerObj.isFolded && (
                               <div className="flex items-center gap-4 bg-white/5 p-3 md:p-4 rounded-2xl border border-white/10 shadow-inner">
-                                 <div className="flex flex-col">
-                                    <span className="text-white/40 text-[7px] md:text-[10px] font-black">YOUR HAND</span>
-                                    <span className="text-purple-400 text-xs md:text-xl font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span>
-                                 </div>
+                                 <div className="flex flex-col"><span className="text-white/40 text-[7px] md:text-[10px] font-black">YOUR HAND</span><span className="text-purple-400 text-xs md:text-xl font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span></div>
                                  <div className="h-6 md:h-10 w-px bg-white/10" />
-                                 <div className="flex flex-col items-end">
-                                    <span className="text-white/40 text-[7px] md:text-[10px] font-black">WIN PROB.</span>
-                                    <span className="text-[#fbbf24] text-xs md:text-xl font-mono font-black">{Math.round(heroWinProb || 0)}%</span>
-                                 </div>
+                                 <div className="flex flex-col items-end"><span className="text-white/40 text-[7px] md:text-[10px] font-black">WIN PROB.</span><span className="text-[#fbbf24] text-xs md:text-xl font-mono font-black">{Math.round(heroWinProb)}%</span></div>
                               </div>
                            )}
                         </div>
@@ -672,55 +464,12 @@ const App = () => {
             </div>
           )}
         </div>
-        
-        {/* INTELLIGENCE HUD - EXPANDABLE & MINIMAL HEADER ONLY WHEN COLLAPSED */}
-        <div 
-          onClick={() => setIntelExpanded(!intelExpanded)}
-          className={`w-full border-t border-white/10 p-1 flex flex-col overflow-hidden text-[8px] md:text-[12px] font-mono tracking-widest font-black uppercase transition-all duration-500 cursor-pointer ${intelExpanded ? 'fixed inset-0 z-[2000] bg-black/95 h-full pt-[env(safe-area-inset-top)]' : 'h-[24px] bg-black/20'}`}
-        >
-            <div className="text-white/40 flex items-center justify-between px-0.5 uppercase h-full min-h-[16px]">
-              <div className="flex items-center gap-1.5">
-                <Eye size={10} className="text-[#fbbf24]"/> 
-                {intelExpanded ? 'Intelligence - Full Access' : 'Intelligence HUD'}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 text-emerald-500 animate-pulse text-[7px] md:text-[10px] font-black uppercase">Live</div>
-                {intelExpanded ? <Minimize size={12}/> : <Maximize size={12}/>}
-              </div>
-            </div>
-            
-            {intelExpanded && (
-              <div className="flex-1 space-y-0.5 overflow-y-auto scrollbar-hide font-black p-0.5 uppercase border-t border-white/5 mt-1 pt-1">
-                  {(logs || []).map(l => (
-                      <div key={l.id} className="animate-in slide-in-from-left duration-200 flex items-center gap-1 border-l-2 border-white/10 pl-1 py-1.5 md:py-2 hover:bg-white/5 transition-colors border-b border-white/5 uppercase">
-                          <span className="text-white/20 font-black shrink-0 uppercase text-xs w-16">
-                            {String(l.time)}
-                          </span> 
-                          <div className="flex flex-wrap items-center gap-x-1 font-black leading-none overflow-hidden uppercase">
-                              <span className={`font-black uppercase px-1 py-0.5 rounded-sm shrink-0 text-sm ${
-                                  l.type === 'win' ? 'text-emerald-400' : 
-                                  l.type === 'variant' ? 'text-purple-400' : 
-                                  l.type === 'fold' ? 'text-red-400' :
-                                  l.type === 'phase' ? 'text-cyan-400' :
-                                  l.type === 'join' ? 'text-blue-400' :
-                                  'text-[#fbbf24]'
-                              }`}>{String(l.name)}</span>
-                              <span className="text-white/60 lowercase tracking-tight font-black uppercase text-sm">{String(l.action)}</span>
-                          </div>
-                      </div>
-                  ))}
-                  <div ref={logEndRef} />
-              </div>
-            )}
-        </div>
       </footer>
       <style>{`
           @keyframes progress { from { width: 100%; } to { width: 0%; } }
           @keyframes fling-to-pot { 0% { transform: translate(-50%, -100%) scale(1.5); filter: blur(0px); } 100% { transform: translate(0, -35vh) scale(0.1) rotate(1080deg); filter: blur(4px); opacity: 0; } }
           @keyframes pot-pulse { 0% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 50% { transform: scale(1.1); filter: drop-shadow(0 0 30px #fbbf24) brightness(1.2); } 100% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } }
           .animate-pot-pulse { animation: pot-pulse 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-          .bg-glimmer { background: linear-gradient(135deg, #fff 0%, #fff 40%, #fbbf24 50%, #fff 60%, #fff 100%); background-size: 200% 200%; animation: glimmer 3s infinite; }
-          @keyframes glimmer { 0% { background-position: -100% -100%; } 100% { background-position: 200% 200%; } }
           .animate-pulse-glow { animation: pulse-glow 2s infinite ease-in-out; }
           @keyframes pulse-glow { 0% { box-shadow: 0 0 20px rgba(34,211,238,0.6); } 50% { box-shadow: 0 0 20px rgba(34,211,238,0.6); } 100% { box-shadow: 0 0 20px rgba(34,211,238,0); } }
           ::-webkit-scrollbar { display: none; }
@@ -731,19 +480,9 @@ const App = () => {
           @keyframes card-flip { 0% { transform: rotateY(90deg) scale(0.5); opacity: 0; } 100% { transform: rotateY(0deg) scale(1); opacity: 1; } }
           @keyframes bet-splash { 0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
           .animate-bet-splash { animation: bet-splash 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-          @keyframes deal-card { 
-            0% { top: 40%; left: 50%; transform: translate(-50%, -50%) scale(0.2) rotate(720deg); opacity: 0; } 
-            100% { opacity: 1; } 
-          }
+          @keyframes deal-card { 0% { top: 40%; left: 50%; transform: translate(-50%, -50%) scale(0.2) rotate(720deg); opacity: 0; } 100% { opacity: 1; } }
           .animate-deal-card { animation: deal-card 0.5s cubic-bezier(0.2, 0.8, 0.2, 1.1) forwards; }
-          html, body { 
-            overscroll-behavior-y: contain;
-            height: 100%;
-            width: 100%;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-          }
+          html, body { overscroll-behavior-y: contain; height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; }
       `}</style>
     </div>
   );
