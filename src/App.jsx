@@ -222,7 +222,7 @@ const App = () => {
     heroCardScale: 4.0, heroCardY: 22, oppCardScale: 1.0, oppCardY: -25,
     commCardScale: 1.8, commCardY: -7, betScale: 2.0, betY: 47,
     badgeY: 85, 
-    footerHeight: window.innerWidth < 768 ? 215 : 220,
+    footerHeight: 270, 
     tableZoom: window.innerWidth < 768 ? 0.75 : 0.85, 
     holeCardFan: 25
   });
@@ -878,7 +878,7 @@ const App = () => {
                     <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.2em] text-[10px] md:text-2xl uppercase text-center px-4 drop-shadow-[0_0_15px_rgba(251,191,36,0.6)]">
                       <Trophy size={14} className="md:size-6" /> 
                       {showdownWinners.length === 1 
-                        ? (showdownWinners[0].rank === "!" ? `${showdownWinners[0].name} won!` : `${showdownWinners[0].name} won with ${showdownWinners[0].rank}`)
+                        ? (showdownWinners[0].rank === "!" ? `${showdownWinners[0].name} Wins!` : `${showdownWinners[0].name} won with ${showdownWinners[0].rank}`)
                         : `POT SPLIT: ${showdownWinners[currentShowdownIdx].name} - ${showdownWinners[currentShowdownIdx].rank}`
                       }
                     </div>
@@ -888,17 +888,19 @@ const App = () => {
                                 <div className="flex flex-col items-center shrink-0">
                                     <div className="text-white font-black text-[12px] md:text-3xl drop-shadow-lg uppercase truncate max-w-[80px] md:max-w-none mb-0.5">{String(showdownWinners[currentShowdownIdx].name)}</div>
                                     <div className="bg-yellow-500 text-black px-2 py-0.5 rounded-full font-mono text-[10px] md:text-2xl font-black shadow-inner">+${(showdownWinners[currentShowdownIdx].amount || 0).toLocaleString()}</div>
-                                    <div className="text-yellow-400/80 text-[6px] md:text-[10px] tracking-widest uppercase mt-1.5 font-black italic">{showdownWinners[currentShowdownIdx].rank === "!" ? "Pot Swept" : String(showdownWinners[currentShowdownIdx].rank)}</div>
+                                    <div className="text-yellow-400/80 text-[6px] md:text-[10px] tracking-widest uppercase mt-1.5 font-black italic">{showdownWinners[currentShowdownIdx].rank === "!" ? "" : String(showdownWinners[currentShowdownIdx].rank)}</div>
                                 </div>
-                                <div className="flex gap-1 md:gap-2 items-center justify-center">
-                                    {(showdownWinners[currentShowdownIdx].hand || []).map((c, ci) => (
-                                        <div key={ci} className="w-6 md:w-16 h-9 md:h-24 bg-white rounded-sm md:rounded-xl flex flex-col items-center justify-center text-black shadow-lg ring-1 ring-black/5 relative overflow-hidden" 
-                                             style={{ animation: `card-flip-hero 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.4 + ci * 0.2}s`, opacity: 0 }}>
-                                            <span className="text-[8px] md:text-[20px] font-black absolute top-0.5 left-1 leading-none">{String(c.value)}</span>
-                                            <span className={`text-[12px] md:text-[36px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                                {showdownWinners[currentShowdownIdx].rank !== "!" && (
+                                    <div className="flex gap-1 md:gap-2 items-center justify-center">
+                                        {(showdownWinners[currentShowdownIdx].hand || []).map((c, ci) => (
+                                            <div key={ci} className="w-6 md:w-16 h-9 md:h-24 bg-white rounded-sm md:rounded-xl flex flex-col items-center justify-center text-black shadow-lg ring-1 ring-black/5 relative overflow-hidden" 
+                                                style={{ animation: `card-flip-hero 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.4 + ci * 0.2}s`, opacity: 0 }}>
+                                                <span className="text-[8px] md:text-[20px] font-black absolute top-0.5 left-1 leading-none">{String(c.value)}</span>
+                                                <span className={`text-[12px] md:text-[36px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -926,7 +928,6 @@ const App = () => {
                         </div>
                     </div>
 
-                    {/* Moved Hand Strength and Probabilities Row */}
                     <div className="flex justify-between w-full max-w-[600px] mt-1 px-1.5 pb-2">
                         <div className="flex flex-col items-start min-w-[80px]">
                             {activeVariant?.id === 'HILOW' && (
