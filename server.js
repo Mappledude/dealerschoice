@@ -411,6 +411,8 @@ const runIgnition = (roomId) => {
   if (room.ignitionTimer) clearTimeout(room.ignitionTimer);
   room.ignitionTimer = null;
   
+  room.players.forEach(p => { if (p) p.waitingForNextHand = false; });
+  
   const seated = room.players.map((p, i) => (p && p.chips > Number(room.bb)) ? i : null).filter(x => x !== null);
   if (seated.length < 2) { 
       room.phase = PHASES.IDLE; 
@@ -466,7 +468,6 @@ const removePlayerGlobally = (uid) => {
             }
             room.players[idx] = null;
             
-            // Check if room is empty
             const remainingCount = room.players.filter(p => p).length;
             if (remainingCount === 0) {
                 room.phase = PHASES.IDLE;
@@ -540,7 +541,6 @@ io.on('connection', (socket) => {
         player.waitingForNextHand = room.gameInProgress;
         io.to(roomId).emit('log', { name: player.name, action: `REBOUGHT FOR $${amount.toFixed(2)}`, type: 'phase' });
         
-        // Progression Check: If table was idle but now has enough ready players, start ignition
         if (room.phase === PHASES.IDLE && !room.gameInProgress && !room.ignitionTimer) {
             const readyPlayers = room.players.filter(p => p && p.chips > Number(room.bb));
             if (readyPlayers.length >= 2) {
@@ -607,6 +607,29 @@ io.on('connection', (socket) => {
   socket.on('adminNuclearReset', () => { rooms = {}; profiles = profiles.filter(p => p.role === 'admin'); io.emit('lobbyUpdate', []); io.emit('profilesUpdate', profiles); io.emit('roomUpdate', null); });
   socket.on('adminCreatePlayer', (p) => { profiles.push({ ...p, chips: Number(p.chips) }); io.emit('profilesUpdate', profiles); });
   
+  socket.on('adminUpdatePlayer', ({ uid, chips, password }) => {
+    const p = profiles.find(x => x.uid === uid);
+    if (p) {
+        if (chips !== undefined) p.chips = Number(chips);
+        if (password) p.password = password.toLowerCase();
+        
+        Object.values(rooms).forEach(room => {
+            const player = room.players.find(pl => pl && pl.uid === uid);
+            if (player) {
+                if (chips !== undefined) player.chips = Number(chips);
+                io.to(room.id).emit('roomUpdate', serializeRoom(room));
+            }
+        });
+        io.emit('profilesUpdate', profiles);
+    }
+  });
+
+  socket.on('adminDeletePlayer', (uid) => {
+      removePlayerGlobally(uid);
+      profiles = profiles.filter(p => p.uid !== uid);
+      io.emit('profilesUpdate', profiles);
+  });
+
   socket.on('adminEditChips', ({ uid, chips }) => {
     const p = profiles.find(x => x.uid === uid);
     if (p) {
