@@ -163,7 +163,7 @@ const Seat = ({
                         const fanTranslation = offset * (player.hand.length > 2 ? 2.0 : 3.5);
                         return (
                           <div key={c.id || ci} 
-                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
+                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_200px_#fbbf24]' : 'border-white/20'}`} 
                               style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${seatIdx * 0.1}s` }}>
                               {(isShowdown || isHero) && ( <><span className="text-[9px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
                           </div>
@@ -686,15 +686,15 @@ const App = () => {
 
                              return (
                                <div key={l.id} className="flex items-start gap-3 p-3 border-b border-white/5 hover:bg-white/5 transition-colors">
-                                  <span className="text-white/20 text-[10px] w-12 shrink-0 font-black pt-0.5">{String(l.time)}</span>
-                                  <div className="flex flex-wrap items-center gap-2 overflow-hidden">
-                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${colorClass}`}>
-                                      {tag}
-                                    </span>
-                                    <span className="text-white/80 text-[12px] font-black tracking-tight uppercase">
-                                      <span className="text-white/30">{l.name}:</span> {l.action}
-                                    </span>
-                                  </div>
+                                 <span className="text-white/20 text-[10px] w-12 shrink-0 font-black pt-0.5">{String(l.time)}</span>
+                                 <div className="flex flex-wrap items-center gap-2 overflow-hidden">
+                                   <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${colorClass}`}>
+                                     {tag}
+                                   </span>
+                                   <span className="text-white/80 text-[12px] font-black tracking-tight uppercase">
+                                     <span className="text-white/30">{l.name}:</span> {l.action}
+                                   </span>
+                                 </div>
                                </div>
                              );
                           })}
@@ -906,33 +906,6 @@ const App = () => {
             </div>
           ) : (
             <div className={`flex flex-col gap-2 md:gap-4 items-center w-full font-black uppercase transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-40 grayscale pointer-events-none' : 'opacity-100'}`}>
-                <div className="absolute top-2 left-1.5">
-                    {activeVariant?.id === 'HILOW' && (
-                        <div className="flex flex-col items-start">
-                            <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Low Strength</span>
-                            <span className="text-[9px] md:text-[18px] text-emerald-400 font-black uppercase leading-none">
-                                {phase === PHASES.PRE_FLOP ? "Pre-flop" : String(heroPlayerObj?.lowStrength || "Pre-flop")}
-                            </span>
-                            <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
-                                {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroLowWinProb)}% PROB.
-                            </span>
-                        </div>
-                    )}
-                </div>
-                <div className="absolute top-2 right-1.5">
-                    <div className="flex flex-col items-end">
-                        <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">
-                            {activeVariant?.id === 'HILOW' ? 'High Strength' : 'Strength'}
-                        </span>
-                        <span className="text-[9px] md:text-[18px] text-purple-400 font-black uppercase leading-none">
-                            {phase === PHASES.PRE_FLOP ? "Pre-flop" : String(heroPlayerObj?.strength || "Pre-flop")}
-                        </span>
-                        <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
-                            {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroWinProb)}% PROB.
-                        </span>
-                    </div>
-                </div>
-
                 {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-1 w-full max-w-[600px] font-black uppercase mt-4">
                         <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button>
@@ -950,6 +923,34 @@ const App = () => {
                                 <input disabled={activeIdx !== heroIdx} type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center font-mono text-xs md:text-2xl text-[#fbbf24] outline-none font-black" />
                             </div>
                             <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-9 md:h-14 bg-emerald-600/60 border border-400/50 rounded-md flex items-center justify-center hover:brightness-125 font-black uppercase text-[9px] md:text-xl shadow-xl"><Zap size={10} className="mr-0.5 text-emerald-400"/> RAISE</button>
+                        </div>
+                    </div>
+
+                    {/* Moved Hand Strength and Probabilities Row */}
+                    <div className="flex justify-between w-full max-w-[600px] mt-1 px-1.5 pb-2">
+                        <div className="flex flex-col items-start min-w-[80px]">
+                            {activeVariant?.id === 'HILOW' && (
+                                <>
+                                    <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Low Strength</span>
+                                    <span className="text-[9px] md:text-[18px] text-emerald-400 font-black uppercase leading-none">
+                                        {phase === PHASES.PRE_FLOP ? "Pre-flop" : String(heroPlayerObj?.lowStrength || "Pre-flop")}
+                                    </span>
+                                    <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
+                                        {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroLowWinProb)}% PROB.
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                        <div className="flex flex-col items-end min-w-[80px]">
+                            <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">
+                                {activeVariant?.id === 'HILOW' ? 'High Strength' : 'Strength'}
+                            </span>
+                            <span className="text-[9px] md:text-[18px] text-purple-400 font-black uppercase leading-none">
+                                {phase === PHASES.PRE_FLOP ? "Pre-flop" : String(heroPlayerObj?.strength || "Pre-flop")}
+                            </span>
+                            <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
+                                {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroWinProb)}% PROB.
+                            </span>
                         </div>
                     </div>
                 </>) : (
