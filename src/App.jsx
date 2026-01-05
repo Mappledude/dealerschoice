@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.4.3-PRO";
+const VERSION = "v1.4.6-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -225,7 +225,7 @@ const App = () => {
     heroCardScale: 4.0, heroCardY: 22, oppCardScale: 1.0, oppCardY: -25,
     commCardScale: 1.8, commCardY: -7, betScale: 2.0, betY: 47,
     badgeY: 85, 
-    footerHeight: window.innerWidth < 768 ? 160 : 220,
+    footerHeight: window.innerWidth < 768 ? 215 : 220,
     tableZoom: window.innerWidth < 768 ? 0.75 : 0.85, 
     holeCardFan: 25
   });
@@ -673,7 +673,7 @@ const App = () => {
         style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} 
         className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]"
       >
-        {/* SHOWDOWN OVERLAY - BRINGING TO TOP OF HUD FOR IPHONE VISIBILITY */}
+        {/* SHOWDOWN OVERLAY */}
         {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 && (
             <div className="absolute top-0 left-0 w-full -translate-y-full z-[1000] flex flex-col items-center pointer-events-none">
                  <div className="w-full bg-gradient-to-t from-slate-900 to-transparent h-12" />
@@ -705,10 +705,10 @@ const App = () => {
             </div>
         )}
 
-        <div className="flex-1 flex flex-col justify-center px-2 md:px-10 relative bg-white/5 shadow-inner py-1.5 md:py-3 font-black uppercase">
+        <div className="flex-1 flex flex-col justify-start pt-3 md:pt-6 pb-2 px-2 md:px-10 relative bg-white/5 shadow-inner font-black uppercase">
           {activeIdx === heroIdx && phase !== PHASES.IDLE && heroPlayerObj ? (
             <div className="flex flex-col gap-2 md:gap-4 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
-                <div className="absolute top-0 right-1.5 animate-in slide-in-from-right duration-500"><div className="flex flex-col items-end"><span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Strength</span><span className="text-[7px] md:text-[14px] text-purple-400 font-black uppercase leading-none">{String(heroPlayerObj.strength || "High Card")}</span></div></div>
+                <div className="absolute top-2 right-1.5 animate-in slide-in-from-right duration-500"><div className="flex flex-col items-end"><span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Strength</span><span className="text-[9px] md:text-[18px] text-purple-400 font-black uppercase leading-none">{String(heroPlayerObj.strength || "High Card")}</span></div></div>
                 {Number(heroPlayerObj.chips) > 0 ? (<>
                         <div className="flex gap-1 w-full max-w-[600px] font-black uppercase"><button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button><button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button><button onClick={handleAllIn} className="flex-1 h-7 md:h-10 bg-red-900/30 border border-red-500/50 rounded-md text-[8px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center">ALL-IN</button></div>
                         <div className="flex flex-col md:flex-row gap-1.5 md:gap-6 w-full items-center justify-center font-black">
@@ -717,7 +717,7 @@ const App = () => {
                         </div></>) : ( <div className="flex flex-col items-center gap-1 animate-pulse"><span className="text-lg md:text-4xl font-black text-white tracking-tighter uppercase">ALL-IN POSITION</span></div> )}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full relative font-black uppercase">
+            <div className="flex flex-col items-center justify-start pt-4 relative font-black uppercase">
                 {phase === PHASES.SHOWDOWN ? null : ( 
                     <div className="flex flex-col items-center gap-1 md:gap-4 animate-in fade-in duration-500 font-black uppercase w-full max-w-[1000px]">
                       {phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3"><span className="text-white/40 tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase leading-none">Arena Idle</span></div>) : (
@@ -725,7 +725,7 @@ const App = () => {
                             <div className="flex flex-col items-center md:items-start"><span className="text-cyan-400 text-[8px] md:text-[12px] animate-pulse mb-1 font-black">PLAYER TURN</span><span className="text-white text-sm md:text-3xl font-black tracking-tighter drop-shadow-lg uppercase leading-none">{String(players[activeIdx]?.name || "OPPONENT")}</span></div>
                             {heroPlayerObj && !heroPlayerObj.isFolded && (
                               <div className="flex items-center gap-4 bg-white/5 p-3 md:p-4 rounded-2xl border border-white/10 shadow-inner">
-                                  <div className="flex flex-col"><span className="text-white/40 text-[7px] md:text-[10px] font-black">YOUR HAND</span><span className="text-purple-400 text-xs md:text-xl font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span></div>
+                                  <div className="flex flex-col"><span className="text-white/40 text-[7px] md:text-[10px] font-black">YOUR HAND</span><span className="text-[13px] md:text-[20px] text-purple-400 font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span></div>
                                   <div className="h-6 md:h-10 w-px bg-white/10" />
                                   <div className="flex flex-col items-end"><span className="text-white/40 text-[7px] md:text-[10px] font-black">WIN PROB.</span><span className="text-[#fbbf24] text-xs md:text-xl font-mono font-black">{Math.round(heroWinProb)}%</span></div>
                               </div>
