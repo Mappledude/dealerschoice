@@ -452,6 +452,21 @@ io.on('connection', (socket) => {
         room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000);
     }
   });
+
+  socket.on('playerRebuy', ({ roomId, uid, amount }) => {
+    const room = rooms[roomId];
+    const profile = profiles.find(p => p.uid === uid);
+    if (!room || !profile || profile.chips < Number(amount)) return;
+    const player = room.players.find(p => p && p.uid === uid);
+    if (player && player.chips <= 1) {
+        profile.chips -= Number(amount);
+        player.chips += Number(amount);
+        io.to(roomId).emit('log', { name: player.name, action: `REBOUGHT FOR $${amount.toFixed(2)}`, type: 'phase' });
+        io.to(roomId).emit('roomUpdate', serializeRoom(room));
+        io.emit('profilesUpdate', profiles);
+    }
+  });
+
   socket.on('adminAddBot', ({ roomId }) => {
     const room = rooms[roomId]; if (!room) return;
     const emptyIdx = room.players.findIndex(p => p === null); if (emptyIdx === -1) return;
@@ -491,6 +506,20 @@ io.on('connection', (socket) => {
   });
   socket.on('adminNuclearReset', () => { rooms = {}; profiles = profiles.filter(p => p.role === 'admin'); io.emit('lobbyUpdate', []); io.emit('profilesUpdate', profiles); io.emit('roomUpdate', null); });
   socket.on('adminCreatePlayer', (p) => { profiles.push({ ...p, chips: Number(p.chips) }); io.emit('profilesUpdate', profiles); });
+  socket.on('adminEditChips', ({ uid, chips }) => {
+    const p = profiles.find(x => x.uid === uid);
+    if (p) {
+        p.chips = Number(chips);
+        Object.values(rooms).forEach(room => {
+            const player = room.players.find(pl => pl && pl.uid === uid);
+            if (player) {
+                player.chips = Number(chips);
+                io.to(room.id).emit('roomUpdate', serializeRoom(room));
+            }
+        });
+        io.emit('profilesUpdate', profiles);
+    }
+  });
   socket.on('adminCreateRoom', (data) => { 
     const defaultData = { sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 };
     rooms[data.id] = { ...defaultData, ...data, players: Array(10).fill(null), phase: PHASES.IDLE, community: [], potData: [{amount:0}], dealerIdx: 0, timeRemaining: 20, gameInProgress: false }; 
