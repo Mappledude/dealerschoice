@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.4.7-PRO";
+const VERSION = "v1.5.1-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -673,38 +673,6 @@ const App = () => {
         style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} 
         className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]"
       >
-        {/* SHOWDOWN OVERLAY */}
-        {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 && (
-            <div className="absolute top-0 left-0 w-full -translate-y-full z-[1000] flex flex-col items-center pointer-events-none">
-                 <div className="w-full bg-gradient-to-t from-slate-900 to-transparent h-12" />
-                 <div className="bg-slate-900/95 backdrop-blur-2xl border-t-2 border-yellow-500/50 w-full py-4 md:py-6 shadow-[0_-20px_50px_rgba(0,0,0,0.8)] flex flex-col items-center gap-3">
-                    <div className="flex items-center gap-2 text-yellow-400 animate-pulse font-black tracking-[0.2em] text-[10px] md:text-lg uppercase">
-                        <Trophy size={14} className="md:size-6" /> SHOWDOWN WINNERS
-                    </div>
-                    <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-6 px-4 md:px-10 justify-start md:justify-center no-scrollbar pb-2">
-                        {showdownWinners.map((winner, idx) => (
-                            <div key={idx} className="flex items-center gap-3 md:gap-6 bg-black/60 p-2 md:p-4 rounded-2xl md:rounded-[2.5rem] border border-yellow-500/30 shadow-2xl min-w-[180px] md:min-w-[340px] animate-showdown-card-pop shrink-0" style={{ animationDelay: `${idx * 0.1}s`, pointerEvents: 'auto' }}>
-                                <div className="flex flex-col items-center shrink-0">
-                                    <div className="text-[#fbbf24] font-black text-[11px] md:text-2xl drop-shadow-lg uppercase truncate max-w-[60px] md:max-w-none">{String(winner.name)}</div>
-                                    <div className="text-emerald-400 font-mono text-[11px] md:text-xl font-black">+${(winner.amount || 0).toLocaleString()}</div>
-                                    <div className="text-yellow-400/60 text-[6px] md:text-[9px] tracking-widest uppercase mt-0.5">{String(winner.rank)}</div>
-                                </div>
-                                <div className="flex gap-1 md:gap-1.5 items-center justify-center">
-                                    {(winner.hand || []).map((c, ci) => (
-                                        <div key={ci} className="w-6 md:w-14 h-9 md:h-20 bg-white rounded-sm md:rounded-lg flex flex-col items-center justify-center text-black shadow-2xl ring-1 ring-black/10 relative overflow-hidden" 
-                                             style={{ animation: `card-flip 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.3 + ci * 0.15}s`, opacity: 0 }}>
-                                            <span className="text-[8px] md:text-[16px] font-black absolute top-0.5 left-0.5 leading-none">{String(c.value)}</span>
-                                            <span className={`text-[12px] md:text-[28px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                 </div>
-            </div>
-        )}
-
         <div className="flex-1 flex flex-col justify-start pt-3 md:pt-6 pb-2 px-2 md:px-10 relative bg-white/5 shadow-inner font-black uppercase">
           {activeIdx === heroIdx && phase !== PHASES.IDLE && heroPlayerObj ? (
             <div className="flex flex-col gap-2 md:gap-4 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
@@ -724,22 +692,62 @@ const App = () => {
                         </div></>) : ( <div className="flex flex-col items-center gap-1 animate-pulse"><span className="text-lg md:text-4xl font-black text-white tracking-tighter uppercase">ALL-IN POSITION</span></div> )}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-start pt-4 relative font-black uppercase">
-                {phase === PHASES.SHOWDOWN ? null : ( 
-                    <div className="flex flex-col items-center gap-1 md:gap-4 animate-in fade-in duration-500 font-black uppercase w-full max-w-[1000px]">
-                      {phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3"><span className="text-white/40 tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase leading-none">Arena Idle</span></div>) : (
-                        <div className="flex flex-col md:flex-row items-center justify-between w-full gap-4 px-4">
-                            <div className="flex flex-col items-center md:items-start"><span className="text-cyan-400 text-[8px] md:text-[12px] animate-pulse mb-1 font-black">PLAYER TURN</span><span className="text-white text-sm md:text-3xl font-black tracking-tighter drop-shadow-lg uppercase leading-none">{String(players[activeIdx]?.name || "OPPONENT")}</span></div>
-                            {heroPlayerObj && !heroPlayerObj.isFolded && (
-                              <div className="flex items-center gap-4 bg-white/5 p-3 md:p-4 rounded-2xl border border-white/10 shadow-inner">
-                                  <div className="flex flex-col"><span className="text-white/40 text-[7px] md:text-[10px] font-black">YOUR HAND</span><span className="text-[13px] md:text-[20px] text-purple-400 font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span></div>
-                                  <div className="h-6 md:h-10 w-px bg-white/10" />
-                                  <div className="flex flex-col items-end"><span className="text-white/40 text-[7px] md:text-[10px] font-black">WIN PROB.</span><span className="text-[#fbbf24] text-xs md:text-xl font-mono font-black">{Math.round(heroWinProb)}%</span></div>
-                              </div>
-                            )}
+            <div className="flex flex-col items-center justify-start h-full relative font-black uppercase">
+                {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
+                    <div className="w-full h-full flex flex-col items-center gap-2 md:gap-4 animate-in fade-in zoom-in duration-700 relative overflow-visible">
+                        {/* Celebration Particles */}
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                            {[...Array(12)].map((_, i) => (
+                                <div key={i} className={`sparkle-particle sparkle-${i} absolute w-1 h-1 bg-yellow-400 rounded-full opacity-0`} />
+                            ))}
                         </div>
-                      )}
-                    </div> 
+
+                        <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.2em] text-[10px] md:text-2xl uppercase text-center px-4 drop-shadow-[0_0_15px_rgba(251,191,36,0.6)]">
+                            <Trophy size={14} className="md:size-6" /> 
+                            {showdownWinners.length === 1 
+                              ? `${showdownWinners[0].name} won with ${showdownWinners[0].rank}`
+                              : `${showdownWinners.map(w => w.name).join(' & ')} split with ${showdownWinners[0].rank}`
+                            }
+                        </div>
+
+                        <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-8 px-2 md:px-16 justify-start md:justify-center no-scrollbar pb-1">
+                            {showdownWinners.map((winner, idx) => (
+                                <div key={idx} className="flex items-center gap-3 md:gap-8 bg-black/70 p-2 md:p-6 rounded-[1.5rem] md:rounded-[3.5rem] border-2 border-yellow-500/40 shadow-2xl min-w-[170px] md:min-w-[400px] animate-showdown-card-pop shrink-0" style={{ animationDelay: `${idx * 0.15}s` }}>
+                                    <div className="flex flex-col items-center shrink-0">
+                                        <div className="text-white font-black text-[12px] md:text-3xl drop-shadow-lg uppercase truncate max-w-[60px] md:max-w-none mb-0.5">{String(winner.name)}</div>
+                                        <div className="bg-yellow-500 text-black px-2 py-0.5 rounded-full font-mono text-[10px] md:text-2xl font-black shadow-inner">+${(winner.amount || 0).toLocaleString()}</div>
+                                        <div className="text-yellow-400/80 text-[6px] md:text-[10px] tracking-widest uppercase mt-1.5 font-black italic">{String(winner.rank)}</div>
+                                    </div>
+                                    <div className="flex gap-1 md:gap-2 items-center justify-center">
+                                        {(winner.hand || []).map((c, ci) => (
+                                            <div key={ci} className="w-6 md:w-16 h-9 md:h-24 bg-white rounded-sm md:rounded-xl flex flex-col items-center justify-center text-black shadow-lg ring-1 ring-black/5 relative overflow-hidden" 
+                                                 style={{ animation: `card-flip-hero 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.4 + ci * 0.2}s`, opacity: 0 }}>
+                                                <span className="text-[8px] md:text-[20px] font-black absolute top-0.5 left-1 leading-none">{String(c.value)}</span>
+                                                <span className={`text-[12px] md:text-[36px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : ( 
+                    <div className="flex flex-col items-center justify-start pt-4 relative font-black uppercase w-full">
+                        <div className="flex flex-col items-center gap-1 md:gap-4 animate-in fade-in duration-500 font-black uppercase w-full max-w-[1000px]">
+                          {phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3 pt-4"><span className="text-white/40 tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase leading-none">Arena Idle</span></div>) : (
+                            <div className="flex flex-row items-center justify-between w-full gap-2 md:gap-4 px-2 md:px-4 animate-in fade-in duration-500 font-black uppercase">
+                                <div className="flex flex-col items-start"><span className="text-cyan-400 text-[8px] md:text-[12px] animate-pulse mb-0.5 font-black">PLAYER TURN</span><span className="text-white text-xs md:text-3xl font-black tracking-tighter drop-shadow-lg uppercase leading-none truncate max-w-[80px] md:max-w-none">{String(players[activeIdx]?.name || "OPPONENT")}</span></div>
+                                {heroPlayerObj && !heroPlayerObj.isFolded && (
+                                  <div className="flex items-center gap-2 md:gap-4 bg-white/5 p-2 md:p-4 rounded-xl md:rounded-2xl border border-white/10 shadow-inner">
+                                      <div className="flex flex-col"><span className="text-white/40 text-[6px] md:text-[10px] font-black">YOUR HAND</span><span className="text-[13px] md:text-[20px] text-purple-400 font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span></div>
+                                      <div className="h-6 md:h-10 w-px bg-white/10" />
+                                      <div className="flex flex-col items-end"><span className="text-white/40 text-[6px] md:text-[10px] font-black">WIN PROB.</span><span className="text-[#fbbf24] text-xs md:text-xl font-mono font-black">{Math.round(heroWinProb)}%</span></div>
+                                  </div>
+                                )}
+                            </div>
+                          )}
+                        </div> 
+                    </div>
                 )}
             </div>
           )}
@@ -758,21 +766,37 @@ const App = () => {
           }
           .animate-pot-pulse { animation: pot-pulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
           .animate-pulse-glow { animation: pulse-glow 1.5s infinite ease-in-out; }
-          @keyframes pulse-glow { 0% { box-shadow: 0 0 5px rgba(34,211,238,0.2); } 50% { box-shadow: 0 0 25px rgba(34,211,238,0.6); } 100% { box-shadow: 0 0 5px rgba(34,211,238,0.2); } }
+          @keyframes pulse-glow { 0% { box-shadow: 0 0 5px rgba(251,191,36,0.2); } 50% { box-shadow: 0 0 35px rgba(251,191,36,0.7); } 100% { box-shadow: 0 0 5px rgba(251,191,36,0.2); } }
+          
           .no-scrollbar::-webkit-scrollbar { display: none; }
           .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-          @keyframes bounce-short { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-          .animate-bounce-short { animation: bounce-short 1s ease-in-out infinite; }
+          
           @keyframes showdown-pop { 
-            0% { transform: scale(0.8) translateY(150px) rotateX(-60deg); opacity: 0; filter: brightness(0) blur(10px); } 
-            70% { transform: scale(1.05) translateY(-5px) rotateX(10deg); opacity: 1; filter: brightness(1.2) blur(0px); }
-            100% { transform: scale(1) translateY(0) rotateX(0deg); opacity: 1; filter: brightness(1); } 
+            0% { transform: scale(0.9) translateY(40px); opacity: 0; filter: brightness(0); } 
+            100% { transform: scale(1) translateY(0); opacity: 1; filter: brightness(1); } 
           }
-          .animate-showdown-card-pop { animation: showdown-pop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-          @keyframes card-flip { 
-            0% { transform: rotateY(180deg) scale(0.3) translateY(40px); opacity: 0; filter: blur(8px); } 
-            100% { transform: rotateY(0deg) scale(1) translateY(0); opacity: 1; filter: blur(0px); } 
+          .animate-showdown-card-pop { animation: showdown-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          
+          @keyframes card-flip-hero { 
+            0% { transform: rotateY(180deg) scale(0.2); opacity: 0; filter: blur(10px); } 
+            100% { transform: rotateY(0deg) scale(1); opacity: 1; filter: blur(0px); } 
           }
+          
+          @keyframes sparkle {
+            0% { transform: translate(0,0) scale(0); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translate(var(--x), var(--y)) scale(1.5); opacity: 0; }
+          }
+          .sparkle-particle { animation: sparkle 1.5s ease-out infinite; }
+          .sparkle-0 { --x: 50px; --y: -50px; left: 50%; top: 20%; animation-delay: 0.1s; }
+          .sparkle-1 { --x: -60px; --y: -40px; left: 45%; top: 30%; animation-delay: 0.3s; }
+          .sparkle-2 { --x: 70px; --y: -30px; left: 55%; top: 25%; animation-delay: 0.5s; }
+          .sparkle-3 { --x: -40px; --y: -70px; left: 50%; top: 35%; animation-delay: 0.7s; }
+          .sparkle-4 { --x: 30px; --y: -80px; left: 48%; top: 15%; animation-delay: 0.9s; }
+          .sparkle-5 { --x: -80px; --y: -20px; left: 52%; top: 40%; animation-delay: 1.1s; }
+          .sparkle-6 { --x: 10px; --y: -90px; left: 40%; top: 10%; animation-delay: 0.2s; }
+          .sparkle-7 { --x: -20px; --y: -55px; left: 60%; top: 18%; animation-delay: 0.4s; }
+          
           @keyframes bet-splash { 
             0% { transform: translate(-50%, -50%) scale(0) rotate(-180deg); opacity: 0; filter: brightness(3); } 
             50% { transform: translate(-50%, -50%) scale(1.4) rotate(10deg); opacity: 1; filter: brightness(1.5); }
@@ -780,11 +804,7 @@ const App = () => {
             100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; } 
           }
           .animate-bet-splash { animation: bet-splash 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-          @keyframes deal-card { 
-            0% { top: 40%; left: 50%; transform: translate(-50%, -50%) scale(0.1) rotate(1080deg); opacity: 0; filter: blur(10px); } 
-            100% { opacity: 1; filter: blur(0px); } 
-          }
-          .animate-deal-card { animation: deal-card 0.6s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; }
+          
           html, body { overscroll-behavior-y: contain; height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; }
       `}</style>
     </div>
