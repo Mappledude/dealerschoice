@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.4.2-PRO";
+const VERSION = "v1.4.3-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -251,7 +251,6 @@ const processShowdown = (roomId) => {
     }, 6000);
 };
 
-// BOT TURN TRIGGER - STRICT 1 SECOND ACTION
 const triggerBotTurn = (roomId) => {
     const room = rooms[roomId];
     if (!room || room.activeIdx === -1) return;
