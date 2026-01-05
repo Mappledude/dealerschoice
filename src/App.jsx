@@ -272,19 +272,15 @@ const App = () => {
   }, []);
 
   const groupedLogs = useMemo(() => {
-    // Basic grouping by variant or a mock handId to make the Intel tab useful
-    // In a production app, the server would send a unique handId with each log
     const handGroups = [];
     let currentHand = { id: 'latest', variantName: activeVariant.name, isOngoing: phase !== PHASES.IDLE, summaries: [] };
     
-    // Reverse logs to show most recent hand context first
     [...logs].reverse().forEach(log => {
       if (log.type === 'phase' && log.action.includes('DEALT')) {
-        // Start of a new logical hand block in feed
         handGroups.push(currentHand);
         currentHand = { id: log.id, variantName: activeVariant.name, isOngoing: false, summaries: [] };
       }
-      if (log.name && log.name !== 'SYSTEM') {
+      if (log.name) {
         currentHand.summaries.push({ name: log.name, amount: log.amount || log.action, rank: log.rank || 'N/A' });
       }
     });
@@ -382,29 +378,9 @@ const App = () => {
 
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-[#05070a]/95 backdrop-blur-3xl border-t border-white/5 flex flex-col z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]">
         <div className="flex-1 flex flex-col justify-center pt-2 md:pt-4 pb-2 px-3 md:px-10 relative bg-white/[0.02] shadow-inner font-black uppercase overflow-visible">
-          {activeVariant?.id === 'HILOW' && heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
-            <>
-              <div className="absolute top-2 left-2 z-[110] animate-in slide-in-from-left duration-500">
-                 <div className="flex flex-col items-start bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-500/20 shadow-xl font-mono">
-                    <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">Low Strength</span>
-                    <span className="text-[10px] md:text-[18px] text-emerald-400 font-black uppercase leading-none italic mb-0.5">{String(heroPlayerObj.lowStrength || "...")}</span>
-                    <span className="text-[10px] md:text-[14px] text-yellow-400 italic leading-none font-black">{Math.round(heroPlayerObj.winProbabilityLow || 0)}% WIN</span>
-                 </div>
-              </div>
-              <div className="absolute top-2 right-2 z-[110] animate-in slide-in-from-right duration-500">
-                 <div className="flex flex-col items-end bg-purple-950/40 px-3 py-1 rounded-lg border border-purple-500/20 shadow-xl font-mono">
-                    <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">High Strength</span>
-                    <span className="text-[10px] md:text-[18px] text-purple-400 font-black uppercase leading-none italic mb-0.5">{String(heroPlayerObj.strength || "...")}</span>
-                    <span className="text-[10px] md:text-[14px] text-yellow-400 italic leading-none font-black">{Math.round(heroPlayerObj.winProbabilityHigh || 0)}% WIN</span>
-                 </div>
-              </div>
-            </>
-          )}
           {activeIdx === heroIdx && phase !== PHASES.IDLE && heroPlayerObj ? (
             <div className="flex flex-col gap-3 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
-                {activeVariant?.id !== 'HILOW' && (
-                    <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-900/60 px-6 py-2 rounded-2xl border border-white/5 flex flex-col items-center"><span className="text-sm md:text-xl text-purple-400 italic mb-0.5 font-black uppercase font-mono">{String(heroPlayerObj.strength || "...")}</span><span className="text-xs md:text-lg text-yellow-400 font-mono font-black italic">{Math.round(heroWinProb)}% Win Probability</span></div>
-                )}
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-900/60 px-6 py-2 rounded-2xl border border-white/5 flex flex-col items-center"><span className="text-sm md:text-xl text-purple-400 italic mb-0.5 font-black uppercase font-mono">{String(heroPlayerObj.strength || "...")}</span><span className="text-xs md:text-lg text-yellow-400 font-mono font-black italic">{Math.round(heroWinProb)}% Win Probability</span></div>
                 <div className="mt-12 flex gap-2 w-full max-w-[700px] font-black uppercase"><button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-[14px] hover:bg-white/15 transition-all font-black uppercase flex items-center justify-center tracking-widest font-mono">1/2 POT</button><button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-[14px] hover:bg-white/15 transition-all font-black uppercase flex items-center justify-center tracking-widest font-mono">POT</button><button onClick={handleAllIn} className="flex-1 h-8 md:h-12 bg-red-950/50 border border-red-500/40 rounded-lg text-[9px] md:text-[14px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center tracking-widest shadow-lg font-mono">ALL-IN</button></div>
                 <div className="flex flex-row gap-2 w-full items-center justify-center font-black"><button onClick={()=>handleAction('FOLD')} className="flex-1 h-12 md:h-20 bg-gradient-to-b from-red-950/80 to-red-900/60 border border-red-500/30 rounded-xl tracking-widest hover:brightness-125 transition-all font-black text-[11px] md:text-lg shadow-2xl uppercase font-mono">FOLD</button><button onClick={()=>handleAction('CALL')} className="flex-1 h-12 md:h-20 bg-gradient-to-b from-indigo-950/80 to-indigo-900/60 border border-indigo-400/30 rounded-xl text-[11px] md:text-2xl tracking-widest hover:brightness-125 font-black shadow-2xl uppercase px-2 truncate font-mono">{highestBet > heroPlayerObj.currentBet ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `ALL-IN` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) : 'CHECK'}</button><div className="flex-[2] flex gap-2 items-center bg-[#0d1117] border border-yellow-500/20 p-1 md:p-2 rounded-xl shadow-[inset_0_2px_20px_rgba(0,0,0,1)] font-black uppercase overflow-hidden"><div className="flex items-center bg-black/80 px-3 md:px-6 rounded-lg border border-white/5 h-10 md:h-16 font-black uppercase flex-1 shadow-inner group"><span className="text-yellow-500 text-[12px] md:text-2xl font-mono mr-1.5 animate-pulse">$</span><input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center font-mono text-sm md:text-4xl text-yellow-400 outline-none font-black tracking-tighter" /></div><button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-10 md:h-16 bg-gradient-to-r from-yellow-600 to-amber-700 border border-yellow-400/30 rounded-lg flex items-center justify-center hover:brightness-125 font-black uppercase text-[10px] md:text-2xl shadow-2xl tracking-tighter group font-mono"><Zap size={18} className="mr-1 text-black group-hover:scale-125 transition-transform"/> BET</button></div></div>
             </div>
