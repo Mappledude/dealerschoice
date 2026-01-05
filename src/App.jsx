@@ -5,7 +5,7 @@ import {
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
   Zap, Target, DollarSign, User, Lock, DoorOpen, LayoutGrid, ShieldAlert, PlusCircle,
   Users, Layers, Edit3, ScrollText, ArrowLeft, Key, Save, AlertTriangle, Monitor, Bot,
-  Timer, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3, Settings, Maximize, Minimize, Copy, Check, Activity
+  Timer, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3, Settings, Maximize, Minimize, Copy, Check, Activity, BookOpen
 } from 'lucide-react';
 import io from 'socket.io-client';
 
@@ -14,11 +14,13 @@ const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:
 
 const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
 
-const VERSION = "v1.3.4-PRO";
+const VERSION = "v1.3.9-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
+
+const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
 const DISPLAY_POSITIONS = [
   { x: 50, y: 92 }, { x: 15, y: 82 }, { x: 6,  y: 45 }, { x: 12, y: 12 }, { x: 30, y: 3  },
@@ -31,15 +33,67 @@ const BET_OFFSETS = [
 ];
 
 const VARIANTS = { 
-  HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', desc: '2 Hole Cards' }, 
-  OMAHA: { id: 'OMAHA', name: 'OMAHA', desc: '4 Hole Cards (Exactly 2 Hole + 3 Board)' }, 
-  PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', desc: '3 Hole Cards' }, 
-  MUFLIS: { id: 'MUFLIS', name: 'Muflis', desc: 'Low Hand Wins (Ace is 1)' },
-  HILOW: { id: 'HILOW', name: 'Hi-Low Split', desc: '4 Hole Cards' },
-  REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', desc: 'Joker wildcard logic' }
+  HOLDEM: { 
+    id: 'HOLDEM', 
+    name: 'Texas Hold\'em', 
+    desc: '2 Hole Cards',
+    rules: [
+      "Each player receives 2 hole cards.",
+      "Use any combination of hole and community cards to make the best 5-card hand.",
+      "Standard high hand poker ranking."
+    ]
+  }, 
+  OMAHA: { 
+    id: 'OMAHA', 
+    name: 'OMAHA', 
+    desc: '4 Hole Cards (Exactly 2 Hole + 3 Board)',
+    rules: [
+      "Each player receives 4 hole cards.",
+      "STRICT RULE: You MUST use exactly 2 cards from your hand and exactly 3 cards from the board.",
+      "Standard high hand ranking."
+    ]
+  }, 
+  PINEAPPLE: { 
+    id: 'PINEAPPLE', 
+    name: 'Pineapple', 
+    desc: '3 Hole Cards',
+    rules: [
+      "Each player receives 3 hole cards.",
+      "Evaluation uses standard high-hand rankings using any combination."
+    ]
+  }, 
+  MUFLIS: { 
+    id: 'MUFLIS', 
+    name: 'Muflis', 
+    desc: 'Low Hand Wins (Ace is 1)',
+    rules: [
+      "Weakest hand wins the pot.",
+      "Ace is treated as 1 (lowest).",
+      "Standard rankings are flipped: High Card beats Pair, etc."
+    ]
+  }, 
+  HILOW: { 
+    id: 'HILOW', 
+    name: 'Hi-Low Split', 
+    desc: '4 Hole Cards',
+    rules: [
+      "Each player receives 4 hole cards.",
+      "Pot is split 50/50 between Best High Hand and Best Low Hand.",
+      "Exactly 2 from hand and 3 from board."
+    ]
+  }, 
+  REDSBLACKS: { 
+    id: 'REDSBLACKS', 
+    name: 'Reds & Blacks', 
+    desc: 'Joker wildcard logic',
+    rules: [
+      "Each player receives 4 hole cards.",
+      "If you have a mix of colors (e.g. 2 Red + 1 Black), 3 cards form a Joker wildcard.",
+      "Joker represents any card to make your best hand.",
+      "If Joker forms, you use Joker + 1 other hole card + 3 community cards."
+    ]
+  }
 };
-
-const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, 
@@ -147,6 +201,7 @@ const App = () => {
   const [showdownWinners, setShowdownWinners] = useState(null);
   const [nuclearConfirm, setNuclearConfirm] = useState(false);
   const [showVisualControls, setShowVisualControls] = useState(false);
+  const [showRulesModal, setShowRulesModal] = useState(false);
   const [intelExpanded, setIntelExpanded] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -209,12 +264,14 @@ const App = () => {
   const handleAllIn = useCallback(() => {
     if (!heroPlayerObj) return;
     const totalStack = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
-    if (totalStack <= highestBet) {
-        handleAction('CALL'); 
-    } else {
-        handleAction('RAISE', totalStack);
+    handleAction('RAISE', totalStack);
+  }, [heroPlayerObj, handleAction]);
+
+  const addBot = useCallback(() => { 
+    if (currentRoomId && isConnected) {
+      socket.emit('adminAddBot', { roomId: currentRoomId });
     }
-  }, [heroPlayerObj, highestBet, handleAction]);
+  }, [currentRoomId, isConnected]);
 
   const handleCreatePlayer = useCallback(() => {
     if (!newPlayer.name) return;
@@ -227,12 +284,6 @@ const App = () => {
     socket.emit('adminCreateRoom', { ...newTable, id: 'room_' + Math.random().toString(36).slice(2, 9) });
     setNewTable({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
   }, [newTable]);
-
-  const addBot = useCallback(() => { 
-    if (currentRoomId && isConnected) {
-      socket.emit('adminAddBot', { roomId: currentRoomId });
-    }
-  }, [currentRoomId, isConnected]);
 
   const handleNuclear = useCallback(() => {
       if (!nuclearConfirm) {
@@ -296,10 +347,8 @@ const App = () => {
     const handleRoomUpdate = (d) => {
         if (!d) return;
         setPlayers(() => { 
-          const next = [...INITIAL_PLAYERS]; 
-          (d.players || []).forEach((p, i) => { 
-            if (p) next[i] = { ...p, seatIdx: i }; 
-          }); 
+          const next = Array(TOTAL_SEATS).fill(null); 
+          (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); 
           return next; 
         });
         setPhase(d.phase); setCommunity(d.community || []); setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
@@ -307,7 +356,7 @@ const App = () => {
         setTimeRemaining(d.timeRemaining !== undefined ? Math.max(0, d.timeRemaining) : 0);
         if (d.activeVariant) {
             const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
-            setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId });
+            setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId, rules: [] });
         }
         if (d.phase === PHASES.SHOWDOWN) { setPotTransferring(true); setShowdownWinners(d.showdownWinners || null); setWinning5Ids(d.winning5Ids || []); setTimeout(() => setPotTransferring(false), 4000); }
     };
@@ -343,6 +392,7 @@ const App = () => {
             <button onClick={handleNuclear} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl flex items-center justify-center gap-2 border-2 transition-all uppercase ${nuclearConfirm ? 'bg-red-600 border-white text-white' : 'bg-white/5 text-red-500 border-red-500/20'}`}>
                 <Bomb size={14}/> {nuclearConfirm ? 'CONFIRM' : 'NUCLEAR'}
             </button>
+            <button onClick={()=>setCurrentView(VIEWS.LOBBY)} className="flex-1 md:flex-none p-2.5 md:p-4 rounded-xl bg-cyan-600 text-black font-black text-[9px] md:text-xs">BACK TO LOBBY</button>
         </aside>
         <main className="flex-1 p-5 md:p-12 overflow-y-auto bg-black/40">
             {adminTab === ADMIN_TABS.PLAYERS ? (
@@ -393,7 +443,7 @@ const App = () => {
                   <div className="flex justify-between items-center text-[10px] text-white/40 tracking-widest font-black"><span>BUY-IN AMOUNT</span><span className="text-emerald-400 text-lg md:text-2xl font-mono">${buyInAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
                   <input type="range" min={selectedTableForJoin.minBuy || 5} max={selectedTableForJoin.maxBuy || 10} step={0.25} value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#fbbf24]" />
                 </div>
-                <div className="flex gap-4"><button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-3.5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all font-black text-[10px] uppercase">BACK</button><button onClick={joinRoom} disabled={isJoining} className={`flex-2 p-3.5 rounded-2xl shadow-lg transition-all text-[10px] tracking-widest font-black uppercase ${isJoining ? 'bg-slate-700 opacity-50' : 'bg-emerald-600 hover:scale-105 active:scale-95'}`}>{isJoining ? 'Joining...' : 'SIT DOWN'}</button></div>
+                <div className="flex gap-4"><button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-3.5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all font-black text-[10px] uppercase">BACK</button><button onClick={joinRoom} disabled={isJoining} className={`flex-2 p-3.5 rounded-2xl shadow-lg transition-all text-[10px] tracking-widest font-black uppercase ${isJoining ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-emerald-600 hover:scale-105 active:scale-95'}`}>{isJoining ? 'Joining...' : 'SIT DOWN'}</button></div>
               </div>
             </div>
         )}
@@ -404,7 +454,7 @@ const App = () => {
             <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={16}/></button>
           </div>
         </header>
-        <main className="flex-1 p-5 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-10 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase">
+        <main className="flex-1 p-5 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-10 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase font-black uppercase">
             {activeTables.length === 0 ? (<div className="col-span-full flex flex-col items-center justify-center p-20 text-white/20 gap-4 uppercase font-black"><ShieldAlert size={48} /><span className="text-sm tracking-[0.4em]">NO ACTIVE ARENAS</span></div>) : (activeTables.map((t) => (
               <div key={t.id} className="p-5 md:p-8 bg-white/5 border border-white/5 rounded-3xl flex flex-col gap-4 md:gap-6 shadow-2xl hover:border-[#fbbf24]/20 transition-all group relative overflow-hidden font-black">
                 <h3 className="text-lg md:text-2xl tracking-widest text-white group-hover:text-[#fbbf24] transition-colors uppercase font-black">{String(t.name)}</h3>
@@ -412,24 +462,18 @@ const App = () => {
                   <div className="flex flex-col font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">STAKES</span><span className="text-[#fbbf24] text-base md:text-xl font-black">${t.sb}/${t.bb}</span></div>
                   <div className="flex flex-col items-end font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">SEATS</span><span className="text-white/80 font-mono text-[10px] md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
                 </div>
-                
                 {/* Seated Players List */}
-                <div className="bg-black/40 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
+                <div className="bg-black/40 p-3 rounded-2xl border border-white/5 flex flex-col gap-2 min-h-[60px]">
                   <span className="text-[8px] text-white/30 tracking-widest uppercase font-black">Seated Players</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {t.players?.filter(p => p).length > 0 ? (
-                      t.players.filter(p => p).map((p, idx) => (
-                        <div key={idx} className="flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">
-                          {p.isBot && <Bot size={8} className="text-indigo-400" />}
-                          <span className="text-[9px] text-white/80 uppercase font-black">{p.name}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <span className="text-[9px] text-white/20 italic">Empty Arena</span>
-                    )}
+                    {t.players?.filter(p => p).length > 0 ? t.players.filter(p => p).map((p, idx) => (
+                      <div key={idx} className="flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">
+                        {p.isBot && <Bot size={8} className="text-indigo-400" />}
+                        <span className="text-[9px] text-white/80 uppercase font-black">{String(p.name)}</span>
+                      </div>
+                    )) : <span className="text-[9px] text-white/20 italic">Arena is empty</span>}
                   </div>
                 </div>
-
                 <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-5 md:p-8 bg-emerald-600 rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] font-black uppercase">ENTER ARENA</button>
               </div>
             )))}
@@ -460,6 +504,29 @@ const App = () => {
                 ))}
                 <div ref={logEndRef} />
             </div>
+          </div>
+        </div>
+      )}
+
+      {showRulesModal && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 md:p-12" onClick={() => setShowRulesModal(false)}>
+          <div className="w-full max-w-[600px] bg-slate-900 border-2 border-cyan-500/40 rounded-[2.5rem] p-8 md:p-12 shadow-[0_0_80px_rgba(34,211,238,0.2)] animate-in zoom-in duration-300 relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
+            <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
+              <h3 className="text-xl md:text-3xl text-cyan-400 font-black tracking-tighter uppercase flex items-center gap-3">
+                <BookOpen size={24} /> {activeVariant?.name} Manual
+              </h3>
+              <button onClick={() => setShowRulesModal(false)} className="text-white/40 hover:text-white transition-colors p-2 bg-white/5 rounded-full"><X size={24}/></button>
+            </div>
+            <div className="space-y-6">
+              {(activeVariant?.rules || []).map((rule, idx) => (
+                <div key={idx} className="flex gap-4 items-start group">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] flex items-center justify-center font-black group-hover:scale-110 transition-transform">0{idx + 1}</span>
+                  <p className="text-sm md:text-lg text-white/80 font-black leading-snug uppercase tracking-tight">{rule}</p>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowRulesModal(false)} className="w-full mt-10 py-5 bg-cyan-600 hover:bg-cyan-500 text-black font-black uppercase text-sm md:text-base rounded-2xl transition-all shadow-lg active:scale-95">Acknowledge Rules</button>
           </div>
         </div>
       )}
@@ -548,7 +615,17 @@ const App = () => {
 
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)]" style={{ height: `calc(${headerHeight}px + env(safe-area-inset-top))` }}>
         <div className="flex items-center gap-1.5 overflow-hidden flex-1">
-            <div className="bg-white/5 px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]"><span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">This Hand:</span><span className="text-white text-[10px] md:text-sm truncate leading-none">{String(activeVariant?.name || "Hold'em")}</span></div>
+            <button 
+                onClick={() => setShowRulesModal(true)}
+                className="bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left"
+            >
+              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1">
+                This Hand: <Info size={8} />
+              </span>
+              <span className="text-white text-[10px] md:text-sm truncate leading-none">
+                {String(activeVariant?.name || "Hold'em")}
+              </span>
+            </button>
             <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-lg md:rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]"><span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span><select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full">{Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>))}</select></div>
         </div>
         <div className="flex items-center gap-1.5 md:gap-4">
@@ -631,14 +708,14 @@ const App = () => {
         </div>
       </footer>
       <style>{`
-          @keyframes progress { from { width: 100%; } to { width: 0%; } }
           @keyframes fling-to-pot { 
             0% { transform: translate(-50%, -100%) scale(1.5); filter: blur(0px) brightness(2); } 
-            100% { transform: translate(0, -35vh) scale(0) rotate(1440deg); filter: blur(8px); opacity: 0; } 
+            20% { transform: translate(calc(-50% + 20px), -15vh) scale(1.2); }
+            100% { transform: translate(calc(-50% + ${Math.random() * 40 - 20}px), -35vh) scale(0) rotate(${Math.random() * 720}deg); filter: blur(8px); opacity: 0; } 
           }
           @keyframes pot-pulse { 
             0% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 
-            50% { transform: scale(1.15); filter: drop-shadow(0 0 40px #fbbf24) brightness(1.3); } 
+            50% { transform: scale(1.1); filter: drop-shadow(0 0 30px #fbbf24) brightness(1.2); } 
             100% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 
           }
           .animate-pot-pulse { animation: pot-pulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
