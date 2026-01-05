@@ -596,7 +596,6 @@ const App = () => {
             <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={16}/></button>
           </div>
         </header>
-        {/* REDESIGNED LOBBY LIST - TABLE VIEW */}
         <main className="flex-1 overflow-y-auto bg-[#06080c] scroll-smooth pt-4 px-2 md:px-12 pb-32">
             <div className="max-w-[1200px] mx-auto">
               {/* Table Header - Visible on Desktop */}
