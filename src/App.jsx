@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.7.0-ULTRA";
+const VERSION = "v1.7.5-ULTRA";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -166,6 +166,12 @@ const App = () => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   
+  // Admin specific UI states (Replacement for browser popups)
+  const [pendingDeleteTableId, setPendingDeleteTableId] = useState(null);
+  const [pendingDeletePlayerUid, setPendingDeletePlayerUid] = useState(null);
+  const [editingPlayerUid, setEditingPlayerUid] = useState(null);
+  const [editChipsValue, setEditChipsValue] = useState(0);
+
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
 
@@ -187,6 +193,14 @@ const App = () => {
   }, [players, userProfile]);
 
   const heroPlayerObj = useMemo(() => heroIdx !== -1 ? players[heroIdx] : null, [players, heroIdx]);
+
+  const heroWinProb = useMemo(() => {
+      if (!heroPlayerObj) return 0;
+      if (heroPlayerObj.winProbabilityHigh !== undefined && heroPlayerObj.winProbabilityLow !== undefined) {
+          return (heroPlayerObj.winProbabilityHigh + heroPlayerObj.winProbabilityLow) / 2;
+      }
+      return heroPlayerObj.winProbability || 0;
+  }, [heroPlayerObj]);
 
   const totalDisplayPot = useMemo(() => {
     const currentBetsSum = players.reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
@@ -225,7 +239,6 @@ const App = () => {
 
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
-    socket.on('disconnect', () => setIsConnected(false));
     const handleRoomUpdate = (d) => {
         if (!d) return;
         setPlayers(() => { 
@@ -247,6 +260,7 @@ const App = () => {
             const rawWinners = d.showdownWinners || [];
             setShowdownWinners([...rawWinners]);
             setWinning5Ids(d.winning5Ids || []);
+            const durationPerWinner = 4000;
             const totalDuration = (d.activeVariant?.id || d.activeVariant) === 'HILOW' ? 8000 : 4000;
             if (rawWinners.length > 1) {
                 for (let i = 1; i < rawWinners.length; i++) { setTimeout(() => setCurrentShowdownIdx(i), i * 4000); }
@@ -307,7 +321,18 @@ const App = () => {
             <h2 className="hidden md:flex text-[#fbbf24] items-center gap-2 mb-4 font-mono italic"><ShieldCheck size={20}/> ADMIN CORE</h2>
             <button onClick={()=>setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl text-[9px] md:text-xs font-black font-mono tracking-widest ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black shadow-[0_0_15px_#fbbf24]' : 'bg-white/5'}`}>PLAYER REGISTRY</button>
             <button onClick={()=>setAdminTab(ADMIN_TABS.TABLES)} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl text-[9px] md:text-xs font-black font-mono tracking-widest ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black shadow-[0_0_15px_#fbbf24]' : 'bg-white/5'}`}>ARENA CONTROL</button>
-            <button onClick={() => { if(!nuclearConfirm) { setNuclearConfirm(true); setTimeout(()=>setNuclearConfirm(false),3000); } else { socket.emit('adminNuclearReset'); setNuclearConfirm(false); } }} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl flex items-center justify-center gap-2 border-2 transition-all uppercase ${nuclearConfirm ? 'bg-red-600 border-white text-white' : 'bg-white/5 text-red-500 border-red-500/20'}`}>
+            <button 
+                onClick={() => { 
+                    if(!nuclearConfirm) { 
+                        setNuclearConfirm(true); 
+                        setTimeout(()=>setNuclearConfirm(false), 3000); 
+                    } else { 
+                        socket.emit('adminNuclearReset'); 
+                        setNuclearConfirm(false); 
+                    } 
+                }} 
+                className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl flex items-center justify-center gap-2 border-2 transition-all uppercase ${nuclearConfirm ? 'bg-red-600 border-white text-white' : 'bg-white/5 text-red-500 border-red-500/20'}`}
+            >
                 <Bomb size={14}/> {nuclearConfirm ? 'CONFIRM' : 'NUCLEAR'}
             </button>
             <button onClick={()=>setCurrentView(VIEWS.LOBBY)} className="flex-1 md:flex-none p-2.5 md:p-4 rounded-xl bg-cyan-600 text-black font-black text-[9px] md:text-xs font-mono tracking-widest">EXIT TO LOBBY</button>
@@ -323,12 +348,30 @@ const App = () => {
                     </div>
                     <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
                         {allProfiles.map(p => (
-                            <div key={p.uid} className="flex justify-between p-3 md:p-4 border-b border-white/5 items-center hover:bg-white/5 transition-colors">
+                            <div key={p.uid} className="flex flex-col md:flex-row justify-between p-4 border-b border-white/5 gap-4 md:items-center hover:bg-white/5 transition-colors">
                                 <span className="text-[10px] md:text-sm font-black truncate max-w-[100px] font-mono italic">{String(p.name)}</span>
                                 <div className="flex gap-4 items-center font-mono">
-                                    <span className="text-emerald-400 text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span>
-                                    <button onClick={()=>{const n = prompt("NEW WALLET", p.chips); if(n !== null) socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400"><Edit3 size={18}/></button>
-                                    <button onClick={()=>{if(confirm(`Delete ${p.name}?`)) socket.emit('adminDeletePlayer', p.uid)}} className="text-red-500"><Trash2 size={18}/></button>
+                                    {editingPlayerUid === p.uid ? (
+                                        <div className="flex items-center gap-2 animate-in slide-in-from-right duration-300">
+                                            <input type="number" value={editChipsValue} onChange={(e) => setEditChipsValue(Number(e.target.value))} className="w-20 bg-black/40 border border-emerald-500/50 rounded px-2 py-1 text-emerald-400 text-xs" />
+                                            <button onClick={() => { socket.emit('adminEditChips', {uid: p.uid, chips: editChipsValue}); setEditingPlayerUid(null); }} className="text-emerald-400"><Check size={16}/></button>
+                                            <button onClick={() => setEditingPlayerUid(null)} className="text-white/40"><X size={16}/></button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-emerald-400 text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span>
+                                            <button onClick={()=>{ setEditingPlayerUid(p.uid); setEditChipsValue(p.chips); }} className="text-cyan-400 hover:scale-110 transition-transform"><Edit3 size={18}/></button>
+                                        </div>
+                                    )}
+
+                                    {pendingDeletePlayerUid === p.uid ? (
+                                        <div className="flex items-center gap-2 animate-in zoom-in duration-300">
+                                            <button onClick={() => { socket.emit('adminDeletePlayer', p.uid); setPendingDeletePlayerUid(null); }} className="bg-red-600 text-white text-[8px] px-2 py-1 rounded font-black tracking-widest">SURE?</button>
+                                            <button onClick={() => setPendingDeletePlayerUid(null)} className="text-white/40"><X size={14}/></button>
+                                        </div>
+                                    ) : (
+                                        <button onClick={() => setPendingDeletePlayerUid(p.uid)} className="text-red-500 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -348,7 +391,14 @@ const App = () => {
                                 <h4 className="text-[#fbbf24] font-black text-xs md:text-lg italic">{String(t.name)}</h4>
                                 <p className="text-[10px] text-white/40 tracking-[0.2em] uppercase">STAKES: ${t.sb}/${t.bb}</p>
                               </div>
-                              <button onClick={()=>{if(confirm(`Terminate arena ${t.name}?`)) socket.emit('adminDeleteRoom', t.id)}} className="bg-red-950/40 px-4 py-2 rounded-xl text-red-500 font-black text-[10px] hover:bg-red-600 hover:text-white transition-all tracking-widest">TERMINATE</button>
+                              {pendingDeleteTableId === t.id ? (
+                                  <div className="flex items-center gap-3 animate-in slide-in-from-right duration-300">
+                                      <button onClick={() => { socket.emit('adminDeleteRoom', t.id); setPendingDeleteTableId(null); }} className="bg-red-600 text-white px-4 py-1.5 rounded-xl text-[10px] font-black tracking-widest shadow-lg">TERMINATE NOW</button>
+                                      <button onClick={() => setPendingDeleteTableId(null)} className="text-white/40 hover:text-white"><X size={20}/></button>
+                                  </div>
+                              ) : (
+                                  <button onClick={() => setPendingDeleteTableId(t.id)} className="bg-red-950/40 px-4 py-2 rounded-xl text-red-500 font-black text-[10px] hover:bg-red-600 hover:text-white transition-all tracking-widest">TERMINATE</button>
+                              )}
                             </div>
                         ))}
                     </div>
@@ -399,7 +449,6 @@ const App = () => {
 
   return (
     <div className="h-screen bg-[#020408] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter">
-      {/* INTELLIGENCE MODAL */}
       {intelExpanded && (
         <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-md p-6 pt-[100px] flex flex-col animate-in fade-in duration-300">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[800px] mx-auto bg-slate-900/90 border border-yellow-500/20 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
@@ -432,10 +481,9 @@ const App = () => {
         </div>
       )}
 
-      {/* SETTINGS MODAL */}
       {showVisualControls && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-            <div className="w-full max-w-[1000px] h-[90vh] bg-slate-900 border-2 border-yellow-500/20 rounded-[3rem] p-10 flex flex-col gap-6 overflow-y-auto scrollbar-hide">
+            <div className="w-full max-w-[1000px] h-[90vh] bg-slate-900 border-2 border-yellow-500/20 rounded-[3rem] p-10 flex flex-col gap-6 overflow-y-auto scrollbar-hide relative">
                 <div className="flex items-center justify-between border-b border-white/5 pb-4">
                     <h3 className="text-2xl text-yellow-400 font-black uppercase font-mono">Arena Calibration</h3>
                     <button onClick={() => setShowVisualControls(false)} className="text-white/20 hover:text-white"><X size={32}/></button>
@@ -468,7 +516,6 @@ const App = () => {
         </div>
       )}
 
-      {/* HEADER */}
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)]" style={{ height: `calc(${headerHeight}px + env(safe-area-inset-top))` }}>
         <div className="flex items-center gap-1.5 overflow-hidden flex-1">
             <button onClick={() => setShowRulesModal(true)} className="bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left">
@@ -492,7 +539,6 @@ const App = () => {
         </div>
       </header>
 
-      {/* TABLE */}
       <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-[#0f3d2e]/40 to-black overflow-hidden px-1 py-1 font-black uppercase">
         <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center font-black">
             <div className="absolute inset-0 bg-[#0f3d2e]/60 rounded-[50%] border-[3vw] md:border-[2.5vw] border-slate-900/80 shadow-[inset_0_0_20vw_rgba(0,0,0,0.9),0_20px_100px_rgba(0,0,0,0.5)] border-double font-black uppercase overflow-hidden">
@@ -518,7 +564,6 @@ const App = () => {
         </div>
       </main>
 
-      {/* FOOTER ACTIONS */}
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-[#05070a]/95 backdrop-blur-3xl border-t border-white/5 flex flex-col z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]">
         <div className="flex-1 flex flex-col justify-center pt-2 md:pt-4 pb-2 px-3 md:px-10 relative bg-white/[0.02] shadow-inner font-black uppercase overflow-visible">
           {activeVariant?.id === 'HILOW' && heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
@@ -576,6 +621,9 @@ const App = () => {
             <div className="flex flex-col items-center justify-center h-full relative font-black uppercase overflow-visible">
                 {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-1 md:gap-3 animate-in fade-in zoom-in duration-700 relative overflow-visible">
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                            {[...Array(16)].map((_, i) => ( <div key={i} className={`sparkle-particle sparkle-${i} absolute w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-0 shadow-[0_0_10px_#fbbf24]`}/> ))}
+                        </div>
                         <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.3em] text-[10px] md:text-xl uppercase text-center px-4 drop-shadow-[0_0_20px_rgba(251,191,36,0.7)] bg-yellow-400/5 py-1 rounded-full border border-yellow-400/10">
                             <Trophy size={14} className="md:size-6" /> 
                             {showdownWinners.length === 1 
@@ -587,7 +635,7 @@ const App = () => {
                             {showdownWinners[currentShowdownIdx] && (
                                 <div key={currentShowdownIdx} className="flex items-center gap-4 md:gap-8 bg-slate-950/90 p-3 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border-2 border-yellow-500/40 shadow-[0_0_60px_rgba(0,0,0,0.8)] min-w-[240px] md:min-w-[500px] animate-showdown-card-pop shrink-0">
                                     <div className="flex flex-col items-center shrink-0 font-mono">
-                                        <div className="text-white font-black text-[12px] md:text-2xl drop-shadow-2xl uppercase truncate max-w-[80px] md:max-w-none mb-0.5 tracking-tighter italic">{String(showdownWinners[currentShowdownIdx].name)}</div>
+                                        <div className="text-white font-black text-[12px] md:text-2xl drop-shadow-2xl uppercase truncate max-w-[80px] md:max-w-none mb-0.5 tracking-tighter font-mono italic">{String(showdownWinners[currentShowdownIdx].name)}</div>
                                         <div className="bg-gradient-to-r from-yellow-400 to-amber-600 text-black px-3 py-0.5 rounded-full font-mono text-[10px] md:text-xl font-black shadow-inner tracking-widest">+${(showdownWinners[currentShowdownIdx].amount || 0).toLocaleString()}</div>
                                     </div>
                                     <div className="flex gap-1 md:gap-2 items-center justify-center">
@@ -610,7 +658,7 @@ const App = () => {
                             <div className="flex flex-row items-center justify-between w-full gap-4 md:gap-10 px-4 md:px-8 animate-in fade-in duration-500 font-black uppercase">
                                 <div className="flex flex-col items-start bg-yellow-950/20 px-5 py-2 rounded-2xl border border-yellow-500/20">
                                     <span className="text-yellow-500 text-[9px] md:text-[13px] animate-pulse mb-1 font-black tracking-widest">ACTION ON</span>
-                                    <span className="text-white text-sm md:text-4xl font-mono italic drop-shadow-2xl uppercase leading-none truncate max-w-[100px] md:max-w-none">{String(players[activeIdx]?.name || "OPPONENT")}</span>
+                                    <span className="text-white text-sm md:text-4xl font-mono italic drop-shadow-2xl uppercase leading-none truncate max-w-[100px] md:max-w-none font-black italic">{String(players[activeIdx]?.name || "OPPONENT")}</span>
                                 </div>
                                 {heroPlayerObj && !heroPlayerObj.isFolded && activeVariant?.id !== 'HILOW' && (
                                   <div className="flex items-center gap-4 md:gap-8 bg-slate-950/60 p-3 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-white/5 shadow-2xl">
