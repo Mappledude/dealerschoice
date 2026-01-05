@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.7.0-ULTRA";
+const VERSION = "v1.7.5-ULTRA";
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 const SUITS = ['♥', '♦', '♣', '♠'];
 const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -16,6 +16,12 @@ const VM = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10
 
 let profiles = []; 
 let rooms = {};
+
+const serializeRoom = (room) => {
+    if (!room) return null;
+    const { timer, deck, ignitionTimer, ...rest } = room;
+    return rest;
+};
 
 const combinations = (array, k) => {
   let result = [];
@@ -71,12 +77,16 @@ const getBestHand = (hole, comm, variantId) => {
     let bestHigh = { power: -1, name: "Evaluating..." };
     let bestLow = null;
 
-    if (variantId === 'HOLDEM' || variantId === 'PINEAPPLE') {
+    if (variantId === 'HOLDEM' || variantId === 'PINEAPPLE' || variantId === 'MUFLIS') {
         combinations([...hole, ...comm], 5).forEach(c => {
             const res = rankHand(c);
-            if (res.power > bestHigh.power) bestHigh = res;
+            if (variantId === 'MUFLIS') {
+                if (bestHigh.power === -1 || res.power < bestHigh.power) bestHigh = res;
+            } else {
+                if (res.power > bestHigh.power) bestHigh = res;
+            }
         });
-    } else if (variantId === 'OMAHA' || variantId === 'HILOW') {
+    } else if (variantId === 'OMAHA' || variantId === 'HILOW' || variantId === 'REDSBLACKS') {
         const boardCombos = combinations(comm, 3);
         const holePairs = combinations(hole, 2);
         
@@ -86,17 +96,11 @@ const getBestHand = (hole, comm, variantId) => {
                 if (res.power > bestHigh.power) bestHigh = res;
                 
                 if (variantId === 'HILOW') {
-                    // Low is simply the weakest High-Card hand (Straights/Flushes break Low)
                     if (res.name === "High Card") {
                         if (!bestLow || res.power < bestLow.power) bestLow = res;
                     }
                 }
             });
-        });
-    } else if (variantId === 'MUFLIS') {
-        combinations([...hole, ...comm], 5).forEach(c => {
-            const res = rankHand(c);
-            if (bestHigh.power === -1 || res.power < bestHigh.power) bestHigh = res;
         });
     }
     
@@ -111,28 +115,19 @@ const simulateEquity = (player, board, deck, variantId, otherPlayersCount) => {
 
     for (let i = 0; i < iterations; i++) {
         const simDeck = [...deck].sort(() => Math.random() - 0.5);
-        
-        // 1. Complete Board
         const simBoard = [...board];
         while (simBoard.length < 5) simBoard.push(simDeck.pop());
 
-        // 2. Assign Opponents
         const opponents = [];
         const cardsPerHand = (variantId === 'HOLDEM' || variantId === 'MUFLIS') ? 2 : (variantId === 'PINEAPPLE' ? 3 : 4);
-        for (let j = 0; j < otherPlayersCount; j++) {
-            opponents.push(simDeck.splice(0, cardsPerHand));
-        }
+        for (let j = 0; j < otherPlayersCount; j++) { opponents.push(simDeck.splice(0, cardsPerHand)); }
 
-        // 3. Evaluate Hero
         const heroRes = getBestHand(player.hand, simBoard, variantId);
-
-        // 4. Check against Opponents
         let heroWinsH = true;
         let heroWinsL = variantId === 'HILOW' ? (heroRes.low !== null) : false;
 
         for (const oppHand of opponents) {
             const oppRes = getBestHand(oppHand, simBoard, variantId);
-            
             if (variantId === 'MUFLIS') {
                 if (oppRes.high.power < heroRes.high.power) heroWinsH = false;
             } else {
@@ -141,36 +136,25 @@ const simulateEquity = (player, board, deck, variantId, otherPlayersCount) => {
                     if (!heroRes.low || oppRes.low.power < heroRes.low.power) heroWinsL = false;
                 }
             }
-            if (!heroWinsH && (variantId !== 'HILOW' || !heroWinsL)) break;
         }
-
         if (heroWinsH) winsHigh++;
         if (heroWinsL) winsLow++;
     }
-
-    return { 
-        high: (winsHigh / iterations) * 100, 
-        low: (winsLow / iterations) * 100 
-    };
+    return { high: (winsHigh / iterations) * 100, low: (winsLow / iterations) * 100 };
 };
 
 const updateRoomStrengths = (roomId) => {
     const room = rooms[roomId];
     if (!room || room.phase === PHASES.IDLE) return;
-
     const activePlayers = room.players.filter(p => p && !p.isFolded);
-    
     room.players.forEach(p => {
         if (p && p.hand && !p.isFolded) {
             const evalRes = getBestHand(p.hand, room.community, room.activeVariant.id);
             p.strength = evalRes.high.name;
-            p.lowStrength = evalRes.low ? "Low Qualifies" : "No Low";
-
-            // Run Simulation
+            p.lowStrength = evalRes.low ? evalRes.low.name : "No Low";
             const remainingDeck = VALUES.flatMap(v => SUITS.map(s => ({ value: v, suit: s })))
                 .filter(c => !p.hand.some(ph => ph.value === c.value && ph.suit === c.suit))
                 .filter(c => !room.community.some(cb => cb.value === c.value && cb.suit === c.suit));
-
             const equity = simulateEquity(p, room.community, remainingDeck, room.activeVariant.id, activePlayers.length - 1);
             p.winProbabilityHigh = equity.high;
             p.winProbabilityLow = equity.low;
@@ -179,9 +163,8 @@ const updateRoomStrengths = (roomId) => {
     });
 };
 
-// --- Standard Socket Logic with Admin Updates ---
 io.on('connection', (socket) => {
-    socket.on('getInitialData', () => socket.emit('initialDataResponse', { profiles, rooms: Object.values(rooms) }));
+    socket.on('getInitialData', () => socket.emit('initialDataResponse', { profiles, rooms: Object.values(rooms).map(serializeRoom) }));
     
     socket.on('playerLogin', ({ password }) => {
         const profile = profiles.find(p => p.password === password);
@@ -203,13 +186,24 @@ io.on('connection', (socket) => {
         io.emit('profilesUpdate', profiles);
     });
 
-    socket.on('adminDeleteRoom', (roomId) => {
-        delete rooms[roomId];
-        io.emit('lobbyUpdate', Object.values(rooms));
+    socket.on('adminCreateRoom', (data) => {
+        const defaultData = { sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 };
+        rooms[data.id] = { ...defaultData, ...data, players: Array(10).fill(null), phase: PHASES.IDLE, community: [], potData: [{amount:0}], dealerIdx: 0, timeRemaining: 20, gameInProgress: false };
+        io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom));
     });
 
-    // ... (rest of game loop/performAction remains as previously defined but calling updateRoomStrengths)
+    socket.on('adminDeleteRoom', (roomId) => {
+        delete rooms[roomId];
+        io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom));
+    });
+
+    socket.on('adminNuclearReset', () => {
+        rooms = {};
+        profiles = profiles.filter(p => p.role === 'admin');
+        io.emit('lobbyUpdate', []);
+        io.emit('profilesUpdate', profiles);
+    });
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`Server ${VERSION} active on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server ${VERSION} ready.`));
