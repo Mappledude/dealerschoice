@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.4.5-PRO";
+const VERSION = "v1.4.6-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -95,7 +95,7 @@ const getBestHand = (hole, comm, variantId) => {
 
   let bestHigh = { power: -1, name: "Pre-flop" };
   let bestLow = null;
-  let handTypeMeta = ""; // Natural or Joker
+  let handTypeMeta = ""; 
 
   if (variantId === 'OMAHA' || variantId === 'HILOW') {
       const holeCombos = combinations(hole, 2);
@@ -105,11 +105,18 @@ const getBestHand = (hole, comm, variantId) => {
               if (b.length < 3) return;
               const res = rankHand([...h, ...b]);
               if (res.power > bestHigh.power) bestHigh = res;
+              
               if (variantId === 'HILOW') {
-                  const uniqueRanks = [...new Set([...h, ...b].map(c => VM[c.value]))].filter(r => r <= 8).sort((x, y) => x - y);
+                  // Low Hand logic: Aces are 1, only ranks 8 or lower qualify
+                  const ranksForLow = [...h, ...b].map(c => c.value === 'A' ? 1 : VM[c.value]);
+                  const uniqueRanks = [...new Set(ranksForLow)].filter(r => r <= 8).sort((x, y) => x - y);
+                  
                   if (uniqueRanks.length >= 5) {
+                      // Power is calculated such that lower power is better (e.g. 5-4-3-2-A is best)
                       const lowPower = uniqueRanks.slice(0, 5).reduce((acc, v, i) => acc + (v * Math.pow(15, i)), 0);
-                      if (!bestLow || lowPower < bestLow.power) bestLow = { power: lowPower, name: `Low ${V_LABEL[uniqueRanks[4]]}-High` };
+                      if (!bestLow || lowPower < bestLow.power) {
+                          bestLow = { power: lowPower, name: `Low ${V_LABEL[uniqueRanks[4]]}-High` };
+                      }
                   }
               }
           });
@@ -119,10 +126,6 @@ const getBestHand = (hole, comm, variantId) => {
       const blacks = hole.filter(c => c.suit === '♣' || c.suit === '♠');
       const boardCombos = combinations(comm, 3);
       
-      // Determine if a Joker can be formed.
-      // Rule: Joker created if 3 of 4 cards are exactly (2R+1B) or (2B+1R).
-      // This means the 4th hole card is simply the one left out.
-      // We iterate through each card in the hole, and see if the *other 3* form a Joker.
       let possibleJokerHands = [];
       hole.forEach((fourthCard, idx) => {
           const others = hole.filter((_, i) => i !== idx);
@@ -130,9 +133,7 @@ const getBestHand = (hole, comm, variantId) => {
           const oBlacks = others.filter(c => c.suit === '♣' || c.suit === '♠');
           
           if ((oReds.length === 2 && oBlacks.length === 1) || (oBlacks.length === 2 && oReds.length === 1)) {
-              // Joker formed! 4th card is fourthCard. Combine with 3 board cards.
               boardCombos.forEach(b => {
-                  // Simulate Joker as every card to find max power
                   for (let v of VALUES) {
                       for (let s of SUITS) {
                           const res = rankHand([{value: v, suit: s}, fourthCard, ...b]);
@@ -148,7 +149,6 @@ const getBestHand = (hole, comm, variantId) => {
           possibleJokerHands.sort((a, b) => b.power - a.power);
           if (possibleJokerHands[0].power > bestHigh.power) bestHigh = possibleJokerHands[0];
       } else {
-          // NATURAL HAND (All 4 cards same color)
           handTypeMeta = "NATURAL";
           combinations(hole, 2).forEach(h => {
               boardCombos.forEach(b => {
@@ -170,7 +170,6 @@ const getBestHand = (hole, comm, variantId) => {
   }
   
   if (bestHigh.power <= 0) bestHigh.name = "Pre-flop";
-  
   return { high: bestHigh, low: bestLow, meta: handTypeMeta };
 };
 
@@ -265,6 +264,8 @@ const processShowdown = (roomId) => {
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     room.showdownWinners.forEach(w => io.to(roomId).emit('log', { name: w.name, action: `WON $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}`, type: 'win' }));
 
+    // Extended timeout to allow for sequential winner animation (6s total) plus buffer
+    const nextHandDelay = variantId === 'HILOW' ? 8000 : 6000;
     setTimeout(() => {
         const seated = room.players.map((p, i) => (p && Number(p.chips) > 0.50) ? i : null).filter(x => x !== null);
         if (seated.length >= 2) {
@@ -275,7 +276,7 @@ const processShowdown = (roomId) => {
             room.phase = PHASES.IDLE;
             io.to(roomId).emit('roomUpdate', serializeRoom(room));
         }
-    }, 6000);
+    }, nextHandDelay);
 };
 
 const triggerBotTurn = (roomId) => {
