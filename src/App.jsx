@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.4.2-PRO";
+const VERSION = "v1.4.3-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -215,7 +215,7 @@ const App = () => {
   const [isJoining, setIsJoining] = useState(false);
   const joinLock = useRef(false);
   
-  const [newPlayer, setNewPlayer] = useState({ name: '', chips: 5000, password: '' });
+  const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
 
   const isMobile = window.innerWidth < 768;
@@ -283,7 +283,7 @@ const App = () => {
   const handleCreatePlayer = useCallback(() => {
     if (!newPlayer.name) return;
     socket.emit('adminCreatePlayer', { ...newPlayer, uid: Math.random().toString(36).slice(2) });
-    setNewPlayer({ name: '', chips: 5000, password: '' });
+    setNewPlayer({ name: '', chips: 100, password: '' });
   }, [newPlayer]);
 
   const handleSpawnArena = useCallback(() => {
