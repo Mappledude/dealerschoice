@@ -558,7 +558,7 @@ const App = () => {
   );
 
   if (currentView === VIEWS.LOBBY) return (
-    <div className="h-screen bg-[#06080c] flex flex-col text-white font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]">
+    <div className="h-screen bg-[#06080c] flex flex-col text-white font-black uppercase overflow-hidden">
         {selectedTableForJoin && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md px-6">
               <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-[#fbbf24]/30 rounded-3xl shadow-2xl flex flex-col gap-6 md:gap-10">
@@ -578,29 +578,53 @@ const App = () => {
             <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={16}/></button>
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-10 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase font-black uppercase">
-            {activeTables.length === 0 ? (<div className="col-span-full flex flex-col items-center justify-center p-20 text-white/20 gap-4 uppercase font-black"><ShieldAlert size={48} /><span className="text-sm tracking-[0.4em]">NO ACTIVE ARENAS</span></div>) : (activeTables.map((t) => (
-              <div key={t.id} className="p-4 md:p-8 bg-white/5 border border-white/5 rounded-2xl md:rounded-3xl flex flex-col gap-3 md:gap-6 shadow-2xl hover:border-[#fbbf24]/20 transition-all group relative overflow-hidden font-black">
-                <h3 className="text-lg md:text-2xl tracking-widest text-white group-hover:text-[#fbbf24] transition-colors uppercase font-black">{String(t.name)}</h3>
-                <div className="bg-black/60 p-3 md:p-6 rounded-2xl flex justify-between items-center border border-white/5 shadow-inner uppercase font-black">
-                  <div className="flex flex-col font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">STAKES</span><span className="text-[#fbbf24] text-base md:text-xl font-black">${t.sb}/${t.bb}</span></div>
-                  <div className="flex flex-col items-end font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">SEATS</span><span className="text-white/80 font-mono text-[10px] md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
-                </div>
-                {/* Compact Seated Players List */}
-                <div className="bg-black/40 p-2 md:p-3 rounded-2xl border border-white/5 flex flex-col gap-1 md:gap-2 min-h-[50px] md:min-h-[60px]">
-                  <span className="text-[7px] md:text-[8px] text-white/30 tracking-widest uppercase font-black">Seated Players</span>
-                  <div className="flex flex-wrap gap-1">
-                    {t.players?.filter(p => p).length > 0 ? t.players.filter(p => p).map((p, idx) => (
-                      <div key={idx} className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">
-                        {p.isBot && <Bot size={7} className="text-indigo-400" />}
-                        <span className="text-[8px] md:text-[9px] text-white/80 uppercase font-black">{String(p.name)}</span>
+        <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase pb-32 scroll-smooth">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 max-w-[1400px] mx-auto">
+                {activeTables.length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center p-20 text-white/20 gap-4 uppercase font-black"><ShieldAlert size={48} /><span className="text-sm tracking-[0.4em]">NO ACTIVE ARENAS</span></div>
+                ) : (
+                  activeTables.map((t) => (
+                    <div key={t.id} className="p-4 md:p-8 bg-slate-900/60 border border-white/10 rounded-2xl md:rounded-[2.5rem] flex flex-col gap-3 md:gap-6 shadow-2xl hover:border-[#fbbf24]/30 transition-all group relative overflow-hidden backdrop-blur-sm">
+                      <div className="flex justify-between items-start">
+                        <h3 className="text-base md:text-2xl tracking-tighter text-white group-hover:text-[#fbbf24] transition-colors uppercase font-black max-w-[70%] leading-tight">{String(t.name)}</h3>
+                        <div className="flex flex-col items-end">
+                            <span className="text-white/40 text-[7px] md:text-[9px] tracking-widest leading-none mb-1">STAKES</span>
+                            <span className="text-[#fbbf24] text-sm md:text-xl font-black leading-none">${t.sb}/${t.bb}</span>
+                        </div>
                       </div>
-                    )) : <span className="text-[8px] text-white/20 italic">Arena is empty</span>}
-                  </div>
-                </div>
-                <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-4 md:p-8 bg-emerald-600 rounded-xl md:rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[9px] md:text-[10px] font-black uppercase">ENTER ARENA</button>
-              </div>
-            )))}
+
+                      <div className="bg-black/40 p-2 md:p-4 rounded-xl md:rounded-2xl flex justify-between items-center border border-white/5 shadow-inner">
+                        <div className="flex items-center gap-2">
+                           <Users size={12} className="text-white/30" />
+                           <span className="text-white/80 font-mono text-[10px] md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10 SEATS</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <span className="text-white/30 text-[7px] uppercase font-black">Min Buy-in</span>
+                            <span className="text-emerald-400 text-[10px] md:text-sm font-mono font-black">${t.minBuy || 5}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[7px] md:text-[8px] text-white/30 tracking-widest uppercase font-black ml-1">Live Arena Feed</span>
+                        <div className="bg-black/20 p-2 md:p-3 rounded-xl border border-white/5 max-h-[80px] md:max-h-[120px] overflow-y-auto custom-scrollbar">
+                          <div className="flex flex-wrap gap-1 md:gap-1.5">
+                            {t.players?.filter(p => p).length > 0 ? t.players.filter(p => p).map((p, idx) => (
+                              <div key={idx} className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md hover:bg-white/10 transition-colors">
+                                {p.isBot && <Bot size={8} className="text-indigo-400 shrink-0" />}
+                                <span className="text-[8px] md:text-[10px] text-white/90 uppercase font-black truncate max-w-[80px]">{String(p.name)}</span>
+                              </div>
+                            )) : <span className="text-[8px] text-white/20 italic ml-1">No players seated</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-4 md:p-6 bg-emerald-600 hover:bg-emerald-500 rounded-xl md:rounded-2xl tracking-[0.15em] shadow-[0_8px_20px_-5px_rgba(16,185,129,0.3)] hover:translate-y-[-2px] active:scale-[0.98] transition-all text-[10px] md:text-sm font-black uppercase text-white border border-emerald-400/20">
+                        ENTER ARENA
+                      </button>
+                    </div>
+                  ))
+                )}
+            </div>
         </main>
     </div>
   );
@@ -620,7 +644,7 @@ const App = () => {
                 </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto space-y-4 scrollbar-hide font-mono">
+            <div className="flex-1 overflow-y-auto space-y-4 scrollbar-hide font-mono text-xs md:text-sm">
                 {groupedLogs.map((hand, hIdx) => {
                   const isExpanded = expandedHands.has(hand.id) || (hIdx === 0 && hand.isOngoing);
                   return (
@@ -748,11 +772,11 @@ const App = () => {
               </h3>
               <button onClick={() => setShowRulesModal(false)} className="text-white/40 hover:text-white transition-colors p-2 bg-white/5 rounded-full"><X size={24}/></button>
             </div>
-            <div className="space-y-6">
+            <div className="space-y-6 text-sm md:text-base">
               {(activeVariant?.rules || []).map((rule, idx) => (
                 <div key={idx} className="flex gap-4 items-start group">
                   <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] flex items-center justify-center font-black group-hover:scale-110 transition-transform">0{idx + 1}</span>
-                  <p className="text-sm md:text-lg text-white/80 font-black leading-snug uppercase tracking-tight">{rule}</p>
+                  <p className="text-white/80 font-black leading-snug uppercase tracking-tight">{rule}</p>
                 </div>
               ))}
             </div>
@@ -915,11 +939,25 @@ const App = () => {
                     </div>
                     <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.2em] text-[10px] md:text-2xl uppercase text-center px-4 drop-shadow-[0_0_15px_rgba(251,191,36,0.6)]">
                       <Trophy size={14} className="md:size-6" /> 
-                      {showdownWinners.every(w => w.name === showdownWinners[0].name) ? (
-                        showdownWinners[0].rank === "!" ? `${showdownWinners[0].name} Wins!` : `${showdownWinners[0].name} Wins with ${showdownWinners[0].rank}`
-                      ) : (
-                        `Split Pot: ${showdownWinners[currentShowdownIdx].name} (${showdownWinners[currentShowdownIdx].rank === "!" ? "Default" : showdownWinners[currentShowdownIdx].rank})`
-                      )}
+                      {(() => {
+                        const winner = showdownWinners[currentShowdownIdx];
+                        if (winner.rank === "!") return `${winner.name} Wins!`;
+                        
+                        const rankStr = String(winner.rank).toUpperCase();
+                        if (rankStr.startsWith("LOW:")) {
+                           return `${winner.name} wins the low game with ${winner.rank.substring(4).trim()}!`;
+                        }
+                        
+                        const displayRank = rankStr.startsWith("HIGH:") ? winner.rank.substring(5).trim() : winner.rank;
+                        const isScoop = showdownWinners.length > 1 && showdownWinners.every(w => w.name === showdownWinners[0].name);
+                        
+                        if (isScoop) {
+                           return `${winner.name} Wins with ${displayRank}`;
+                        } else {
+                           const prefix = showdownWinners.length > 1 ? "Split Pot: " : "";
+                           return `${prefix}${winner.name} Wins with ${displayRank}`;
+                        }
+                      })()}
                     </div>
                     <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-8 px-2 md:px-16 justify-center no-scrollbar pb-1">
                         {showdownWinners[currentShowdownIdx] && (
@@ -1003,6 +1041,9 @@ const App = () => {
         </div>
       </footer>
       <style>{`
+          .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
           @keyframes fling-to-pot { 
             0% { transform: translate(calc(-50% + 0px), 0px) scale(2.0); filter: blur(0px) brightness(2); } 
             15% { transform: translate(calc(-50% + 20px), -10vh) scale(1.4); filter: blur(1px) brightness(1.5); }
