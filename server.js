@@ -82,7 +82,7 @@ const getBestHand = (hole, comm, variantId) => {
 
 const simulateEquity = (playerHand, board, deck, variantId, otherPlayersCount) => {
     let winsHigh = 0, winsLow = 0;
-    const iterations = 500; // Calibrated for performance
+    const iterations = 500;
     for (let i = 0; i < iterations; i++) {
         const simDeck = [...deck].sort(() => Math.random() - 0.5);
         const simBoard = [...board];
@@ -104,25 +104,6 @@ const simulateEquity = (playerHand, board, deck, variantId, otherPlayersCount) =
         if (heroWinsL) winsLow++;
     }
     return { high: (winsHigh / iterations) * 100, low: (winsLow / iterations) * 100 };
-};
-
-const updateRoomStrengths = (roomId) => {
-    const room = rooms[roomId];
-    if (!room || room.phase === PHASES.IDLE) return;
-    const activePlayers = room.players.filter(p => p && !p.isFolded);
-    room.players.forEach(p => {
-        if (p && p.hand && !p.isFolded) {
-            const evalRes = getBestHand(p.hand, room.community, room.activeVariant.id);
-            p.strength = evalRes.high.name;
-            p.lowStrength = evalRes.low ? "Low Ready" : "No Low";
-            const fullDeck = VALUES.flatMap(v => SUITS.map(s => ({ value: v, suit: s })));
-            const remainingDeck = fullDeck.filter(c => !p.hand.some(ph => ph.value === c.value && ph.suit === c.suit) && !room.community.some(cb => cb.value === c.value && cb.suit === c.suit));
-            const equity = simulateEquity(p.hand, room.community, remainingDeck, room.activeVariant.id, activePlayers.length - 1);
-            p.winProbabilityHigh = equity.high;
-            p.winProbabilityLow = equity.low;
-            p.winProbability = (equity.high + equity.low) / (room.activeVariant.id === 'HILOW' ? 2 : 1);
-        }
-    });
 };
 
 io.on('connection', (socket) => {
@@ -157,13 +138,6 @@ io.on('connection', (socket) => {
         room.players[seatIdx] = playerObj;
         callback({ status: 'ok' });
         io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom));
-        io.to(roomId).emit('roomUpdate', serializeRoom(room));
-    });
-
-    socket.on('playerAction', ({ roomId, type, amount }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-        // Game Logic for actions goes here (simplified for this update)
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
     });
 });
