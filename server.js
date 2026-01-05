@@ -205,8 +205,19 @@ const processShowdown = (roomId) => {
         }
     });
 
+    const totalUnfolded = room.players.filter(p => p && !p.isFolded).length;
+
     pots.forEach(pot => {
         const eligiblePlayers = room.players.filter(p => p && pot.eligible.includes(p.uid));
+        
+        // Check if this is a win by default (everyone folded)
+        if (totalUnfolded === 1 && eligiblePlayers.length === 1) {
+            const soleWinner = eligiblePlayers[0];
+            soleWinner.chips += pot.amount;
+            room.showdownWinners.push({ name: soleWinner.name, rank: "!", hand: [], amount: pot.amount });
+            return;
+        }
+
         const evals = eligiblePlayers.map(p => ({ player: p, res: getBestHand(p.hand, room.community, variantId) }));
 
         if (variantId === 'HILOW') {
@@ -238,7 +249,8 @@ const processShowdown = (roomId) => {
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     room.showdownWinners.forEach(w => {
       const cardStr = w.hand && w.hand.length > 0 ? ` (${w.hand.map(c => `${c.value}${c.suit}`).join(', ')})` : "";
-      io.to(roomId).emit('log', { name: w.name, action: `WON $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}${cardStr}`, type: 'win' });
+      const actionStr = w.rank === "!" ? `WON $${w.amount.toFixed(2)} BY DEFAULT` : `WON $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}${cardStr}`;
+      io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
     });
 
     setTimeout(() => {
