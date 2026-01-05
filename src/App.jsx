@@ -578,27 +578,27 @@ const App = () => {
             <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={16}/></button>
           </div>
         </header>
-        <main className="flex-1 p-5 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-10 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase font-black uppercase">
+        <main className="flex-1 p-4 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-10 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase font-black uppercase">
             {activeTables.length === 0 ? (<div className="col-span-full flex flex-col items-center justify-center p-20 text-white/20 gap-4 uppercase font-black"><ShieldAlert size={48} /><span className="text-sm tracking-[0.4em]">NO ACTIVE ARENAS</span></div>) : (activeTables.map((t) => (
-              <div key={t.id} className="p-5 md:p-8 bg-white/5 border border-white/5 rounded-3xl flex flex-col gap-4 md:gap-6 shadow-2xl hover:border-[#fbbf24]/20 transition-all group relative overflow-hidden font-black">
+              <div key={t.id} className="p-4 md:p-8 bg-white/5 border border-white/5 rounded-2xl md:rounded-3xl flex flex-col gap-3 md:gap-6 shadow-2xl hover:border-[#fbbf24]/20 transition-all group relative overflow-hidden font-black">
                 <h3 className="text-lg md:text-2xl tracking-widest text-white group-hover:text-[#fbbf24] transition-colors uppercase font-black">{String(t.name)}</h3>
-                <div className="bg-black/60 p-4 md:p-6 rounded-2xl flex justify-between items-center border border-white/5 shadow-inner uppercase font-black">
+                <div className="bg-black/60 p-3 md:p-6 rounded-2xl flex justify-between items-center border border-white/5 shadow-inner uppercase font-black">
                   <div className="flex flex-col font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">STAKES</span><span className="text-[#fbbf24] text-base md:text-xl font-black">${t.sb}/${t.bb}</span></div>
                   <div className="flex flex-col items-end font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">SEATS</span><span className="text-white/80 font-mono text-[10px] md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
                 </div>
-                {/* Seated Players List */}
-                <div className="bg-black/40 p-3 rounded-2xl border border-white/5 flex flex-col gap-2 min-h-[60px]">
-                  <span className="text-[8px] text-white/30 tracking-widest uppercase font-black">Seated Players</span>
-                  <div className="flex flex-wrap gap-1.5">
+                {/* Compact Seated Players List */}
+                <div className="bg-black/40 p-2 md:p-3 rounded-2xl border border-white/5 flex flex-col gap-1 md:gap-2 min-h-[50px] md:min-h-[60px]">
+                  <span className="text-[7px] md:text-[8px] text-white/30 tracking-widest uppercase font-black">Seated Players</span>
+                  <div className="flex flex-wrap gap-1">
                     {t.players?.filter(p => p).length > 0 ? t.players.filter(p => p).map((p, idx) => (
-                      <div key={idx} className="flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">
-                        {p.isBot && <Bot size={8} className="text-indigo-400" />}
-                        <span className="text-[9px] text-white/80 uppercase font-black">{String(p.name)}</span>
+                      <div key={idx} className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">
+                        {p.isBot && <Bot size={7} className="text-indigo-400" />}
+                        <span className="text-[8px] md:text-[9px] text-white/80 uppercase font-black">{String(p.name)}</span>
                       </div>
-                    )) : <span className="text-[9px] text-white/20 italic">Arena is empty</span>}
+                    )) : <span className="text-[8px] text-white/20 italic">Arena is empty</span>}
                   </div>
                 </div>
-                <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-5 md:p-8 bg-emerald-600 rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] font-black uppercase">ENTER ARENA</button>
+                <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-4 md:p-8 bg-emerald-600 rounded-xl md:rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[9px] md:text-[10px] font-black uppercase">ENTER ARENA</button>
               </div>
             )))}
         </main>
