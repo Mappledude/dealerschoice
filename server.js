@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.8.1-ULTRA";
+const VERSION = "v1.8.5-ULTRA";
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 const SUITS = ['♥', '♦', '♣', '♠'];
 const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -23,73 +23,23 @@ const serializeRoom = (room) => {
     return rest;
 };
 
-const combinations = (array, k) => {
-  let result = [];
-  const fn = (start, prev) => {
-    if (prev.length === k) { result.push(prev); return; }
-    for (let i = start; i < array.length; i++) { fn(i + 1, [...prev, array[i]]); }
-  };
-  fn(0, []);
-  return result;
-};
-
-const rankHand = (cards) => {
-  if (!cards || cards.length < 5) return { power: 0, name: "Evaluating" };
-  const ranks = cards.map(c => VM[c.value]).sort((a, b) => b - a);
-  const suits = cards.map(c => c.suit);
-  const counts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
-  const groups = Object.entries(counts).map(([rank, count]) => ({ r: parseInt(rank), c: count })).sort((a, b) => b.c - a.c || b.r - a.r);
-  const isFlush = new Set(suits).size === 1;
-  const uniqueRanks = [...new Set(ranks)].sort((a, b) => b - a);
-  let isStraight = false, straightHigh = 0;
-  for (let i = 0; i <= uniqueRanks.length - 5; i++) { if (uniqueRanks[i] === uniqueRanks[i + 4] + 4) { isStraight = true; straightHigh = uniqueRanks[i]; break; } }
-  if (!isStraight && uniqueRanks.includes(14) && [5,4,3,2].every(r => uniqueRanks.includes(r))) { isStraight = true; straightHigh = 5; }
-  const vc = groups.map(x => x.c);
-  let score = 0, name = "High Card";
-  if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
-  else if (vc[0] === 4) { score = 7; name = "Four of a Kind"; }
-  else if (vc[0] === 3 && vc[1] >= 2) { score = 6; name = "Full House"; }
-  else if (isFlush) { score = 5; name = "Flush"; }
-  else if (isStraight) { score = 4; name = "Straight"; }
-  else if (vc[0] === 3) { score = 3; name = "Three of a Kind"; }
-  else if (vc[0] === 2 && vc[1] === 2) { score = 2; name = "Two Pair"; }
-  else if (vc[0] === 2) { score = 1; name = "Pair"; }
-  const power = score * Math.pow(15, 7) + groups.reduce((acc, g, i) => acc + (g.r * Math.pow(15, 6 - i)), 0);
-  return { power, name, cards: cards.slice(0, 5) };
-};
-
-const getBestHand = (hole, comm, variantId) => {
-    if (!hole || hole.length === 0 || !comm || comm.length < 3) return { high: { power: 0, name: "..." }, low: null };
-    let bestHigh = { power: -1, name: "Evaluating..." };
-    let bestLow = null;
-    if (variantId === 'HOLDEM' || variantId === 'PINEAPPLE' || variantId === 'MUFLIS') {
-        combinations([...hole, ...comm], 5).forEach(c => {
-            const res = rankHand(c);
-            if (variantId === 'MUFLIS') { if (bestHigh.power === -1 || res.power < bestHigh.power) bestHigh = res; }
-            else { if (res.power > bestHigh.power) bestHigh = res; }
-        });
-    } else if (variantId === 'OMAHA' || variantId === 'HILOW' || variantId === 'REDSBLACKS') {
-        const boardCombos = combinations(comm, 3);
-        const holePairs = combinations(hole, 2);
-        holePairs.forEach(h => { boardCombos.forEach(b => {
-            const res = rankHand([...h, ...b]);
-            if (res.power > bestHigh.power) bestHigh = res;
-            if (variantId === 'HILOW' && res.name === "High Card") { if (!bestLow || res.power < bestLow.power) bestLow = res; }
-        }); });
-    }
-    return { high: bestHigh, low: bestLow };
-};
-
 io.on('connection', (socket) => {
-    socket.on('getInitialData', () => socket.emit('initialDataResponse', { profiles, rooms: Object.values(rooms).map(serializeRoom) }));
+    socket.on('getInitialData', () => {
+        socket.emit('initialDataResponse', { 
+            profiles, 
+            rooms: Object.values(rooms).map(serializeRoom) 
+        });
+    });
 
     socket.on('playerLogin', ({ password }) => {
         const profile = profiles.find(p => p.password === password);
         if (profile) socket.emit('loginSuccess', profile);
     });
 
+    // --- ADMIN ACTIONS ---
     socket.on('adminCreatePlayer', (p) => { 
-        profiles.push({ ...p, uid: 'u_' + Math.random().toString(36).slice(2, 9), chips: Number(p.chips) }); 
+        const newP = { ...p, uid: 'u_' + Math.random().toString(36).slice(2, 9), chips: Number(p.chips) };
+        profiles.push(newP); 
         io.emit('profilesUpdate', profiles); 
     });
 
@@ -107,7 +57,7 @@ io.on('connection', (socket) => {
         const roomId = data.id || 'room_' + Math.random().toString(36).slice(2, 9);
         rooms[roomId] = { 
             id: roomId,
-            name: data.name || "Arena",
+            name: data.name || "New Arena",
             sb: data.sb || 0.25, 
             bb: data.bb || 0.50, 
             minBuy: data.minBuy || 5, 
@@ -137,6 +87,35 @@ io.on('connection', (socket) => {
         io.emit('profilesUpdate', profiles);
     });
 
+    // --- BOT ACTIONS ---
+    socket.on('adminAddBot', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+
+        const seatIdx = room.players.findIndex(p => p === null);
+        if (seatIdx === -1) return;
+
+        const botNames = ["Alpha", "Beta", "Gamma", "Neon", "Cyber", "Turbo", "Ace", "Jack", "Queen", "King"];
+        const name = botNames[Math.floor(Math.random() * botNames.length)] + " " + Math.floor(Math.random() * 99);
+
+        const botObj = {
+            uid: 'bot_' + Math.random().toString(36).slice(2, 9),
+            name: name,
+            chips: room.maxBuy || 10,
+            isBot: true,
+            seatIdx,
+            isFolded: false,
+            currentBet: 0,
+            hand: null,
+            lastAction: null,
+            winProbability: 0
+        };
+
+        room.players[seatIdx] = botObj;
+        io.to(roomId).emit('roomUpdate', serializeRoom(room));
+    });
+
+    // --- GAMEPLAY ACTIONS ---
     socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
         const room = rooms[roomId];
         if (!room) return callback({ status: 'error', message: 'Arena not found' });
@@ -156,13 +135,9 @@ io.on('connection', (socket) => {
         };
 
         room.players[seatIdx] = playerObj;
-        
-        // Critical: Join the socket room to receive table updates
         socket.join(roomId);
         
         callback({ status: 'ok' });
-        
-        // Broadcast updates
         io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom));
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
     });
@@ -178,7 +153,14 @@ io.on('connection', (socket) => {
             }
         });
     });
+
+    socket.on('playerAction', ({ roomId, type, amount }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        // Core game action logic to be expanded
+        io.to(roomId).emit('roomUpdate', serializeRoom(room));
+    });
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`Server ${VERSION} ready.`));
+server.listen(PORT, () => console.log(`Server ${VERSION} active.`));
