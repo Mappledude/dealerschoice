@@ -601,10 +601,10 @@ const App = () => {
             <div className="max-w-[1200px] mx-auto">
               {/* Table Header - Visible on Desktop */}
               <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/10 text-white/40 text-[10px] tracking-[0.2em] font-black uppercase">
-                <div className="col-span-4">Arena Name</div>
+                <div className="col-span-3">Arena Name</div>
                 <div className="col-span-2 text-center">Stakes</div>
-                <div className="col-span-2 text-center">Min Buy</div>
-                <div className="col-span-2 text-center">Seats</div>
+                <div className="col-span-4 text-center">Seated Players</div>
+                <div className="col-span-1 text-center">Seats</div>
                 <div className="col-span-2"></div>
               </div>
 
@@ -619,16 +619,21 @@ const App = () => {
                     <div key={t.id} className="bg-white/5 border border-white/5 rounded-xl md:rounded-2xl p-3 md:p-0 transition-all hover:bg-white/10 group">
                       {/* Desktop Row Layout */}
                       <div className="hidden md:grid grid-cols-12 items-center gap-4 px-6 py-4">
-                        <div className="col-span-4">
+                        <div className="col-span-3">
                           <h3 className="text-lg text-white font-black truncate">{String(t.name)}</h3>
                         </div>
                         <div className="col-span-2 text-center">
                           <span className="text-[#fbbf24] font-black">${t.sb}/${t.bb}</span>
                         </div>
-                        <div className="col-span-2 text-center">
-                          <span className="text-emerald-400 font-mono font-black">${t.minBuy || 5}</span>
+                        <div className="col-span-4 flex flex-wrap justify-center gap-1">
+                          {t.players?.filter(p => p).length > 0 ? t.players.filter(p => p).map((p, idx) => (
+                            <div key={idx} className="flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">
+                              {p.isBot && <Bot size={10} className="text-indigo-400 shrink-0" />}
+                              <span className="text-[10px] text-white/80 font-black">{String(p.name)}</span>
+                            </div>
+                          )) : <span className="text-white/20 text-xs italic">Empty</span>}
                         </div>
-                        <div className="col-span-2 text-center">
+                        <div className="col-span-1 text-center">
                           <span className="text-white/80 font-mono font-black">{t.players?.filter(p=>p).length || 0}/10</span>
                         </div>
                         <div className="col-span-2">
@@ -637,16 +642,27 @@ const App = () => {
                       </div>
 
                       {/* Mobile Row Layout - High Density */}
-                      <div className="flex md:hidden items-center justify-between gap-3">
-                         <div className="flex flex-col min-w-0 flex-1">
-                            <h3 className="text-[13px] text-white font-black truncate uppercase leading-tight">{String(t.name)}</h3>
-                            <div className="flex items-center gap-2 mt-1">
-                               <span className="text-[#fbbf24] text-[10px] font-black">${t.sb}/${t.bb}</span>
-                               <span className="text-white/20 text-[10px]">|</span>
-                               <span className="text-white/60 text-[10px] font-mono">{t.players?.filter(p=>p).length || 0}/10 SEATS</span>
+                      <div className="flex md:hidden flex-col gap-2">
+                         <div className="flex items-center justify-between gap-3">
+                            <div className="flex flex-col min-w-0 flex-1">
+                               <h3 className="text-[13px] text-white font-black truncate uppercase leading-tight">{String(t.name)}</h3>
+                               <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[#fbbf24] text-[10px] font-black">${t.sb}/${t.bb}</span>
+                                  <span className="text-white/20 text-[10px]">|</span>
+                                  <span className="text-white/60 text-[10px] font-mono">{t.players?.filter(p=>p).length || 0}/10 SEATS</span>
+                               </div>
                             </div>
+                            <button onClick={()=>setSelectedTableForJoin(t)} className="px-5 py-3 bg-emerald-600 rounded-lg text-[10px] font-black uppercase shadow-lg active:scale-95 transition-transform">ENTER</button>
                          </div>
-                         <button onClick={()=>setSelectedTableForJoin(t)} className="px-5 py-3 bg-emerald-600 rounded-lg text-[10px] font-black uppercase shadow-lg active:scale-95 transition-transform">ENTER</button>
+                         {/* Player List for Mobile */}
+                         <div className="flex flex-wrap gap-1 border-t border-white/5 pt-2 mt-1">
+                            {t.players?.filter(p => p).map((p, idx) => (
+                              <div key={idx} className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded">
+                                {p.isBot && <Bot size={8} className="text-indigo-400 shrink-0" />}
+                                <span className="text-[8px] text-white/60 font-black">{String(p.name)}</span>
+                              </div>
+                            ))}
+                         </div>
                       </div>
                     </div>
                   ))}
