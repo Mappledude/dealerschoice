@@ -256,6 +256,7 @@ const App = () => {
     return isOutOfChips && hasNoActiveBet && isHandResolved;
   }, [heroPlayerObj, phase]);
 
+  // High-fidelity parser for the Intelligence Feed
   const groupedLogs = useMemo(() => {
     const hands = [];
     let currentHand = { id: 'init-hand', actions: [], summaries: [], variantName: 'Standard', isOngoing: true, winnerSummary: "In Progress..." };
@@ -354,7 +355,8 @@ const App = () => {
 
   const handleCreatePlayer = useCallback(() => {
     if (!newPlayer.name) return;
-    socket.emit('adminCreatePlayer', { ...newPlayer, uid: Math.random().toString(36).slice(2) });
+    // Normalized to lowercase to ensure non-case sensitive passwords
+    socket.emit('adminCreatePlayer', { ...newPlayer, password: newPlayer.password.toLowerCase(), uid: Math.random().toString(36).slice(2) });
     setNewPlayer({ name: '', chips: 100, password: '' });
   }, [newPlayer]);
 
@@ -392,7 +394,7 @@ const App = () => {
     if (passwordInput.toLowerCase().trim() === 'pass') { 
         setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin' }); 
         setCurrentView(VIEWS.ADMIN); socket.emit('getInitialData'); 
-    } else socket.emit('playerLogin', { password: passwordInput });
+    } else socket.emit('playerLogin', { password: passwordInput.toLowerCase() }); // Normalized to lowercase
   }, [passwordInput]);
 
   const joinRoom = useCallback(() => {
