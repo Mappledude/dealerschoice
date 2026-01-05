@@ -163,7 +163,7 @@ const Seat = ({
                         const fanTranslation = offset * (player.hand.length > 2 ? 2.0 : 3.5);
                         return (
                           <div key={c.id || ci} 
-                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_200px_#fbbf24]' : 'border-white/20'}`} 
+                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_20px_#fbbf24]' : 'border-white/20'}`} 
                               style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${seatIdx * 0.1}s` }}>
                               {(isShowdown || isHero) && ( <><span className="text-[9px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
                           </div>
@@ -195,7 +195,7 @@ const App = () => {
   const [activeTables, setActiveTables] = useState([]);
   const [allProfiles, setAllProfiles] = useState([]);
   const [selectedTableForJoin, setSelectedTableForJoin] = useState(null);
-  const [buyInAmount, setBuyInAmount] = useState(10);
+  const [buyInAmount, setBuyInAmount] = useState(10); 
   const [raiseInput, setRaiseInput] = useState(0);
   const [currentRoomId, setCurrentRoomId] = useState(null);
   const [potAnimating, setPotAnimating] = useState(false);
@@ -249,9 +249,8 @@ const App = () => {
     if (!heroPlayerObj) return false;
     const isOutOfChips = Number(heroPlayerObj.chips) <= 1;
     const hasNoActiveBet = Number(heroPlayerObj.currentBet) <= 0;
-    const isHandResolved = phase === PHASES.IDLE || phase === PHASES.SHOWDOWN;
-    return isOutOfChips && hasNoActiveBet && isHandResolved;
-  }, [heroPlayerObj, phase]);
+    return isOutOfChips && hasNoActiveBet;
+  }, [heroPlayerObj]);
 
   // High-fidelity parser for the Intelligence Feed
   const groupedLogs = useMemo(() => {
@@ -502,7 +501,7 @@ const App = () => {
                         {allProfiles.map(p => (
                             <div key={p.uid} className="flex justify-between p-3 md:p-4 border-b border-white/5 items-center hover:bg-white/5">
                                 <span className="text-[10px] md:text-sm font-black truncate max-w-[100px]">{String(p.name)}</span>
-                                <div className="flex gap-2 md:gap-4 items-center"><span className="text-emerald-400 font-mono text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span><button onClick={()=>{const n = prompt("NEW WALLET", p.chips); if(n) socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400"><Edit3 size={14}/></button><button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500"><Trash2 size={14}/></button></div>
+                                <div className="flex gap-2 md:gap-4 items-center"><span className="text-emerald-400 font-mono text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span><button onClick={()=>{const n = prompt("NEW WALLET", p.chips); if(n !== null && n !== "") socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400"><Edit3 size={14}/></button><button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500"><Trash2 size={14}/></button></div>
                             </div>
                         ))}
                     </div>
@@ -510,14 +509,25 @@ const App = () => {
             ) : (
                 <div className="flex flex-col gap-5 md:gap-8">
                     <h3 className="text-lg md:text-xl border-l-4 border-emerald-500 pl-4">ARENA CONTROL</h3>
-                    <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-4 border border-white/10">
+                    <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border border-white/10">
                         <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ARENA NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm"/>
-                        <button onClick={handleSpawnArena} className="bg-emerald-600 text-white rounded-xl font-black p-3 text-sm">SPAWN ARENA</button>
+                        <div className="flex gap-2">
+                          <input type="number" step="0.05" value={newTable.sb} onChange={e=>setNewTable({...newTable, sb: Number(e.target.value)})} placeholder="SB" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm w-1/2"/>
+                          <input type="number" step="0.05" value={newTable.bb} onChange={e=>setNewTable({...newTable, bb: Number(e.target.value)})} placeholder="BB" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm w-1/2"/>
+                        </div>
+                        <div className="flex gap-2">
+                          <input type="number" value={newTable.minBuy} onChange={e=>setNewTable({...newTable, minBuy: Number(e.target.value)})} placeholder="MIN BUY" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm w-1/2"/>
+                          <input type="number" value={newTable.maxBuy} onChange={e=>setNewTable({...newTable, maxBuy: Number(e.target.value)})} placeholder="MAX BUY" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm w-1/2"/>
+                        </div>
+                        <button onClick={handleSpawnArena} className="bg-emerald-600 text-white rounded-xl font-black p-3 text-sm lg:col-span-3">SPAWN ARENA</button>
                     </div>
                     <div className="grid grid-cols-1 gap-2.5 md:gap-4">
                         {activeTables.map(t => (
                             <div key={t.id} className="bg-white/5 p-3 rounded-2xl flex justify-between items-center border border-white/10">
-                              <div><h4 className="text-[#fbbf24] font-black text-xs md:text-base">{String(t.name)}</h4><p className="text-[8px] text-white/40 tracking-widest uppercase">${t.sb}/${t.bb}</p></div>
+                              <div>
+                                <h4 className="text-[#fbbf24] font-black text-xs md:text-base">{String(t.name)}</h4>
+                                <p className="text-[8px] text-white/40 tracking-widest uppercase">${t.sb}/${t.bb} • Buy-in: ${t.minBuy}-${t.maxBuy}</p>
+                              </div>
                               <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="bg-red-950/40 px-2 py-1.5 rounded-xl text-red-500 font-black text-[8px]">TERMINATE</button>
                             </div>
                         ))}
@@ -808,7 +818,16 @@ const App = () => {
               <AlertTriangle size={64} className="text-red-500 animate-pulse mb-4 mx-auto" />
               <h2 className="text-xl md:text-3xl font-black mb-2 uppercase">Busted!</h2>
               <p className="text-white/40 mb-5 text-[8px] tracking-widest uppercase">Stack is $1 or less - Rebuy Required</p>
-              {(userProfile?.chips || 0) >= 5 ? (<button onClick={() => socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: buyInAmount })} className="w-full p-5 bg-emerald-600 text-white rounded-2xl shadow-xl animate-bounce font-black uppercase text-xs">REBUY ${buyInAmount.toLocaleString()}</button>) : (<div className="p-5 bg-white/5 rounded-2xl border border-white/10 text-white/40 text-[10px] font-black uppercase">INSUFFICIENT WALLET (Min $5)</div>)}
+              {(userProfile?.chips || 0) >= 5 ? (
+                <button 
+                  onClick={() => socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: Math.min(buyInAmount, userProfile.chips) })} 
+                  className="w-full p-5 bg-emerald-600 text-white rounded-2xl shadow-xl animate-bounce font-black uppercase text-xs"
+                >
+                  REBUY ${Math.min(buyInAmount, userProfile.chips).toLocaleString()}
+                </button>
+              ) : (
+                <div className="p-5 bg-white/5 rounded-2xl border border-white/10 text-white/40 text-[10px] font-black uppercase">INSUFFICIENT WALLET (Min $5)</div>
+              )}
               <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="mt-4 text-white/20 hover:text-white text-[9px] uppercase underline">EXIT ARENA</button>
             </div>
           </div>
@@ -877,10 +896,11 @@ const App = () => {
                     </div>
                     <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.2em] text-[10px] md:text-2xl uppercase text-center px-4 drop-shadow-[0_0_15px_rgba(251,191,36,0.6)]">
                       <Trophy size={14} className="md:size-6" /> 
-                      {showdownWinners.length === 1 
-                        ? (showdownWinners[0].rank === "!" ? `${showdownWinners[0].name} Wins!` : `${showdownWinners[0].name} won with ${showdownWinners[0].rank}`)
-                        : `POT SPLIT: ${showdownWinners[currentShowdownIdx].name} - ${showdownWinners[currentShowdownIdx].rank}`
-                      }
+                      {showdownWinners.every(w => w.name === showdownWinners[0].name) ? (
+                        showdownWinners[0].rank === "!" ? `${showdownWinners[0].name} Wins!` : `${showdownWinners[0].name} Wins with ${showdownWinners[0].rank}`
+                      ) : (
+                        `Split Pot: ${showdownWinners[currentShowdownIdx].name} (${showdownWinners[currentShowdownIdx].rank === "!" ? "Default" : showdownWinners[currentShowdownIdx].rank})`
+                      )}
                     </div>
                     <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-8 px-2 md:px-16 justify-center no-scrollbar pb-1">
                         {showdownWinners[currentShowdownIdx] && (
