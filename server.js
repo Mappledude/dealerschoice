@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.4.4-PRO";
+const VERSION = "v1.4.5-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -45,8 +45,7 @@ const combinations = (array, k) => {
 };
 
 const rankHand = (cards, isAceLow = false) => {
-  // Guard against insufficient cards for evaluation
-  if (!cards || cards.length < 5) return { power: 0, name: "Evaluating...", cards: [] };
+  if (!cards || cards.length < 5) return { power: 0, name: "Pre-flop", cards: [] };
   
   const getVal = (v) => (isAceLow && v === 'A') ? 1 : VM[v];
   const sorted = [...cards].sort((a, b) => getVal(b.value) - getVal(a.value));
@@ -76,7 +75,6 @@ const rankHand = (cards, isAceLow = false) => {
 
   let score = 0, name = `High Card ${V_LABEL[compArr[0]] || compArr[0]}`;
   
-  // Logic for 5 of a kind if wildcards/jokers ever allow 5 identical values
   if (vc[0] === 5) { score = 9; name = `Five of a Kind ${V_LABEL[groups[0].r]}s`; }
   else if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
   else if (vc[0] === 4) { score = 7; name = `Four of a Kind ${V_LABEL[groups[0].r]}s`; }
@@ -93,8 +91,11 @@ const rankHand = (cards, isAceLow = false) => {
 
 const getBestHand = (hole, comm, variantId) => {
   if (!hole || hole.length === 0) return { high: { power: 0, name: "Pre-flop" }, low: null };
-  let bestHigh = { power: -1, name: "Evaluating..." };
+  if (!comm || comm.length < 3) return { high: { power: 0, name: "Pre-flop" }, low: null };
+
+  let bestHigh = { power: -1, name: "Pre-flop" };
   let bestLow = null;
+  let handTypeMeta = ""; // Natural or Joker
 
   if (variantId === 'OMAHA' || variantId === 'HILOW') {
       const holeCombos = combinations(hole, 2);
@@ -116,31 +117,43 @@ const getBestHand = (hole, comm, variantId) => {
   } else if (variantId === 'REDSBLACKS') {
       const reds = hole.filter(c => c.suit === '♥' || c.suit === '♦');
       const blacks = hole.filter(c => c.suit === '♣' || c.suit === '♠');
-      
-      // A "mix" means at least one card of each color is present in the 4-card hole hand
-      const hasJoker = reds.length > 0 && blacks.length > 0;
-      
       const boardCombos = combinations(comm, 3);
-      if (hasJoker) {
-          // Optimization: If Joker forms, try best possible rank for Joker + one other hole card + 3 board
-          boardCombos.forEach(b => {
-              hole.forEach(remainingHoleCard => {
-                  // The Joker represents the best possible card to complete the hand
+      
+      // Determine if a Joker can be formed.
+      // Rule: Joker created if 3 of 4 cards are exactly (2R+1B) or (2B+1R).
+      // This means the 4th hole card is simply the one left out.
+      // We iterate through each card in the hole, and see if the *other 3* form a Joker.
+      let possibleJokerHands = [];
+      hole.forEach((fourthCard, idx) => {
+          const others = hole.filter((_, i) => i !== idx);
+          const oReds = others.filter(c => c.suit === '♥' || c.suit === '♦');
+          const oBlacks = others.filter(c => c.suit === '♣' || c.suit === '♠');
+          
+          if ((oReds.length === 2 && oBlacks.length === 1) || (oBlacks.length === 2 && oReds.length === 1)) {
+              // Joker formed! 4th card is fourthCard. Combine with 3 board cards.
+              boardCombos.forEach(b => {
+                  // Simulate Joker as every card to find max power
                   for (let v of VALUES) {
                       for (let s of SUITS) {
-                          const res = rankHand([{value: v, suit: s}, remainingHoleCard, ...b]);
-                          if (res.power > bestHigh.power) bestHigh = { ...res, name: `${res.name} (Joker)` };
+                          const res = rankHand([{value: v, suit: s}, fourthCard, ...b]);
+                          possibleJokerHands.push({...res, name: `${res.name} (Joker)`});
                       }
                   }
               });
-          });
+          }
+      });
+
+      if (possibleJokerHands.length > 0) {
+          handTypeMeta = "JOKER";
+          possibleJokerHands.sort((a, b) => b.power - a.power);
+          if (possibleJokerHands[0].power > bestHigh.power) bestHigh = possibleJokerHands[0];
       } else {
-          // All 4 same color - standard Omaha logic: 2 hole + 3 board
+          // NATURAL HAND (All 4 cards same color)
+          handTypeMeta = "NATURAL";
           combinations(hole, 2).forEach(h => {
               boardCombos.forEach(b => {
-                  if (b.length < 3) return;
                   const res = rankHand([...h, ...b]);
-                  if (res.power > bestHigh.power) bestHigh = res;
+                  if (res.power > bestHigh.power) bestHigh = { ...res, name: `${res.name} (Natural)` };
               });
           });
       }
@@ -156,29 +169,22 @@ const getBestHand = (hole, comm, variantId) => {
       });
   }
   
-  // Catch-all to ensure we don't return an empty name
-  if (bestHigh.power === -1) bestHigh.name = "Pre-flop";
+  if (bestHigh.power <= 0) bestHigh.name = "Pre-flop";
   
-  return { high: bestHigh, low: bestLow };
+  return { high: bestHigh, low: bestLow, meta: handTypeMeta };
 };
 
 const updateRoomStrengths = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
     const variantId = room.activeVariant?.id || 'HOLDEM';
-    
     room.players.forEach(p => {
         if (p && p.hand && !p.isFolded) {
-            if (room.phase === PHASES.PRE_FLOP) {
-                p.strength = "Pre-flop";
-                p.winProbability = 50; // Neutral starting probability
-            } else {
-                const evaluation = getBestHand(p.hand, room.community, variantId);
-                p.strength = evaluation.high.name;
-                p.strengthPower = evaluation.high.power;
-                const rawProb = (p.strengthPower / (9 * Math.pow(15, 7))) * 100;
-                p.winProbability = variantId === 'MUFLIS' ? Math.max(5, 100 - rawProb) : Math.min(99, Math.max(5, rawProb));
-            }
+            const evaluation = getBestHand(p.hand, room.community, variantId);
+            p.strength = evaluation.high.name;
+            p.strengthPower = evaluation.high.power;
+            const rawProb = (p.strengthPower / (9 * Math.pow(15, 7))) * 100;
+            p.winProbability = variantId === 'MUFLIS' ? Math.max(5, 100 - rawProb) : Math.min(99, Math.max(5, rawProb));
         }
     });
 };
@@ -350,6 +356,7 @@ const runIgnition = (roomId) => {
           p.hand = room.deck.splice(0, room.activeVariant.holeCards); 
           p.currentBet = 0; p.isFolded = false; p.isWinner = false; 
           p.lastAction = null; p.actedThisStreet = false; p.winProbability = 0; 
+          p.strength = "Pre-flop";
       } 
   });
   
