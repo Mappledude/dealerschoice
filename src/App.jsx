@@ -179,7 +179,7 @@ const App = () => {
   const isMobile = window.innerWidth < 768;
   const headerHeight = isMobile ? 48 : 64; 
 
-  // Layout Adjustment States - LOCKED IN CUSTOM DEFAULTS FOR ALL PLATFORMS
+  // Layout Adjustment States - Move Table Zoom into State
   const [visuals, setVisuals] = useState({
     heroCardScale: 2.2,
     heroCardY: -9,
@@ -190,11 +190,12 @@ const App = () => {
     betScale: isMobile ? 0.8 : 1.0,
     betY: isMobile ? -5 : 0,
     badgeY: isMobile ? 85 : 100,
-    footerHeight: 180 // Increased to accommodate larger mobile buttons
+    footerHeight: 180,
+    tableZoom: isMobile ? 0.6 : 0.85 
   });
 
   const footerHeight = visuals.footerHeight;
-  const tableZoom = isMobile ? 0.6 : 0.85;
+  const tableZoom = visuals.tableZoom;
 
   const logEndRef = useRef(null);
 
@@ -420,28 +421,32 @@ const App = () => {
   return (
     <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       
-      {/* Visual Adjustments Overlay */}
+      {/* Visual Adjustments Overlay - Made Transparent and Real-Time Interactive */}
       {showVisualControls && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-            <div className="w-full max-w-[500px] bg-slate-900 border border-white/10 rounded-3xl p-6 md:p-8 flex flex-col gap-5 shadow-2xl max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-[2px] p-4">
+            <div className="w-full max-w-[500px] bg-slate-900/60 border border-white/10 rounded-3xl p-6 md:p-8 flex flex-col gap-5 shadow-2xl max-h-[80vh] overflow-y-auto">
                 <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                    <h3 className="text-base md:text-xl text-[#fbbf24] flex items-center gap-2 font-black uppercase">Display Settings</h3>
+                    <h3 className="text-base md:text-xl text-[#fbbf24] flex items-center gap-2 font-black uppercase">Arena Display Settings</h3>
                     <button onClick={() => setShowVisualControls(false)} className="text-white/40 hover:text-white"><X size={18}/></button>
                 </div>
                 
                 <div className="space-y-5">
-                    {/* FOOTER HEIGHT CONTROL */}
+                    {/* TABLE ZOOM CONTROL */}
                     <div className="space-y-3">
-                        <h4 className="text-[8px] md:text-[10px] tracking-widest text-indigo-300 uppercase">Footer / Actions HUD</h4>
+                        <h4 className="text-[8px] md:text-[10px] tracking-widest text-emerald-400 uppercase">Arena Layout</h4>
                         <div className="flex flex-col gap-1">
-                            <label className="text-[8px] text-white/40 uppercase">Height ({visuals.footerHeight}px)</label>
+                            <label className="text-[8px] text-white/40 uppercase">Table Zoom ({visuals.tableZoom.toFixed(2)})</label>
+                            <input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-emerald-400 h-1" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[8px] text-white/40 uppercase">Actions HUD Height ({visuals.footerHeight}px)</label>
                             <input type="range" min="40" max="400" step="1" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 h-1" />
                         </div>
                     </div>
 
                     <div className="space-y-3">
                         <h4 className="text-[8px] md:text-[10px] tracking-widest text-amber-400 uppercase">On My Deal:</h4>
-                        <div className="bg-white/5 border border-white/10 p-2 rounded-xl">
+                        <div className="bg-black/40 border border-white/10 p-2 rounded-xl">
                             <select 
                                 value={pendingVariantId} 
                                 onChange={(e) => { 
@@ -514,7 +519,7 @@ const App = () => {
                     </div>
                 </div>
 
-                <button onClick={() => setShowVisualControls(false)} className="w-full p-3.5 bg-emerald-600 rounded-xl font-black mt-2 text-[10px] uppercase">Save Display</button>
+                <button onClick={() => setShowVisualControls(false)} className="w-full p-3.5 bg-emerald-600 rounded-xl font-black mt-2 text-[10px] uppercase shadow-lg">Close Settings</button>
             </div>
         </div>
       )}
@@ -618,7 +623,7 @@ const App = () => {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full relative font-black uppercase">
-                {showdownWinners && showdownWinners.length > 0 ? (
+                {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
                     <div className="flex flex-col items-center gap-1 md:gap-3 w-full h-full justify-center">
                         <div className="flex items-center gap-1.5 text-yellow-400 animate-pulse font-black tracking-[0.2em] text-[7px] md:text-xs uppercase leading-none"><Trophy size={10} /> SHOWDOWN WINNERS</div>
                         <div className="flex flex-wrap gap-1.5 md:gap-6 items-center justify-center animate-in fade-in zoom-in duration-700 w-full overflow-y-auto px-1">
@@ -627,7 +632,40 @@ const App = () => {
                             ))}
                         </div>
                     </div>
-                ) : ( <div className="flex flex-col items-center gap-1 md:gap-4 animate-in fade-in duration-500 font-black uppercase">{phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3"><span className="text-white/40 tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase leading-none uppercase">Arena Idle</span></div>) : (<div className="flex flex-col items-center gap-0.5 md:gap-2"><div className="flex items-center gap-1 text-cyan-400 animate-pulse mb-0.5"><span className="text-[6px] md:text-[10px] font-black tracking-[0.1em] uppercase leading-none">WAITING ON</span></div><span className="text-xs md:text-4xl font-black text-white tracking-tighter drop-shadow-lg uppercase leading-none">{String(players[activeIdx]?.name || "OPPONENT")}</span></div>)}</div> )}
+                ) : ( 
+                    <div className="flex flex-col items-center gap-1 md:gap-4 animate-in fade-in duration-500 font-black uppercase w-full max-w-[1000px]">
+                      {phase === PHASES.IDLE ? (
+                        <div className="flex flex-col items-center gap-1 md:gap-3">
+                          <span className="text-white/40 tracking-[0.2em] md:tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase leading-none">Arena Idle</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col md:flex-row items-center justify-between w-full gap-4 px-4">
+                           {/* Action Status */}
+                           <div className="flex flex-col items-center md:items-start">
+                              <span className="text-cyan-400 text-[8px] md:text-[12px] animate-pulse mb-1 font-black">PLAYER TURN</span>
+                              <span className="text-white text-sm md:text-3xl font-black tracking-tighter drop-shadow-lg uppercase leading-none">
+                                {String(players[activeIdx]?.name || "OPPONENT")}
+                              </span>
+                           </div>
+
+                           {/* Hand Strength / Probability HUD */}
+                           {heroPlayerObj && !heroPlayerObj.isFolded && (
+                              <div className="flex items-center gap-4 bg-white/5 p-3 md:p-4 rounded-2xl border border-white/10 shadow-inner">
+                                 <div className="flex flex-col">
+                                    <span className="text-white/40 text-[7px] md:text-[10px] font-black">YOUR HAND</span>
+                                    <span className="text-purple-400 text-xs md:text-xl font-black uppercase">{String(heroPlayerObj.strength || "High Card")}</span>
+                                 </div>
+                                 <div className="h-6 md:h-10 w-px bg-white/10" />
+                                 <div className="flex flex-col items-end">
+                                    <span className="text-white/40 text-[7px] md:text-[10px] font-black">WIN PROB.</span>
+                                    <span className="text-[#fbbf24] text-xs md:text-xl font-mono font-black">{Math.round(heroWinProb || 0)}%</span>
+                                 </div>
+                              </div>
+                           )}
+                        </div>
+                      )}
+                    </div> 
+                )}
             </div>
           )}
         </div>
