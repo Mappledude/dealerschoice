@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.8.0-ULTRA";
+const VERSION = "v1.8.1-ULTRA";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -414,21 +414,21 @@ const App = () => {
                   <div className="flex flex-col font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">STAKES</span><span className="text-[#fbbf24] text-base md:text-xl font-black">${t.sb}/${t.bb}</span></div>
                   <div className="flex flex-col items-end font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">SEATS</span><span className="text-white/80 font-mono text-[10px] md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
                 </div>
-                <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-5 md:p-8 bg-emerald-600 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] font-black uppercase">ENTER ARENA</button>
+                <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-5 md:p-8 bg-emerald-600 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] font-black uppercase font-mono tracking-widest">ENTER ARENA</button>
               </div>
             ))}
         </main>
         {selectedTableForJoin && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md px-6">
               <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-[#fbbf24]/30 rounded-3xl shadow-2xl flex flex-col gap-6 md:gap-10">
-                <h3 className="text-xl md:text-3xl text-center text-[#fbbf24] underline underline-offset-8 uppercase font-black">{String(selectedTableForJoin.name)}</h3>
+                <h3 className="text-xl md:text-3xl text-center text-[#fbbf24] underline underline-offset-8 uppercase font-black font-mono italic">{String(selectedTableForJoin.name)}</h3>
                 <div className="space-y-4 font-black text-center uppercase">
-                  <div className="flex justify-between items-center text-[10px] text-white/40 tracking-widest font-black"><span>BUY-IN AMOUNT</span><span className="text-emerald-400 text-lg md:text-2xl font-mono">${Math.min(buyInAmount, userProfile?.chips || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                  <div className="flex justify-between items-center text-[10px] text-white/40 tracking-widest font-black font-mono"><span>BUY-IN AMOUNT</span><span className="text-emerald-400 text-lg md:text-2xl font-mono">${Math.min(buyInAmount, userProfile?.chips || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
                   <input type="range" min={selectedTableForJoin.minBuy || 5} max={Math.min(selectedTableForJoin.maxBuy || 10, userProfile?.chips || 10)} step={0.25} value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#fbbf24]" />
                 </div>
                 <div className="flex gap-4">
-                  <button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-3.5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all font-black text-[10px] uppercase">BACK</button>
-                  <button onClick={joinRoom} disabled={isJoining} className={`flex-2 p-3.5 rounded-2xl shadow-lg transition-all text-[10px] font-black uppercase ${isJoining ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-emerald-600 hover:scale-105 active:scale-95'}`}>{isJoining ? 'Joining...' : 'SIT DOWN'}</button>
+                  <button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-3.5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all font-black text-[10px] uppercase font-mono">BACK</button>
+                  <button onClick={joinRoom} disabled={isJoining} className={`flex-2 p-3.5 rounded-2xl shadow-lg transition-all text-[10px] font-black uppercase font-mono tracking-widest ${isJoining ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-emerald-600 hover:scale-105 active:scale-95'}`}>{isJoining ? 'Joining...' : 'SIT DOWN'}</button>
                 </div>
               </div>
             </div>
@@ -438,33 +438,15 @@ const App = () => {
 
   return (
     <div className="h-screen bg-[#020408] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter">
-      {intelExpanded && (
-        <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-md p-6 pt-[100px] flex flex-col animate-in fade-in duration-300">
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[800px] mx-auto bg-slate-900/90 border border-yellow-500/20 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4 shrink-0">
-               <div className="flex items-center gap-2"><Eye className="text-[#fbbf24]" size={20} /><h3 className="text-xl text-[#fbbf24] font-black uppercase font-mono tracking-widest italic">Intelligence Access</h3></div>
-               <button onClick={() => setIntelExpanded(false)} className="text-white/40 hover:text-white"><X size={24} /></button>
+      {showRulesModal && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 md:p-12" onClick={() => setShowRulesModal(false)}>
+          <div className="w-full max-w-[600px] bg-slate-900 border-2 border-cyan-500/40 rounded-[2.5rem] p-8 md:p-12 shadow-[0_0_80px_rgba(34,211,238,0.2)] animate-in zoom-in duration-300 relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
+              <h3 className="text-xl md:text-3xl text-cyan-400 font-black tracking-tighter uppercase flex items-center gap-3 font-mono italic"><BookOpen size={24} /> {activeVariant?.name} Manual</h3>
+              <button onClick={() => setShowRulesModal(false)} className="text-white/40 hover:text-white transition-colors p-2 bg-white/5 rounded-full"><X size={24}/></button>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3 scrollbar-hide font-mono">
-                {groupedLogs.map((hand) => (
-                    <div key={hand.id} className="flex flex-col border border-white/5 rounded-2xl bg-black/40 overflow-hidden mb-4">
-                      <button onClick={() => toggleHandExpansion(hand.id)} className={`flex flex-col items-start p-3 gap-1 transition-colors ${expandedHands.has(hand.id) ? 'bg-white/5' : 'hover:bg-white/5'}`}>
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-3"><span className="text-[11px] font-black uppercase text-cyan-400 tracking-widest">{hand.variantName}</span></div>
-                          {hand.isOngoing && <span className="text-[8px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded animate-pulse">LIVE</span>}
-                        </div>
-                        <div className="flex flex-col w-full pl-6 mt-1 gap-1">
-                          {hand.summaries.map((s, si) => (
-                            <div key={si} className="flex flex-wrap items-baseline gap-2 text-left">
-                              <span className="text-[12px] font-black text-white uppercase">{String(s.name)}</span>
-                              <span className="text-[12px] font-black text-emerald-400">{String(s.amount)}</span>
-                              <span className="text-[10px] font-black text-white/40 uppercase italic">/ {String(s.rank)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </button>
-                    </div>
-                ))}
+            <div className="space-y-6">
+              <p className="text-white/60 text-xs italic font-mono uppercase">Rules manual loading...</p>
             </div>
           </div>
         </div>
@@ -474,7 +456,7 @@ const App = () => {
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
             <div className="w-full max-w-[1000px] h-[90vh] bg-slate-900 border-2 border-yellow-500/20 rounded-[3rem] p-10 flex flex-col gap-6 overflow-y-auto scrollbar-hide relative">
                 <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                    <h3 className="text-2xl text-yellow-400 font-black uppercase font-mono">Arena Calibration</h3>
+                    <h3 className="text-2xl text-yellow-400 font-black uppercase font-mono italic">Arena Calibration</h3>
                     <button onClick={() => setShowVisualControls(false)} className="text-white/20 hover:text-white"><X size={32}/></button>
                 </div>
                 <div className="space-y-8 font-mono uppercase">
@@ -499,20 +481,76 @@ const App = () => {
                         </div>
                       </div>
                     ))}
+                    <div className="flex flex-col gap-4 bg-black/40 p-6 rounded-2xl border border-white/5">
+                        <h4 className="text-yellow-500 font-black">Arena HUD & Zoom</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[10px] text-white/40">Table Zoom ({visuals.tableZoom.toFixed(2)})</label>
+                                <input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-yellow-500" />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[10px] text-white/40">Footer Height ({visuals.footerHeight}px)</label>
+                                <input type="range" min="100" max="600" step="1" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-yellow-500" />
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <button onClick={() => setShowVisualControls(false)} className="w-full py-6 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-2xl text-black font-black">SAVE ARENA CONFIG</button>
+                <button onClick={() => setShowVisualControls(false)} className="w-full py-6 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-2xl text-black font-black font-mono tracking-widest uppercase">SAVE ARENA CONFIG</button>
             </div>
         </div>
+      )}
+
+      {intelExpanded && (
+        <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-md p-6 pt-[100px] flex flex-col animate-in fade-in duration-300">
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[800px] mx-auto bg-slate-900/90 border border-yellow-500/20 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4 shrink-0">
+               <div className="flex items-center gap-2 font-mono"><Eye className="text-[#fbbf24]" size={20} /><h3 className="text-xl text-[#fbbf24] font-black uppercase font-mono tracking-widest italic">Intelligence Access</h3></div>
+               <button onClick={() => setIntelExpanded(false)} className="text-white/40 hover:text-white"><X size={24} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-3 scrollbar-hide font-mono">
+                {groupedLogs.map((hand) => (
+                    <div key={hand.id} className="flex flex-col border border-white/5 rounded-2xl bg-black/40 overflow-hidden mb-4">
+                      <button onClick={() => toggleHandExpansion(hand.id)} className={`flex flex-col items-start p-3 gap-1 transition-colors ${expandedHands.has(hand.id) ? 'bg-white/5' : 'hover:bg-white/5'}`}>
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-3 font-mono"><span className="text-[11px] font-black uppercase text-cyan-400 tracking-widest">{hand.variantName}</span></div>
+                          {hand.isOngoing && <span className="text-[8px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded animate-pulse">LIVE</span>}
+                        </div>
+                        <div className="flex flex-col w-full pl-6 mt-1 gap-1">
+                          {hand.summaries.map((s, si) => (
+                            <div key={si} className="flex flex-wrap items-baseline gap-2 text-left font-mono">
+                              <span className="text-[12px] font-black text-white uppercase">{String(s.name)}</span>
+                              <span className="text-[12px] font-black text-emerald-400">{String(s.amount)}</span>
+                              <span className="text-[10px] font-black text-white/40 uppercase italic">/ {String(s.rank)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isBrokeStatus && (
+          <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-6 font-mono">
+            <div className="w-full max-w-[400px] p-8 bg-slate-900 border-2 border-red-500 rounded-3xl text-center shadow-[0_0_100px_rgba(239,68,68,0.4)] font-black">
+              <AlertTriangle size={64} className="text-red-500 animate-pulse mb-4 mx-auto" />
+              <h2 className="text-xl md:text-3xl font-black mb-2 uppercase italic tracking-widest">Busted!</h2>
+              <button onClick={() => socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: buyInAmount })} className="w-full p-5 bg-emerald-600 text-white rounded-2xl shadow-xl animate-bounce font-black uppercase text-xs tracking-widest">REBUY ${buyInAmount.toLocaleString()}</button>
+              <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="mt-4 text-white/20 hover:text-white text-[9px] uppercase underline tracking-[0.2em]">EXIT ARENA</button>
+            </div>
+          </div>
       )}
 
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)]" style={{ height: `calc(${headerHeight}px + env(safe-area-inset-top))` }}>
         <div className="flex items-center gap-1.5 overflow-hidden flex-1">
             <button onClick={() => setShowRulesModal(true)} className="bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left">
-              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1">This Hand: <Info size={8} /></span>
+              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1 font-mono">This Hand: <Info size={8} /></span>
               <span className="text-white text-[10px] md:text-sm truncate leading-none font-mono italic">{String(activeVariant?.name || "Hold'em")}</span>
             </button>
             <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]">
-              <span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span>
+              <span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider font-mono">On My Deal:</span>
               <select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile?.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full font-mono italic">
                 {Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>))}
               </select>
@@ -558,17 +596,17 @@ const App = () => {
           {activeVariant?.id === 'HILOW' && heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
             <>
               <div className="absolute top-2 left-2 z-[110] animate-in slide-in-from-left duration-500">
-                 <div className="flex flex-col items-start bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-500/20 shadow-xl">
+                 <div className="flex flex-col items-start bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-500/20 shadow-xl font-mono">
                     <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">Low Hand Strength</span>
-                    <span className="text-[10px] md:text-[18px] text-emerald-400 font-black uppercase leading-none font-mono italic mb-0.5">{String(heroPlayerObj.lowStrength || "...")}</span>
-                    <span className="text-[10px] md:text-[14px] text-yellow-400 font-mono italic leading-none font-black">{Math.round(heroPlayerObj.winProbabilityLow || 0)}% WIN</span>
+                    <span className="text-[10px] md:text-[18px] text-emerald-400 font-black uppercase leading-none italic mb-0.5">{String(heroPlayerObj.lowStrength || "...")}</span>
+                    <span className="text-[10px] md:text-[14px] text-yellow-400 italic leading-none font-black">{Math.round(heroPlayerObj.winProbabilityLow || 0)}% WIN</span>
                  </div>
               </div>
               <div className="absolute top-2 right-2 z-[110] animate-in slide-in-from-right duration-500">
-                 <div className="flex flex-col items-end bg-purple-950/40 px-3 py-1 rounded-lg border border-purple-500/20 shadow-xl">
+                 <div className="flex flex-col items-end bg-purple-950/40 px-3 py-1 rounded-lg border border-purple-500/20 shadow-xl font-mono">
                     <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">High Hand Strength</span>
-                    <span className="text-[10px] md:text-[18px] text-purple-400 font-black uppercase leading-none font-mono italic mb-0.5">{String(heroPlayerObj.strength || "...")}</span>
-                    <span className="text-[10px] md:text-[14px] text-yellow-400 font-mono italic leading-none font-black">{Math.round(heroPlayerObj.winProbabilityHigh || 0)}% WIN</span>
+                    <span className="text-[10px] md:text-[18px] text-purple-400 font-black uppercase leading-none italic mb-0.5">{String(heroPlayerObj.strength || "...")}</span>
+                    <span className="text-[10px] md:text-[14px] text-yellow-400 italic leading-none font-black">{Math.round(heroPlayerObj.winProbabilityHigh || 0)}% WIN</span>
                  </div>
               </div>
             </>
@@ -604,7 +642,10 @@ const App = () => {
             <div className="flex flex-col items-center justify-center h-full relative font-black uppercase overflow-visible">
                 {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-1 md:gap-3 animate-in fade-in zoom-in duration-700 relative overflow-visible">
-                        <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.3em] text-[10px] md:text-xl uppercase text-center px-4 drop-shadow-[0_0_20px_rgba(251,191,36,0.7)] bg-yellow-400/5 py-1 rounded-full border border-yellow-400/10">
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                            {[...Array(16)].map((_, i) => ( <div key={i} className={`sparkle-particle sparkle-${i} absolute w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-0 shadow-[0_0_10px_#fbbf24]`}/> ))}
+                        </div>
+                        <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.3em] text-[10px] md:text-xl uppercase text-center px-4 drop-shadow-[0_0_20px_rgba(251,191,36,0.7)] bg-yellow-400/5 py-1 rounded-full border border-yellow-400/10 font-mono">
                             <Trophy size={14} className="md:size-6" /> 
                             {showdownWinners.length === 1 
                               ? (showdownWinners[0].rank === "!" ? `${String(showdownWinners[0].name)} SWEEPS POT!` : `${String(showdownWinners[0].name)} WINS WITH ${String(showdownWinners[0].rank)}`)
@@ -634,17 +675,17 @@ const App = () => {
                 ) : ( 
                     <div className="flex flex-col items-center justify-center relative font-black uppercase w-full">
                         <div className="flex flex-col items-center gap-1 md:gap-4 animate-in fade-in duration-500 font-black uppercase w-full max-w-[1000px]">
-                          {phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3 font-mono italic animate-pulse text-white/20">ESTABLISHING SECURE ARENA...</div>) : (
+                          {phase === PHASES.IDLE ? (<div className="flex flex-col items-center gap-1 md:gap-3 font-mono italic animate-pulse text-white/20 tracking-[0.2em]">ESTABLISHING SECURE ARENA...</div>) : (
                             <div className="flex flex-row items-center justify-between w-full gap-4 md:gap-10 px-4 md:px-8 animate-in fade-in duration-500 font-black uppercase">
-                                <div className="flex flex-col items-start bg-yellow-950/20 px-5 py-2 rounded-2xl border border-yellow-500/20">
-                                    <span className="text-yellow-500 text-[9px] md:text-[13px] animate-pulse mb-1 font-black tracking-widest font-mono">ACTION ON</span>
-                                    <span className="text-white text-sm md:text-4xl font-mono italic drop-shadow-2xl uppercase leading-none truncate max-w-[100px] md:max-w-none font-black">{String(players[activeIdx]?.name || "OPPONENT")}</span>
+                                <div className="flex flex-col items-start bg-yellow-950/20 px-5 py-2 rounded-2xl border border-yellow-500/20 font-mono">
+                                    <span className="text-yellow-500 text-[9px] md:text-[13px] animate-pulse mb-1 font-black tracking-widest font-mono italic">ACTION ON</span>
+                                    <span className="text-white text-sm md:text-4xl italic drop-shadow-2xl uppercase leading-none truncate max-w-[100px] md:max-w-none font-black">{String(players[activeIdx]?.name || "OPPONENT")}</span>
                                 </div>
                                 {heroPlayerObj && !heroPlayerObj.isFolded && activeVariant?.id !== 'HILOW' && (
-                                  <div className="flex items-center gap-4 md:gap-8 bg-slate-950/60 p-3 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-white/5 shadow-2xl">
+                                  <div className="flex items-center gap-4 md:gap-8 bg-slate-950/60 p-3 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-white/5 shadow-2xl font-mono">
                                       <div className="flex flex-col">
-                                          <span className="text-[15px] md:text-[24px] text-purple-400 font-black uppercase tracking-tight italic mb-1 font-mono">{String(heroPlayerObj.strength || "...")}</span>
-                                          <span className="text-yellow-400 text-sm md:text-lg font-mono tracking-tighter italic font-black">{Math.round(heroWinProb)}% Win Prob.</span>
+                                          <span className="text-[15px] md:text-[24px] text-purple-400 font-black uppercase tracking-tight italic mb-1">{String(heroPlayerObj.strength || "...")}</span>
+                                          <span className="text-yellow-400 text-sm md:text-lg tracking-tighter italic font-black">{Math.round(heroWinProb)}% Win Prob.</span>
                                       </div>
                                   </div>
                                 )}
