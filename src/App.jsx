@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.6.0-PRO";
+const VERSION = "v1.7.0-ULTRA";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -37,26 +37,24 @@ const BET_OFFSETS = [
 ];
 
 const VARIANTS = { 
-  HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', desc: '2 Hole Cards', rules: ["2 hole cards.", "Standard rankings."] }, 
-  OMAHA: { id: 'OMAHA', name: 'OMAHA', desc: '4 Hole Cards', rules: ["4 cards.", "Must use exactly 2 hand + 3 board."] }, 
-  PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', desc: '3 Hole Cards', rules: ["3 cards.", "High hand evaluation."] }, 
-  MUFLIS: { id: 'MUFLIS', name: 'Muflis', desc: 'Low Hand Wins', rules: ["Weakest hand wins.", "Ace is 1."] }, 
-  HILOW: { id: 'HILOW', name: 'Hi-Low Split', desc: '4 Hole Cards', rules: ["Split pot high/low.", "No qualifier."] }, 
-  REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', desc: 'Joker mechanic', rules: ["Mixed colors = Joker."] }
+  HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em' }, 
+  OMAHA: { id: 'OMAHA', name: 'OMAHA' }, 
+  PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple' }, 
+  MUFLIS: { id: 'MUFLIS', name: 'Muflis' }, 
+  HILOW: { id: 'HILOW', name: 'Hi-Low Split' }, 
+  REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks' }
 };
 
-const PotInspiredBet = ({ amount, visuals }) => {
-  return (
-    <div className="relative flex flex-col items-center" style={{ transform: `scale(${visuals.betScale}) translateY(${visuals.betY}px)` }}>
-      <div className="flex items-center gap-1">
-        <div className="w-1 h-3 md:h-6 bg-yellow-500 shadow-[0_0_15px_#fbbf24]" />
-        <span className="text-[12px] md:text-[20px] font-mono font-black text-yellow-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.8)] leading-none italic tracking-tighter">
-          ${Number(amount).toLocaleString()}
-        </span>
-      </div>
+const PotInspiredBet = ({ amount, visuals }) => (
+  <div className="relative flex flex-col items-center" style={{ transform: `scale(${visuals.betScale}) translateY(${visuals.betY}px)` }}>
+    <div className="flex items-center gap-1">
+      <div className="w-1 h-3 md:h-6 bg-yellow-500 shadow-[0_0_15px_#fbbf24]" />
+      <span className="text-[12px] md:text-[20px] font-mono font-black text-yellow-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.8)] leading-none italic tracking-tighter">
+        ${Number(amount).toLocaleString()}
+      </span>
     </div>
-  );
-};
+  </div>
+);
 
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, 
@@ -71,14 +69,6 @@ const Seat = ({
 
     return (
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-[200] transition-all duration-500 overflow-visible ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'}`}>
-            {(isHero || isShowdown) && !player.isFolded && phase !== PHASES.IDLE && player.winProbability > 0 && (
-              <div className="absolute top-[-60px] left-1/2 -translate-x-1/2 z-[300] flex flex-col items-center gap-1 animate-in fade-in zoom-in duration-300">
-                <div className="bg-slate-950/90 backdrop-blur-xl border border-cyan-500/50 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-[0_0_25px_rgba(34,211,238,0.4)]">
-                  <span className="text-[10px] font-black text-cyan-400 font-mono tracking-widest">{Math.round(player.winProbability)}% WIN</span>
-                </div>
-              </div>
-            )}
-            
             {player.lastAction && !isActiveTurn && !isCollectingBets && (
               <div className="absolute top-[-35px] animate-bounce-short z-[200]">
                 <span className={`text-[9px] font-black px-2 py-0.5 rounded shadow-xl uppercase border border-white/20 tracking-wider ${
@@ -113,7 +103,7 @@ const Seat = ({
                 <div className="flex flex-col items-center gap-0.5 w-full">
                     <div className="flex items-center gap-1.5">
                       {player.isBot && <Bot size={10} className="text-indigo-400" />}
-                      <span className="text-[10px] md:text-[15px] font-black text-white/95 uppercase tracking-tighter truncate max-w-[70px] md:max-w-110px]">{String(player.name || "Anon")}</span>
+                      <span className="text-[10px] md:text-[15px] font-black text-white/95 uppercase tracking-tighter truncate max-w-[70px] md:max-w-110px] font-mono italic">{String(player.name || "Anon")}</span>
                     </div>
                     <span className={`text-[12px] md:text-[19px] font-mono font-black ${player.chips <= 1 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                 </div>
@@ -175,8 +165,6 @@ const App = () => {
   const [expandedHands, setExpandedHands] = useState(new Set()); 
   const [copySuccess, setCopySuccess] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [isJoining, setIsJoining] = useState(false);
-  const joinLock = useRef(false);
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
@@ -193,17 +181,12 @@ const App = () => {
     holeCardFan: 25
   });
 
-  const footerHeight = visuals.footerHeight;
-  const tableZoom = visuals.tableZoom;
-  const logEndRef = useRef(null);
-
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
     return players.findIndex(p => p && (p.uid === userProfile.uid || p.name === userProfile.name));
   }, [players, userProfile]);
 
   const heroPlayerObj = useMemo(() => heroIdx !== -1 ? players[heroIdx] : null, [players, heroIdx]);
-  const heroWinProb = useMemo(() => heroPlayerObj?.winProbability || 0, [heroPlayerObj]);
 
   const totalDisplayPot = useMemo(() => {
     const currentBetsSum = players.reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
@@ -222,8 +205,7 @@ const App = () => {
 
   const handleAllIn = useCallback(() => {
     if (!heroPlayerObj) return;
-    const totalStack = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
-    handleAction('RAISE', totalStack);
+    handleAction('RAISE', Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet));
   }, [heroPlayerObj, handleAction]);
 
   const handleLogin = useCallback(() => { 
@@ -232,6 +214,54 @@ const App = () => {
         setCurrentView(VIEWS.ADMIN); socket.emit('getInitialData'); 
     } else socket.emit('playerLogin', { password: passwordInput });
   }, [passwordInput]);
+
+  useEffect(() => {
+    if (activeIdx === heroIdx && phase !== PHASES.IDLE && heroPlayerObj) {
+      const minRequired = highestBet === 0 ? currentBB : Math.max(highestBet + currentBB, highestBet * 2);
+      const stack = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
+      setRaiseInput(Math.min(stack, minRequired));
+    }
+  }, [activeIdx, heroIdx, phase, highestBet, currentBB, heroPlayerObj]);
+
+  useEffect(() => {
+    socket.on('connect', () => setIsConnected(true));
+    socket.on('disconnect', () => setIsConnected(false));
+    const handleRoomUpdate = (d) => {
+        if (!d) return;
+        setPlayers(() => { 
+          const next = Array(TOTAL_SEATS).fill(null); 
+          (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); 
+          return next; 
+        });
+        setPhase(d.phase); setCommunity(d.community || []); setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
+        setActiveIdx(d.activeIdx ?? -1); setHighestBet(d.highestBet || 0); setDealerIdx(d.dealerIdx ?? -1);
+        setTimeRemaining(d.timeRemaining !== undefined ? Math.max(0, d.timeRemaining) : 0);
+        if (d.bb) setCurrentBB(Number(d.bb));
+        if (d.activeVariant) {
+            const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
+            setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId });
+        }
+        if (d.phase === PHASES.SHOWDOWN) {
+            setPotTransferring(true);
+            setCurrentShowdownIdx(0);
+            const rawWinners = d.showdownWinners || [];
+            setShowdownWinners([...rawWinners]);
+            setWinning5Ids(d.winning5Ids || []);
+            const totalDuration = (d.activeVariant?.id || d.activeVariant) === 'HILOW' ? 8000 : 4000;
+            if (rawWinners.length > 1) {
+                for (let i = 1; i < rawWinners.length; i++) { setTimeout(() => setCurrentShowdownIdx(i), i * 4000); }
+            }
+            setTimeout(() => setPotTransferring(false), totalDuration);
+        }
+    };
+    socket.on('roomUpdate', handleRoomUpdate);
+    socket.on('lobbyUpdate', (list) => setActiveTables(list || []));
+    socket.on('profilesUpdate', (list) => { setAllProfiles(list || []); setUserProfile(prev => { if (!prev) return prev; const me = list?.find(p => p.uid === prev.uid || p.name === prev.name); return me ? { ...prev, chips: me.chips } : prev; }); });
+    socket.on('loginSuccess', (p) => { setUserProfile(p); setPendingVariantId(p.pendingVariant || 'HOLDEM'); setCurrentView(VIEWS.LOBBY); socket.emit('getInitialData'); });
+    socket.on('log', (d) => setLogs(prev => [...prev, { id: Math.random() + '-' + Date.now(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), ...d }].slice(-100)));
+    socket.emit('getInitialData');
+    return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('loginSuccess'); socket.off('log'); };
+  }, []);
 
   const groupedLogs = useMemo(() => {
     const hands = [];
@@ -261,59 +291,6 @@ const App = () => {
     });
   };
 
-  // --- NEW: Default Raise Input to BB when turn starts ---
-  useEffect(() => {
-    if (activeIdx === heroIdx && phase !== PHASES.IDLE && heroPlayerObj) {
-      // Logic: If someone has bet, default to min-raise (HighestBet + BB). 
-      // If no one has bet, default to BB.
-      const minRequired = highestBet === 0 ? currentBB : Math.max(highestBet + currentBB, highestBet * 2);
-      const stack = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
-      setRaiseInput(Math.min(stack, minRequired));
-    }
-  }, [activeIdx, heroIdx, phase, highestBet, currentBB, heroPlayerObj]);
-
-  useEffect(() => {
-    socket.on('connect', () => setIsConnected(true));
-    const handleRoomUpdate = (d) => {
-        if (!d) return;
-        setPlayers(() => { 
-          const next = Array(TOTAL_SEATS).fill(null); 
-          (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); 
-          return next; 
-        });
-        setPhase(d.phase); setCommunity(d.community || []); setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
-        setActiveIdx(d.activeIdx ?? -1); setHighestBet(d.highestBet || 0); setDealerIdx(d.dealerIdx ?? -1);
-        setTimeRemaining(d.timeRemaining !== undefined ? Math.max(0, d.timeRemaining) : 0);
-        
-        // Update BB tracking for calculation
-        if (d.bb) setCurrentBB(Number(d.bb));
-
-        if (d.activeVariant) {
-            const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
-            setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId, rules: [] });
-        }
-        if (d.phase === PHASES.SHOWDOWN) {
-            setPotTransferring(true);
-            setCurrentShowdownIdx(0);
-            const rawWinners = d.showdownWinners || [];
-            setShowdownWinners([...rawWinners]);
-            setWinning5Ids(d.winning5Ids || []);
-            const totalDuration = (d.activeVariant?.id || d.activeVariant) === 'HILOW' ? 8000 : 4000;
-            if (rawWinners.length > 1) {
-                for (let i = 1; i < rawWinners.length; i++) { setTimeout(() => setCurrentShowdownIdx(i), i * 4000); }
-            }
-            setTimeout(() => setPotTransferring(false), totalDuration);
-        }
-    };
-    socket.on('roomUpdate', handleRoomUpdate);
-    socket.on('lobbyUpdate', (list) => setActiveTables(list || []));
-    socket.on('profilesUpdate', (list) => { setAllProfiles(list || []); setUserProfile(prev => { if (!prev) return prev; const me = list?.find(p => p.uid === prev.uid || p.name === prev.name); return me ? { ...prev, chips: me.chips } : prev; }); });
-    socket.on('loginSuccess', (p) => { setUserProfile(p); setPendingVariantId(p.pendingVariant || 'HOLDEM'); setCurrentView(VIEWS.LOBBY); socket.emit('getInitialData'); });
-    socket.on('log', (d) => setLogs(prev => [...prev, { id: Math.random() + '-' + Date.now(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), ...d }].slice(-100)));
-    socket.emit('getInitialData');
-    return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('loginSuccess'); socket.off('log'); };
-  }, []);
-
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#020408] flex items-center justify-center p-6 text-white uppercase font-black">
         <div className="w-full max-w-[400px] p-10 md:p-14 bg-black/80 border border-white/10 rounded-[3rem] backdrop-blur-3xl shadow-[0_0_100px_rgba(0,0,0,1)] flex flex-col items-center gap-10">
@@ -327,44 +304,51 @@ const App = () => {
   if (currentView === VIEWS.ADMIN) return (
     <div className="h-screen bg-[#06080c] flex flex-col md:flex-row text-white uppercase font-black overflow-hidden pt-[env(safe-area-inset-top)]">
         <aside className="w-full md:w-64 border-b md:border-r border-white/10 p-3 md:p-8 flex flex-row md:flex-col gap-2 md:gap-4 bg-black/20 shrink-0">
-            <h2 className="hidden md:flex text-[#fbbf24] items-center gap-2 mb-4"><ShieldCheck size={20}/> ADMIN</h2>
-            <button onClick={()=>setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl text-[9px] md:text-xs font-black ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black' : 'bg-white/5'}`}>PLAYERS</button>
-            <button onClick={()=>setAdminTab(ADMIN_TABS.TABLES)} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl text-[9px] md:text-xs font-black ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black' : 'bg-white/5'}`}>TABLES</button>
+            <h2 className="hidden md:flex text-[#fbbf24] items-center gap-2 mb-4 font-mono italic"><ShieldCheck size={20}/> ADMIN CORE</h2>
+            <button onClick={()=>setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl text-[9px] md:text-xs font-black font-mono tracking-widest ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black shadow-[0_0_15px_#fbbf24]' : 'bg-white/5'}`}>PLAYER REGISTRY</button>
+            <button onClick={()=>setAdminTab(ADMIN_TABS.TABLES)} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl text-[9px] md:text-xs font-black font-mono tracking-widest ${adminTab === ADMIN_TABS.TABLES ? 'bg-[#fbbf24] text-black shadow-[0_0_15px_#fbbf24]' : 'bg-white/5'}`}>ARENA CONTROL</button>
             <button onClick={() => { if(!nuclearConfirm) { setNuclearConfirm(true); setTimeout(()=>setNuclearConfirm(false),3000); } else { socket.emit('adminNuclearReset'); setNuclearConfirm(false); } }} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl flex items-center justify-center gap-2 border-2 transition-all uppercase ${nuclearConfirm ? 'bg-red-600 border-white text-white' : 'bg-white/5 text-red-500 border-red-500/20'}`}>
                 <Bomb size={14}/> {nuclearConfirm ? 'CONFIRM' : 'NUCLEAR'}
             </button>
-            <button onClick={()=>setCurrentView(VIEWS.LOBBY)} className="flex-1 md:flex-none p-2.5 md:p-4 rounded-xl bg-cyan-600 text-black font-black text-[9px] md:text-xs">BACK TO LOBBY</button>
+            <button onClick={()=>setCurrentView(VIEWS.LOBBY)} className="flex-1 md:flex-none p-2.5 md:p-4 rounded-xl bg-cyan-600 text-black font-black text-[9px] md:text-xs font-mono tracking-widest">EXIT TO LOBBY</button>
         </aside>
         <main className="flex-1 p-5 md:p-12 overflow-y-auto bg-black/40">
             {adminTab === ADMIN_TABS.PLAYERS ? (
                 <div className="flex flex-col gap-5 md:gap-8">
-                    <h3 className="text-lg md:text-xl border-l-4 border-[#fbbf24] pl-4">PLAYER REGISTRY</h3>
-                    <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10">
-                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm"/>
-                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm"/>
-                        <button onClick={() => { if(newPlayer.name) { socket.emit('adminCreatePlayer', { ...newPlayer, uid: Math.random().toString(36).slice(2) }); setNewPlayer({name:'', chips:100, password:''}); } }} className="bg-[#fbbf24] text-black rounded-xl font-black p-3 text-sm">CREATE</button>
+                    <h3 className="text-lg md:text-xl border-l-4 border-[#fbbf24] pl-4 font-mono italic uppercase">Registry Access</h3>
+                    <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10 shadow-inner">
+                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="PLAYER NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm font-mono"/>
+                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="SECURE KEY" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm font-mono"/>
+                        <button onClick={() => { if(newPlayer.name) { socket.emit('adminCreatePlayer', { ...newPlayer, uid: Math.random().toString(36).slice(2) }); setNewPlayer({name:'', chips:100, password:''}); } }} className="bg-[#fbbf24] text-black rounded-xl font-black p-3 text-sm font-mono tracking-widest">CREATE PROFILE</button>
                     </div>
                     <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
                         {allProfiles.map(p => (
-                            <div key={p.uid} className="flex justify-between p-3 md:p-4 border-b border-white/5 items-center hover:bg-white/5">
-                                <span className="text-[10px] md:text-sm font-black truncate max-w-[100px]">{String(p.name)}</span>
-                                <div className="flex gap-2 md:gap-4 items-center"><span className="text-emerald-400 font-mono text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span><button onClick={()=>{const n = prompt("NEW WALLET", p.chips); if(n) socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400"><Edit3 size={14}/></button><button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500"><Trash2 size={14}/></button></div>
+                            <div key={p.uid} className="flex justify-between p-3 md:p-4 border-b border-white/5 items-center hover:bg-white/5 transition-colors">
+                                <span className="text-[10px] md:text-sm font-black truncate max-w-[100px] font-mono italic">{String(p.name)}</span>
+                                <div className="flex gap-4 items-center font-mono">
+                                    <span className="text-emerald-400 text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span>
+                                    <button onClick={()=>{const n = prompt("NEW WALLET", p.chips); if(n !== null) socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400"><Edit3 size={18}/></button>
+                                    <button onClick={()=>{if(confirm(`Delete ${p.name}?`)) socket.emit('adminDeletePlayer', p.uid)}} className="text-red-500"><Trash2 size={18}/></button>
+                                </div>
                             </div>
                         ))}
                     </div>
                 </div>
             ) : (
                 <div className="flex flex-col gap-5 md:gap-8">
-                    <h3 className="text-lg md:text-xl border-l-4 border-emerald-500 pl-4">ARENA CONTROL</h3>
-                    <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-4 border border-white/10">
-                        <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ARENA NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm"/>
-                        <button onClick={() => { if(newTable.name) { socket.emit('adminCreateRoom', { ...newTable, id: 'room_' + Math.random().toString(36).slice(2, 9) }); setNewTable({name:'', sb:0.25, bb:0.5, minBuy:5, maxBuy:10}); } }} className="bg-emerald-600 text-white rounded-xl font-black p-3 text-sm">SPAWN ARENA</button>
+                    <h3 className="text-lg md:text-xl border-l-4 border-emerald-500 pl-4 font-mono italic uppercase">Arena Deployment</h3>
+                    <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-4 border border-white/10 shadow-inner">
+                        <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ARENA DESIGNATION" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm font-mono"/>
+                        <button onClick={() => { if(newTable.name) { socket.emit('adminCreateRoom', { ...newTable, id: 'room_' + Math.random().toString(36).slice(2, 9) }); setNewTable({name:'', sb:0.25, bb:0.5, minBuy:5, maxBuy:10}); } }} className="bg-emerald-600 text-white rounded-xl font-black p-3 text-sm font-mono tracking-widest">DEPLOY ARENA</button>
                     </div>
-                    <div className="grid grid-cols-1 gap-2.5 md:gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                         {activeTables.map(t => (
-                            <div key={t.id} className="bg-white/5 p-3 rounded-2xl flex justify-between items-center border border-white/10">
-                              <div><h4 className="text-[#fbbf24] font-black text-xs md:text-base">{String(t.name)}</h4><p className="text-[8px] text-white/40 tracking-widest uppercase">${t.sb}/${t.bb}</p></div>
-                              <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="bg-red-950/40 px-2 py-1.5 rounded-xl text-red-500 font-black text-[8px]">TERMINATE</button>
+                            <div key={t.id} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10 font-mono shadow-md">
+                              <div>
+                                <h4 className="text-[#fbbf24] font-black text-xs md:text-lg italic">{String(t.name)}</h4>
+                                <p className="text-[10px] text-white/40 tracking-[0.2em] uppercase">STAKES: ${t.sb}/${t.bb}</p>
+                              </div>
+                              <button onClick={()=>{if(confirm(`Terminate arena ${t.name}?`)) socket.emit('adminDeleteRoom', t.id)}} className="bg-red-950/40 px-4 py-2 rounded-xl text-red-500 font-black text-[10px] hover:bg-red-600 hover:text-white transition-all tracking-widest">TERMINATE</button>
                             </div>
                         ))}
                     </div>
@@ -391,7 +375,7 @@ const App = () => {
                   <div className="flex flex-col font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">STAKES</span><span className="text-[#fbbf24] text-base md:text-xl font-black">${t.sb}/${t.bb}</span></div>
                   <div className="flex flex-col items-end font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">SEATS</span><span className="text-white/80 font-mono text-[10px] md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
                 </div>
-                <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-5 md:p-8 bg-emerald-600 rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] font-black uppercase">ENTER ARENA</button>
+                <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-5 md:p-8 bg-emerald-600 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] font-black uppercase">ENTER ARENA</button>
               </div>
             ))}
         </main>
@@ -415,6 +399,7 @@ const App = () => {
 
   return (
     <div className="h-screen bg-[#020408] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter">
+      {/* INTELLIGENCE MODAL */}
       {intelExpanded && (
         <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-md p-6 pt-[100px] flex flex-col animate-in fade-in duration-300">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[800px] mx-auto bg-slate-900/90 border border-yellow-500/20 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
@@ -433,9 +418,9 @@ const App = () => {
                         <div className="flex flex-col w-full pl-6 mt-1 gap-1">
                           {hand.summaries.map((s, si) => (
                             <div key={si} className="flex flex-wrap items-baseline gap-2 text-left">
-                              <span className="text-[12px] font-black text-white uppercase">{s.name}</span>
-                              <span className="text-[12px] font-black text-emerald-400">{s.amount}</span>
-                              <span className="text-[10px] font-black text-white/40 uppercase italic">/ {s.rank}</span>
+                              <span className="text-[12px] font-black text-white uppercase">{String(s.name)}</span>
+                              <span className="text-[12px] font-black text-emerald-400">{String(s.amount)}</span>
+                              <span className="text-[10px] font-black text-white/40 uppercase italic">/ {String(s.rank)}</span>
                             </div>
                           ))}
                         </div>
@@ -447,6 +432,7 @@ const App = () => {
         </div>
       )}
 
+      {/* SETTINGS MODAL */}
       {showVisualControls && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
             <div className="w-full max-w-[1000px] h-[90vh] bg-slate-900 border-2 border-yellow-500/20 rounded-[3rem] p-10 flex flex-col gap-6 overflow-y-auto scrollbar-hide">
@@ -476,67 +462,27 @@ const App = () => {
                         </div>
                       </div>
                     ))}
-                    <div className="flex flex-col gap-4 bg-black/40 p-6 rounded-2xl border border-white/5">
-                        <h4 className="text-yellow-500 font-black">Arena HUD & Zoom</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[10px] text-white/40">Table Zoom ({visuals.tableZoom.toFixed(2)})</label>
-                                <input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-yellow-500" />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[10px] text-white/40">Footer Height ({visuals.footerHeight}px)</label>
-                                <input type="range" min="100" max="600" step="1" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-yellow-500" />
-                            </div>
-                        </div>
-                    </div>
                 </div>
                 <button onClick={() => setShowVisualControls(false)} className="w-full py-6 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-2xl text-black font-black">SAVE ARENA CONFIG</button>
             </div>
         </div>
       )}
 
-      {showRulesModal && (
-        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 md:p-12" onClick={() => setShowRulesModal(false)}>
-          <div className="w-full max-w-[600px] bg-slate-900 border-2 border-cyan-500/40 rounded-[2.5rem] p-8 md:p-12 shadow-[0_0_80px_rgba(34,211,238,0.2)] animate-in zoom-in duration-300 relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
-              <h3 className="text-xl md:text-3xl text-cyan-400 font-black tracking-tighter uppercase flex items-center gap-3"><BookOpen size={24} /> {activeVariant?.name} Manual</h3>
-              <button onClick={() => setShowRulesModal(false)} className="text-white/40 hover:text-white transition-colors p-2 bg-white/5 rounded-full"><X size={24}/></button>
-            </div>
-            <div className="space-y-6">
-              {(activeVariant?.rules || []).map((rule, idx) => (
-                <div key={idx} className="flex gap-4 items-start group"><span className="flex-shrink-0 w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] flex items-center justify-center font-black">0{idx + 1}</span><p className="text-sm md:text-lg text-white/80 font-black leading-snug uppercase tracking-tight">{rule}</p></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isBrokeStatus && (
-          <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-6">
-            <div className="w-full max-w-[400px] p-8 bg-slate-900 border-2 border-red-500 rounded-3xl text-center shadow-[0_0_100px_rgba(239,68,68,0.4)] font-black">
-              <AlertTriangle size={64} className="text-red-500 animate-pulse mb-4 mx-auto" />
-              <h2 className="text-xl md:text-3xl font-black mb-2 uppercase">Busted!</h2>
-              <button onClick={() => socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: buyInAmount })} className="w-full p-5 bg-emerald-600 text-white rounded-2xl shadow-xl animate-bounce font-black uppercase text-xs">REBUY ${buyInAmount.toLocaleString()}</button>
-              <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="mt-4 text-white/20 hover:text-white text-[9px] uppercase underline">EXIT ARENA</button>
-            </div>
-          </div>
-      )}
-
+      {/* HEADER */}
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)]" style={{ height: `calc(${headerHeight}px + env(safe-area-inset-top))` }}>
         <div className="flex items-center gap-1.5 overflow-hidden flex-1">
             <button onClick={() => setShowRulesModal(true)} className="bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left">
               <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1">This Hand: <Info size={8} /></span>
-              <span className="text-white text-[10px] md:text-sm truncate leading-none">{String(activeVariant?.name || "Hold'em")}</span>
+              <span className="text-white text-[10px] md:text-sm truncate leading-none font-mono italic">{String(activeVariant?.name || "Hold'em")}</span>
             </button>
             <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]">
               <span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span>
-              <select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full">
+              <select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full font-mono italic">
                 {Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>))}
               </select>
             </div>
         </div>
         <div className="flex items-center gap-1.5 md:gap-4">
-          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 md:px-4 py-2 rounded-lg font-mono text-[10px] md:text-[13px] shadow-inner h-[40px] md:h-[52px]"><TrendingUp size={12} className="text-cyan-400" /><span className="text-[#fbbf24] font-black">{Math.round(heroWinProb)}%</span></div>
           <div className="flex gap-1 md:gap-2.5 items-center">
               <button onClick={() => socket.emit('adminAddBot', { roomId: currentRoomId })} className={`${isConnected ? 'text-indigo-400' : 'text-white/20'} p-2 md:p-3 bg-white/5 border border-white/10 rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg active:scale-95`} title={isConnected ? "Add Bot" : "Connecting..."}>{isConnected ? <Bot size={18}/> : <Activity size={18} className="animate-pulse" />}</button>
               <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 md:p-3 border border-white/10 rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors`}><Eye size={18}/></button>
@@ -546,6 +492,7 @@ const App = () => {
         </div>
       </header>
 
+      {/* TABLE */}
       <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-[#0f3d2e]/40 to-black overflow-hidden px-1 py-1 font-black uppercase">
         <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center font-black">
             <div className="absolute inset-0 bg-[#0f3d2e]/60 rounded-[50%] border-[3vw] md:border-[2.5vw] border-slate-900/80 shadow-[inset_0_0_20vw_rgba(0,0,0,0.9),0_20px_100px_rgba(0,0,0,0.5)] border-double font-black uppercase overflow-hidden">
@@ -571,20 +518,27 @@ const App = () => {
         </div>
       </main>
 
+      {/* FOOTER ACTIONS */}
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-[#05070a]/95 backdrop-blur-3xl border-t border-white/5 flex flex-col z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]">
         <div className="flex-1 flex flex-col justify-center pt-2 md:pt-4 pb-2 px-3 md:px-10 relative bg-white/[0.02] shadow-inner font-black uppercase overflow-visible">
           {activeVariant?.id === 'HILOW' && heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
             <>
               <div className="absolute top-2 left-2 z-[110] animate-in slide-in-from-left duration-500">
                  <div className="flex flex-col items-start bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-500/20 shadow-xl">
-                     <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">Low Hand Strength</span>
-                     <span className="text-[10px] md:text-[18px] text-emerald-400 font-black uppercase leading-none font-mono italic">{heroPlayerObj.lowStrength || "..."}</span>
+                     <div className="flex flex-col items-start">
+                        <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">Low Hand Strength</span>
+                        <span className="text-[10px] md:text-[18px] text-emerald-400 font-black uppercase leading-none font-mono italic mb-0.5">{String(heroPlayerObj.lowStrength || "...")}</span>
+                        <span className="text-[10px] md:text-[14px] text-yellow-400 font-mono italic leading-none font-black">{Math.round(heroPlayerObj.winProbabilityLow || 0)}% WIN</span>
+                     </div>
                  </div>
               </div>
               <div className="absolute top-2 right-2 z-[110] animate-in slide-in-from-right duration-500">
                  <div className="flex flex-col items-end bg-purple-950/40 px-3 py-1 rounded-lg border border-purple-500/20 shadow-xl">
-                     <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">High Hand Strength</span>
-                     <span className="text-[10px] md:text-[18px] text-purple-400 font-black uppercase leading-none font-mono italic">{heroPlayerObj.strength || "..."}</span>
+                     <div className="flex flex-col items-end">
+                        <span className="text-[5px] md:text-[8px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">High Hand Strength</span>
+                        <span className="text-[10px] md:text-[18px] text-purple-400 font-black uppercase leading-none font-mono italic mb-0.5">{String(heroPlayerObj.strength || "...")}</span>
+                        <span className="text-[10px] md:text-[14px] text-yellow-400 font-mono italic leading-none font-black">{Math.round(heroPlayerObj.winProbabilityHigh || 0)}% WIN</span>
+                     </div>
                  </div>
               </div>
             </>
@@ -592,22 +546,27 @@ const App = () => {
 
           {activeIdx === heroIdx && phase !== PHASES.IDLE && heroPlayerObj ? (
             <div className="flex flex-col gap-3 md:gap-5 animate-in slide-in-from-bottom duration-500 items-center w-full font-black uppercase">
-                {Number(heroPlayerObj.chips) > 0 && (
-                  <div className="flex gap-2 w-full max-w-[700px] font-black uppercase">
-                    <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-[14px] hover:bg-white/15 transition-all font-black uppercase flex items-center justify-center tracking-widest">1/2 POT</button>
-                    <button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-[14px] hover:bg-white/15 transition-all font-black uppercase flex items-center justify-center tracking-widest">POT</button>
-                    <button onClick={handleAllIn} className="flex-1 h-8 md:h-12 bg-red-950/50 border border-red-500/40 rounded-lg text-[9px] md:text-[14px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center tracking-widest shadow-lg">ALL-IN</button>
-                  </div>
+                {activeVariant?.id !== 'HILOW' && (
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-900/60 px-6 py-2 rounded-2xl border border-white/5 flex flex-col items-center">
+                        <span className="text-[7px] md:text-[10px] text-white/40 tracking-[0.2em] mb-1 uppercase">Current Evaluation</span>
+                        <span className="text-sm md:text-xl text-purple-400 italic mb-0.5 font-black uppercase tracking-tight font-mono">{String(heroPlayerObj.strength || "...")}</span>
+                        <span className="text-xs md:text-lg text-yellow-400 font-mono font-black italic">{Math.round(heroWinProb)}% Win Probability</span>
+                    </div>
                 )}
+                <div className="mt-12 flex gap-2 w-full max-w-[700px] font-black uppercase">
+                    <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(potAmount * 0.5))} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-[14px] hover:bg-white/15 transition-all font-black uppercase flex items-center justify-center tracking-widest font-mono">1/2 POT</button>
+                    <button onClick={()=>handleAction('RAISE', highestBet + potAmount)} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-[14px] hover:bg-white/15 transition-all font-black uppercase flex items-center justify-center tracking-widest font-mono">POT</button>
+                    <button onClick={handleAllIn} className="flex-1 h-8 md:h-12 bg-red-950/50 border border-red-500/40 rounded-lg text-[9px] md:text-[14px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center tracking-widest shadow-lg font-mono">ALL-IN</button>
+                </div>
                 <div className="flex flex-row gap-2 w-full items-center justify-center font-black">
-                    <button onClick={()=>handleAction('FOLD')} className="flex-1 h-12 md:h-20 bg-gradient-to-b from-red-950/80 to-red-900/60 border border-red-500/30 rounded-xl tracking-widest hover:brightness-125 transition-all font-black text-[11px] md:text-lg shadow-2xl uppercase">FOLD</button>
-                    <button onClick={()=>handleAction('CALL')} className="flex-1 h-12 md:h-20 bg-gradient-to-b from-indigo-950/80 to-indigo-900/60 border border-indigo-400/30 rounded-xl text-[11px] md:text-2xl tracking-widest hover:brightness-125 font-black shadow-2xl uppercase px-2 truncate">{highestBet > heroPlayerObj.currentBet ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `ALL-IN` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) : 'CHECK'}</button>
+                    <button onClick={()=>handleAction('FOLD')} className="flex-1 h-12 md:h-20 bg-gradient-to-b from-red-950/80 to-red-900/60 border border-red-500/30 rounded-xl tracking-widest hover:brightness-125 transition-all font-black text-[11px] md:text-lg shadow-2xl uppercase font-mono">FOLD</button>
+                    <button onClick={()=>handleAction('CALL')} className="flex-1 h-12 md:h-20 bg-gradient-to-b from-indigo-950/80 to-indigo-900/60 border border-indigo-400/30 rounded-xl text-[11px] md:text-2xl tracking-widest hover:brightness-125 font-black shadow-2xl uppercase px-2 truncate font-mono">{highestBet > heroPlayerObj.currentBet ? (highestBet - heroPlayerObj.currentBet >= heroPlayerObj.chips ? `ALL-IN` : `CALL $${(highestBet - heroPlayerObj.currentBet).toLocaleString()}`) : 'CHECK'}</button>
                     <div className="flex-[2] flex gap-2 items-center bg-[#0d1117] border border-yellow-500/20 p-1 md:p-2 rounded-xl shadow-[inset_0_2px_20px_rgba(0,0,0,1)] font-black uppercase overflow-hidden">
                         <div className="flex items-center bg-black/80 px-3 md:px-6 rounded-lg border border-white/5 h-10 md:h-16 font-black uppercase flex-1 shadow-inner group">
                             <span className="text-yellow-500 text-[12px] md:text-2xl font-mono mr-1.5 animate-pulse">$</span>
                             <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center font-mono text-sm md:text-4xl text-yellow-400 outline-none font-black tracking-tighter" />
                         </div>
-                        <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-10 md:h-16 bg-gradient-to-r from-yellow-600 to-amber-700 border border-yellow-400/30 rounded-lg flex items-center justify-center hover:brightness-125 font-black uppercase text-[10px] md:text-2xl shadow-2xl tracking-tighter group">
+                        <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-10 md:h-16 bg-gradient-to-r from-yellow-600 to-amber-700 border border-yellow-400/30 rounded-lg flex items-center justify-center hover:brightness-125 font-black uppercase text-[10px] md:text-2xl shadow-2xl tracking-tighter group font-mono">
                             <Zap size={18} className="mr-1 text-black group-hover:scale-125 transition-transform"/> BET
                         </button>
                     </div>
@@ -620,15 +579,15 @@ const App = () => {
                         <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.3em] text-[10px] md:text-xl uppercase text-center px-4 drop-shadow-[0_0_20px_rgba(251,191,36,0.7)] bg-yellow-400/5 py-1 rounded-full border border-yellow-400/10">
                             <Trophy size={14} className="md:size-6" /> 
                             {showdownWinners.length === 1 
-                              ? (showdownWinners[0].rank === "!" ? `${showdownWinners[0].name} SWEEPS POT!` : `${showdownWinners[0].name} WINS WITH ${showdownWinners[0].rank}`)
-                              : (showdownWinners.every(w => w.name === showdownWinners[0].name) ? `${showdownWinners[0].name} WON BOTH POTS!` : `POT SPLIT: ${showdownWinners[currentShowdownIdx].name}`)
+                              ? (showdownWinners[0].rank === "!" ? `${String(showdownWinners[0].name)} SWEEPS POT!` : `${String(showdownWinners[0].name)} WINS WITH ${String(showdownWinners[0].rank)}`)
+                              : (showdownWinners.every(w => w.name === showdownWinners[0].name) ? `${String(showdownWinners[0].name)} WON BOTH POTS!` : `POT SPLIT: ${String(showdownWinners[currentShowdownIdx].name)}`)
                             }
                         </div>
                         <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-8 px-4 justify-center no-scrollbar pb-1 overflow-visible">
                             {showdownWinners[currentShowdownIdx] && (
                                 <div key={currentShowdownIdx} className="flex items-center gap-4 md:gap-8 bg-slate-950/90 p-3 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border-2 border-yellow-500/40 shadow-[0_0_60px_rgba(0,0,0,0.8)] min-w-[240px] md:min-w-[500px] animate-showdown-card-pop shrink-0">
-                                    <div className="flex flex-col items-center shrink-0">
-                                        <div className="text-white font-black text-[12px] md:text-2xl drop-shadow-2xl uppercase truncate max-w-[80px] md:max-w-none mb-0.5 tracking-tighter font-mono italic">{String(showdownWinners[currentShowdownIdx].name)}</div>
+                                    <div className="flex flex-col items-center shrink-0 font-mono">
+                                        <div className="text-white font-black text-[12px] md:text-2xl drop-shadow-2xl uppercase truncate max-w-[80px] md:max-w-none mb-0.5 tracking-tighter italic">{String(showdownWinners[currentShowdownIdx].name)}</div>
                                         <div className="bg-gradient-to-r from-yellow-400 to-amber-600 text-black px-3 py-0.5 rounded-full font-mono text-[10px] md:text-xl font-black shadow-inner tracking-widest">+${(showdownWinners[currentShowdownIdx].amount || 0).toLocaleString()}</div>
                                     </div>
                                     <div className="flex gap-1 md:gap-2 items-center justify-center">
@@ -653,18 +612,12 @@ const App = () => {
                                     <span className="text-yellow-500 text-[9px] md:text-[13px] animate-pulse mb-1 font-black tracking-widest">ACTION ON</span>
                                     <span className="text-white text-sm md:text-4xl font-mono italic drop-shadow-2xl uppercase leading-none truncate max-w-[100px] md:max-w-none">{String(players[activeIdx]?.name || "OPPONENT")}</span>
                                 </div>
-                                {heroPlayerObj && !heroPlayerObj.isFolded && (
+                                {heroPlayerObj && !heroPlayerObj.isFolded && activeVariant?.id !== 'HILOW' && (
                                   <div className="flex items-center gap-4 md:gap-8 bg-slate-950/60 p-3 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-white/5 shadow-2xl">
                                       <div className="flex flex-col">
                                           <span className="text-white/30 text-[7px] md:text-[11px] font-black tracking-widest uppercase">Hand Strength</span>
-                                          <span className="text-[15px] md:text-[24px] text-purple-400 font-black uppercase tracking-tight italic">
-                                              {activeVariant?.id === 'HILOW' ? `${heroPlayerObj.strength || "..."} / ${heroPlayerObj.lowStrength || "..."}` : (heroPlayerObj.strength || "...")}
-                                          </span>
-                                      </div>
-                                      <div className="h-8 md:h-14 w-px bg-white/10" />
-                                      <div className="flex flex-col items-end">
-                                          <span className="text-white/30 text-[7px] md:text-[11px] font-black tracking-widest">WIN PROB.</span>
-                                          <span className="text-yellow-400 text-sm md:text-3xl font-mono font-black italic">{Math.round(heroWinProb)}%</span>
+                                          <span className="text-[15px] md:text-[24px] text-purple-400 font-black uppercase tracking-tight italic mb-1 font-mono">{String(heroPlayerObj.strength || "...")}</span>
+                                          <span className="text-yellow-400 text-sm md:text-lg font-mono tracking-tighter italic font-black">{Math.round(heroWinProb)}% Win Prob.</span>
                                       </div>
                                   </div>
                                 )}
