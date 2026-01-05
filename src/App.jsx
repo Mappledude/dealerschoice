@@ -177,9 +177,9 @@ const App = () => {
 
   // Responsive UI Constant Detection
   const isMobile = window.innerWidth < 768;
-  const headerHeight = isMobile ? 48 : 64; 
+  const headerHeight = isMobile ? 56 : 72; // Increased header height to fit larger text
 
-  // Layout Adjustment States - Move Table Zoom into State
+  // Layout Adjustment States
   const [visuals, setVisuals] = useState({
     heroCardScale: 2.2,
     heroCardY: -9,
@@ -421,7 +421,7 @@ const App = () => {
   return (
     <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       
-      {/* Visual Adjustments Overlay - Made Transparent and Real-Time Interactive */}
+      {/* Visual Adjustments Overlay */}
       {showVisualControls && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-[2px] p-4">
             <div className="w-full max-w-[500px] bg-slate-900/60 border border-white/10 rounded-3xl p-6 md:p-8 flex flex-col gap-5 shadow-2xl max-h-[80vh] overflow-y-auto">
@@ -537,21 +537,21 @@ const App = () => {
       )}
 
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black" style={{ height: `${headerHeight}px` }}>
-        <div className="flex items-center gap-1 overflow-hidden flex-1">
-            <div className="bg-white/5 px-1.5 py-1 md:py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[55px] md:min-w-[80px] h-full">
-              <span className="text-[#fbbf24] text-[5px] md:text-[8px] leading-none mb-0.5 uppercase">This Hand:</span>
-              <span className="text-white text-[7px] md:text-xs truncate leading-none">{String(activeVariant?.name || "Hold'em")}</span>
+        <div className="flex items-center gap-1.5 overflow-hidden flex-1">
+            <div className="bg-white/5 px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]">
+              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">This Hand:</span>
+              <span className="text-white text-[10px] md:text-sm truncate leading-none">{String(activeVariant?.name || "Hold'em")}</span>
             </div>
             
-            <div className="bg-white/5 border border-white/10 px-1.5 py-1 md:py-1.5 rounded-lg md:rounded-xl flex flex-col justify-center shadow-inner min-w-[55px] md:min-w-[80px] h-full">
-                <span className="text-cyan-400 text-[5px] md:text-[8px] leading-none mb-0.5 uppercase">On My Deal:</span>
+            <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-lg md:rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]">
+                <span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span>
                 <select 
                     value={pendingVariantId} 
                     onChange={(e) => { 
                         setPendingVariantId(e.target.value); 
                         socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); 
                     }} 
-                    className="bg-transparent text-white outline-none text-[7px] md:text-xs cursor-pointer font-black uppercase appearance-none leading-none w-full"
+                    className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full"
                 >
                     {Object.entries(VARIANTS).map(([k,v]) => (
                         <option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>
@@ -560,12 +560,15 @@ const App = () => {
             </div>
         </div>
         
-        <div className="flex items-center gap-1 md:gap-3">
-          <div className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 md:px-3 py-1 md:py-1.5 rounded-lg font-mono text-[8px] md:text-[11px] shadow-inner h-[32px] md:h-auto"><TrendingUp size={10} className="text-cyan-400" /><span className="text-[#fbbf24] font-black">{Math.round(heroWinProb || 0)}%</span></div>
-          <div className="flex gap-0.5 md:gap-2 items-center">
-              <button onClick={addBot} className="text-indigo-400 p-1.5 md:p-2 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[32px] w-[32px] flex items-center justify-center"><Bot size={14}/></button>
-              <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-1.5 md:p-2 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[32px] w-[32px] flex items-center justify-center"><Settings size={14}/></button>
-              <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-1.5 md:p-2 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[32px] w-[32px] flex items-center justify-center"><LogOut size={14}/></button>
+        <div className="flex items-center gap-1.5 md:gap-4">
+          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 md:px-4 py-2 rounded-lg font-mono text-[10px] md:text-[13px] shadow-inner h-[40px] md:h-[52px]">
+            <TrendingUp size={12} className="text-cyan-400" />
+            <span className="text-[#fbbf24] font-black">{Math.round(heroWinProb || 0)}%</span>
+          </div>
+          <div className="flex gap-1 md:gap-2.5 items-center">
+              <button onClick={addBot} className="text-indigo-400 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><Bot size={18}/></button>
+              <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><Settings size={18}/></button>
+              <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><LogOut size={18}/></button>
           </div>
         </div>
       </header>
