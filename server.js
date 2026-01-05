@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.4.9-PRO";
+const VERSION = "v1.5.0-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -66,13 +66,10 @@ const rankHand = (cards, isAceLow = false) => {
     for (let i = 0; i <= uniqueRanks.length - 5; i++) {
         if (uniqueRanks[i] === uniqueRanks[i + 4] + 4) { isStraight = true; straightHigh = uniqueRanks[i]; break; }
     }
+    // Wheel check
     const wheelRanks = [14, 5, 4, 3, 2];
-    const lowWheelRanks = [14, 5, 4, 3, 2]; // Standard 5-high wheel
-    
-    // Check for wheel when Ace is present
-    if (!isStraight && uniqueRanks.includes(14) && [5,4,3,2].every(r => uniqueRanks.includes(r))) {
-        isStraight = true; 
-        straightHigh = 5; 
+    if (!isStraight && !isAceLow && uniqueRanks.includes(14) && [5,4,3,2].every(r => uniqueRanks.includes(r))) {
+        isStraight = true; straightHigh = 5; 
         compArr = [5, 4, 3, 2, 1]; 
     }
   }
@@ -116,18 +113,21 @@ const getBestHand = (hole, comm, variantId) => {
         });
     });
   } else if (variantId === 'HILOW') {
-    // Independent Construction: Best 2-of-4 for High, Best 2-of-4 for Low
+    // Rule: Exactly 2 hole + 3 board. Independent selection for High and Low.
+    // 1. Calculate Best High
     holePairs.forEach(h => {
         boardCombos.forEach(b => {
-            // High Evaluation
-            const hRes = rankHand([...h, ...b], false);
-            if (hRes.power > bestHigh.power) bestHigh = hRes;
-            
-            // Low Evaluation (A=1, No Qualifier)
-            // In Absolute Low, the "Best" hand is the one with the MINIMUM standard power when A=1
-            const lRes = rankHand([...h, ...b], true);
-            if (!bestLow || lRes.power < bestLow.power) {
-                bestLow = { ...lRes, name: lRes.name.replace('High Card', 'Low') };
+            const res = rankHand([...h, ...b], false);
+            if (res.power > bestHigh.power) bestHigh = res;
+        });
+    });
+    // 2. Calculate Best Low (Ace is 1, Absolute Low wins)
+    holePairs.forEach(h => {
+        boardCombos.forEach(b => {
+            const res = rankHand([...h, ...b], true);
+            // In Absolute Low, the "best" hand is the one with the MINIMUM standard power when A=1
+            if (!bestLow || res.power < bestLow.power) {
+                bestLow = { ...res, name: res.name.replace('High Card', 'Low') };
             }
         });
     });
@@ -162,7 +162,6 @@ const getBestHand = (hole, comm, variantId) => {
           });
       }
   } else if (variantId === 'MUFLIS') {
-      // In Muflis, Aces are 1, and the Lowest standard hand wins
       combinations([...hole, ...comm], 5).forEach(c => {
           const res = rankHand(c, true); 
           if (bestHigh.power === -1 || res.power < bestHigh.power) bestHigh = res;
@@ -182,7 +181,7 @@ const updateRoomStrengths = (roomId) => {
             const evaluation = getBestHand(p.hand, room.community, variantId);
             p.strength = evaluation.high.name;
             p.strengthPower = evaluation.high.power;
-            p.lowStrength = evaluation.low ? evaluation.low.name : null;
+            p.lowStrength = evaluation.low ? evaluation.low.name : (variantId === 'HILOW' ? "Evaluating..." : null);
             const rawProb = (p.strengthPower / (9 * Math.pow(15, 7))) * 100;
             p.winProbability = variantId === 'MUFLIS' ? Math.max(5, 100 - rawProb) : Math.min(99, Math.max(5, rawProb));
         }
@@ -209,10 +208,9 @@ const processShowdown = (roomId) => {
         const evals = active.map(p => ({ player: p, res: getBestHand(p.hand, room.community, variantId) }));
         
         if (variantId === 'HILOW') {
-            // Absolute Low Logic: High and Low halves are always split
             const half = totalPot / 2;
             
-            // 1. High Winner
+            // 1. Award High
             const highSorted = [...evals].sort((a, b) => b.res.high.power - a.res.high.power);
             const maxHiPower = highSorted[0].res.high.power;
             const hiWinners = highSorted.filter(e => e.res.high.power === maxHiPower);
@@ -222,7 +220,7 @@ const processShowdown = (roomId) => {
                 room.showdownWinners.push({ name: String(w.player.name), rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: hiShare });
             });
 
-            // 2. Low Winner (Minimize power with A=1)
+            // 2. Award Low
             const lowSorted = [...evals].sort((a, b) => a.res.low.power - b.res.low.power);
             const minLoPower = lowSorted[0].res.low.power;
             const loWinners = lowSorted.filter(e => e.res.low.power === minLoPower);
