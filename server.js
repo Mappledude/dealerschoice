@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v2.0.3-PRO";
+const VERSION = "v2.0.4-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -25,10 +25,11 @@ const variantNames = {
   MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks"
 };
 
+// Human names for bots
 const BOT_NAMES = [
   "Doyle", "Stu", "Phil", "Johnny", "Vanessa", "Chris", "Annie", "Erik", "Daniel", 
   "Gus", "Tom", "Scotty", "Huck", "Jennifer", "Barry", "Justin", "Liv", "Maria", 
-  "Antonio", "Vegas Vic", "Sharky", "Aces", "Bluff Master", "Foldy", "River Rat"
+  "Antonio", "Vic", "Fedor", "Bryn", "Negreanu", "Ivey", "Hellmuth"
 ];
 
 let profiles = []; 
@@ -269,15 +270,15 @@ const processShowdown = (roomId) => {
 
     const totalDuration = allShowdownWinners.length * 4000;
     setTimeout(() => {
+        // AUTOMATIC BOT REBUY
         room.players.forEach(p => { 
           if (p) { 
             p.waitingForNextHand = false; 
             p.isWinner = false; 
-            
             if (p.isBot && p.chips < Number(room.bb)) {
-              const rebuyAmount = room.maxBuy || 10;
-              p.chips += rebuyAmount;
-              io.to(roomId).emit('log', { name: "SYSTEM", action: `${p.name} AUTOMATICALLY REBOUGHT FOR $${rebuyAmount.toFixed(2)}`, type: 'phase' });
+              const rebuyAmt = room.maxBuy || 10;
+              p.chips += rebuyAmt;
+              io.to(roomId).emit('log', { name: "SYSTEM", action: `${p.name} AUTOMATICALLY REBOUGHT FOR $${rebuyAmt.toFixed(2)}`, type: 'phase' });
             }
           } 
         });
@@ -456,6 +457,7 @@ const runIgnition = (roomId) => {
   if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
   const dealerSeat = room.players[room.dealerIdx];
   
+  // RANDOMIZED VARIANT SELECTION FOR BOTS
   let variantId;
   if (dealerSeat.isBot) {
     const variants = Object.keys(holeCardsMap);
@@ -635,6 +637,7 @@ io.on('connection', (socket) => {
     const botId = Math.random().toString(36).slice(2, 7);
     const botBuyIn = room.maxBuy || 10;
     
+    // Pick a human name for the bot
     const randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
     
     room.players[emptyIdx] = { 
