@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v2.0.5-PRO";
+const VERSION = "v2.0.8-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -733,8 +733,8 @@ const App = () => {
       <footer style={{ height: visuals.footerHeight }} className="bg-black/95 border-t border-white/10 z-[100] pt-0 px-2 pb-2 md:p-8 shrink-0 shadow-[0_-15px_50px_rgba(0,0,0,0.7)] flex flex-col items-center justify-start">
         {phase === PHASES.SHOWDOWN && currentWinner ? (
           <div key={currentShowdownIdx} className="h-full flex flex-col items-center justify-center animate-in zoom-in duration-700">
-            <div className="flex items-center gap-4 text-yellow-400 text-2xl md:text-5xl mb-4 rank-shimmer font-black italic tracking-tighter uppercase text-center">
-              <Trophy size={48} className="drop-shadow-lg" /> 
+            <div className="flex items-center gap-2 md:gap-4 text-yellow-400 text-[2.6vw] sm:text-lg md:text-4xl mb-2 md:mb-4 rank-shimmer font-black italic tracking-tighter uppercase text-center whitespace-nowrap">
+              <Trophy className="w-3 h-3 md:w-9 md:h-9 drop-shadow-lg" /> 
               {currentWinner.name} won with {currentWinner.rank === '!' ? 'a muck' : currentWinner.rank} (${currentWinner.amount.toFixed(2)})
             </div>
             
@@ -753,7 +753,7 @@ const App = () => {
           <div className={`flex flex-col items-center w-full max-w-4xl mx-auto transition-all duration-500 ${activeIdx !== heroIdx && phase !== PHASES.IDLE ? 'opacity-30 grayscale pointer-events-none scale-95' : ''}`}>
              
              {heroPlayerObj && phase !== PHASES.IDLE && (
-               <div className="flex justify-between w-full px-2 mt-[-10px]">
+               <div className="flex justify-between w-full px-2 mt-[-6px]">
                   <div className="flex flex-col items-start min-w-[120px] md:min-w-[140px]">
                     {activeVariant?.id === 'HILOW' && (
                       <>
