@@ -112,8 +112,10 @@ const Seat = ({
     const currentCardScale = isHero ? visuals.heroCardScale : visuals.oppCardScale;
     const currentCardY = isHero ? visuals.heroCardY : visuals.oppCardY;
 
-    const timeRatio = timeRemaining / 15;
-    const timerColor = timeRemaining < 5 ? 'rgb(239, 68, 68)' : timeRemaining < 10 ? 'rgb(245, 158, 11)' : 'rgb(34, 211, 238)';
+    // Timer Logic for the "Dash Decay" indicator
+    const totalDashes = 15;
+    const activeDashes = Math.max(0, Math.ceil(timeRemaining));
+    const timerColorClass = timeRemaining < 5 ? 'text-red-500' : timeRemaining < 10 ? 'text-amber-400' : 'text-cyan-400';
     const isUrgent = timeRemaining < 5 && isActiveTurn;
 
     return (
@@ -154,43 +156,10 @@ const Seat = ({
 
             <div 
                 style={{ transform: `translateY(${visuals.badgeY}px)` }}
-                className={`relative z-50 flex flex-col items-center p-1 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[180px] shadow-2xl overflow-hidden
-                  ${isActiveTurn ? 'border-cyan-400/50 ring-1 ring-cyan-400/20 scale-105 shadow-[0_0_200px_rgba(34,211,238,0.1)]' : 'border-white/10'} 
+                className={`relative z-50 flex flex-col items-center p-2 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[180px] shadow-2xl
+                  ${isActiveTurn ? 'border-white/30 ring-2 ring-white/10 scale-105' : 'border-white/10'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 animate-pulse-glow' : ''}`}
             >
-                {isActiveTurn && timeRemaining > 0 && (
-                  <>
-                    <div 
-                      className="absolute inset-0 z-[-1] transition-all duration-1000 linear" 
-                      style={{ 
-                        background: `linear-gradient(to top, ${timerColor}22, transparent)`,
-                        height: `${(1 - timeRatio) * 100}%`,
-                        top: 'auto',
-                        bottom: 0
-                      }} 
-                    />
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
-                      <rect 
-                        x="0" y="0" width="100%" height="100%" 
-                        fill="none" 
-                        stroke={timerColor} 
-                        strokeWidth="4" 
-                        className="transition-all duration-1000 linear"
-                        style={{
-                          strokeDasharray: '1000',
-                          strokeDashoffset: (1000 - (timeRatio * 1000)).toString()
-                        }}
-                      />
-                    </svg>
-                    <div 
-                      className="absolute top-1 right-2 text-[10px] font-mono font-black animate-pulse" 
-                      style={{ color: timerColor }}
-                    >
-                      {timeRemaining}s
-                    </div>
-                  </>
-                )}
-
                 {isDealer && ( <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white shadow-[0_0_12px_rgba(220,38,38,0.9)] animate-pulse z-[110]" /> )}
                 
                 <div className="flex flex-col items-center gap-0 w-full relative z-10">
@@ -198,6 +167,14 @@ const Seat = ({
                       {player.isBot && <Bot size={8} className="text-indigo-400" />}
                       <span className="text-[8.5px] md:text-[14.5px] font-black text-white/90 uppercase tracking-tight truncate max-w-[60px] md:max-w-[100px]">{String(player.name || "Anon")}</span>
                     </div>
+
+                    {/* --- NEW DASH TIMER INDICATOR --- */}
+                    {isActiveTurn && timeRemaining > 0 && (
+                      <div className={`text-[8px] md:text-[10px] font-mono font-black tracking-[-0.1em] leading-none mb-1 transition-colors duration-300 ${timerColorClass}`}>
+                        {"-".repeat(activeDashes).padEnd(totalDashes, " ")}
+                      </div>
+                    )}
+
                     <span className={`text-[11px] md:text-[17px] font-mono font-black ${player.chips <= 1 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                 </div>
             </div>
@@ -217,8 +194,8 @@ const Seat = ({
                               style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${seatIdx * 0.1}s` }}>
                               {(isShowdown || isHero) && ( 
                                 <>
-                                  <span className={`text-[9px] md:text-[12px] font-black leading-none ${suitColor}`}>{String(c.value)}</span>
-                                  <span className={`text-[9px] md:text-[16px] leading-none ${suitColor}`}>{String(c.suit)}</span>
+                                  <span className={`text-[8px] md:text-[11px] font-black leading-none ${suitColor}`}>{String(c.value)}</span>
+                                  <span className={`text-[7px] md:text-[13px] leading-none ${suitColor}`}>{String(c.suit)}</span>
                                 </> 
                               )}
                           </div>
@@ -466,7 +443,6 @@ const App = () => {
     });
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
-  // Helper to format rank text into Title Case
   const formatRank = (rank) => {
     if (!rank) return "";
     return rank.toLowerCase()
@@ -475,20 +451,19 @@ const App = () => {
       .join(' ');
   };
 
-  // Function to generate the requested showdown string
   const getShowdownText = (winner, allWinners) => {
+    if (!winner) return "";
     const name = String(winner.name);
     const amt = Number(winner.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
     
-    // Check if it was an uncontested win (Mucked)
     if (winner.rank === "!") {
       return `${name} wins $${amt} (Mucked)`;
     }
 
-    const isHi = String(winner.rank).includes("HIGH:");
-    const isLo = String(winner.rank).includes("LOW:");
+    const rankStr = String(winner.rank).toUpperCase();
+    const isHi = rankStr.includes("HIGH:");
+    const isLo = rankStr.includes("LOW:");
 
-    // Detect Scoop (winning twice in a Hi-Low or 4-way segment)
     const occurrences = allWinners.filter(w => w.name === winner.name).length;
     const isHiLoGame = allWinners.some(w => String(w.rank).includes("HIGH:") || String(w.rank).includes("LOW:"));
 
@@ -544,10 +519,13 @@ const App = () => {
             });
             setShowdownWinners(sortedWinners);
             setWinning5Ids(d.winning5Ids || []);
-            const durationPerWinner = 4000;
-            const totalDuration = durationPerWinner * sortedWinners.length;
-            if (sortedWinners.length > 1) {
-                for (let i = 1; i < sortedWinners.length; i++) {
+            
+            const count = sortedWinners.length;
+            const durationPerWinner = count > 2 ? (10000 / count) : 5000;
+            const totalDuration = durationPerWinner * count;
+
+            if (count > 1) {
+                for (let i = 1; i < count; i++) {
                     setTimeout(() => setCurrentShowdownIdx(i), i * durationPerWinner);
                 }
             }
