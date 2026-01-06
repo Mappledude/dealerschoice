@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.7.6-PRO";
+const VERSION = "v1.7.13-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -104,10 +104,11 @@ const VARIANTS = {
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, 
   isDealer, potTransferring, timeRemaining, isHero, 
-  relativeIdx, seatIdx, visuals, showdownWinnersCount
+  relativeIdx, seatIdx, visuals, showdownWinnersCount, isDefaultWin
 }) => {
     if (!player || !displayPos) return null;
-    const isShowdown = phase === PHASES.SHOWDOWN && showdownWinnersCount > 1;
+    const isRevealed = isHero || (phase === PHASES.SHOWDOWN && !isDefaultWin);
+    
     const betOffset = BET_OFFSETS[relativeIdx] || { x: 0, y: 0 };
     const currentCardScale = isHero ? visuals.heroCardScale : visuals.oppCardScale;
     const currentCardY = isHero ? visuals.heroCardY : visuals.oppCardY;
@@ -166,9 +167,9 @@ const Seat = ({
                         const fanTranslation = offset * (player.hand.length > 2 ? 2.0 : 3.5);
                         return (
                           <div key={c.id || ci} 
-                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_200px_#fbbf24]' : 'border-white/20'}`} 
+                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isRevealed ? 'bg-white text-black' : 'bg-slate-800'} ${isRevealed && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_200px_#fbbf24]' : 'border-white/20'}`} 
                               style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${seatIdx * 0.1}s` }}>
-                              {(isShowdown || isHero) && ( <><span className="text-[9px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
+                              {isRevealed && ( <><span className="text-[9px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
                           </div>
                         );
                     })}
@@ -215,6 +216,10 @@ const App = () => {
   const [isJoining, setIsJoining] = useState(false);
   const joinLock = useRef(false);
   
+  // Admin Editing State
+  const [editingProfile, setEditingProfile] = useState(null);
+  const [editFormData, setEditFormData] = useState({ chips: 0, password: '' });
+
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
 
@@ -255,6 +260,11 @@ const App = () => {
     const isHandResolved = phase === PHASES.IDLE;
     return isOutOfChips && hasNoActiveBet && isHandResolved;
   }, [heroPlayerObj, phase]);
+
+  const isDefaultWin = useMemo(() => 
+    showdownWinners?.length > 0 && showdownWinners.every(w => w.rank === "!"),
+    [showdownWinners]
+  );
 
   const groupedLogs = useMemo(() => {
     const hands = [];
@@ -414,6 +424,16 @@ const App = () => {
     });
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
+  const handleUpdateProfile = useCallback(() => {
+      if (!editingProfile) return;
+      socket.emit('adminUpdatePlayer', {
+          uid: editingProfile.uid,
+          chips: Number(editFormData.chips),
+          password: editFormData.password !== "" ? editFormData.password.toLowerCase() : undefined
+      });
+      setEditingProfile(null);
+  }, [editingProfile, editFormData]);
+
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
@@ -454,8 +474,19 @@ const App = () => {
             });
             setShowdownWinners(sortedWinners);
             setWinning5Ids(d.winning5Ids || []);
-            const durationPerWinner = 4000;
-            const totalDuration = durationPerWinner * sortedWinners.length;
+            
+            const variantId = d.activeVariant?.id || 'HOLDEM';
+            const isDefWin = sortedWinners.length > 0 && sortedWinners.every(w => w.rank === "!");
+            
+            let totalDuration = 5000;
+            if (isDefWin) {
+                totalDuration = 1500;
+            } else if (variantId === 'HILOW') {
+                totalDuration = 10000;
+            }
+            
+            const durationPerWinner = totalDuration / sortedWinners.length;
+            
             if (sortedWinners.length > 1) {
                 for (let i = 1; i < sortedWinners.length; i++) {
                     setTimeout(() => setCurrentShowdownIdx(i), i * durationPerWinner);
@@ -497,7 +528,32 @@ const App = () => {
   );
 
   if (currentView === VIEWS.ADMIN) return (
-    <div className="h-screen bg-[#06080c] flex flex-col md:flex-row text-white uppercase font-black overflow-hidden pt-[env(safe-area-inset-top)]">
+    <div className="h-screen bg-[#06080c] flex flex-col md:flex-row text-white uppercase font-black overflow-hidden pt-[env(safe-area-inset-top)] relative">
+        {/* Profile Edit Overlay Modal */}
+        {editingProfile && (
+            <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/90 backdrop-blur-xl p-6">
+                <div className="w-full max-w-[400px] bg-slate-900 border-2 border-cyan-500 rounded-3xl p-8 flex flex-col gap-6 shadow-[0_0_80px_rgba(34,211,238,0.2)]">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                        <h3 className="text-xl text-cyan-400 flex items-center gap-2">
+                           <Edit3 size={20}/> EDIT {editingProfile.name}
+                        </h3>
+                        <button onClick={() => setEditingProfile(null)} className="text-white/40 hover:text-white"><X/></button>
+                    </div>
+                    <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-white/40">WALLET BALANCE</label>
+                            <input type="number" value={editFormData.chips} onChange={e=>setEditFormData({...editFormData, chips: e.target.value})} className="bg-black/40 border border-white/10 p-4 rounded-xl text-[#fbbf24] font-mono outline-none"/>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-white/40">NEW PASSWORD (OPTIONAL)</label>
+                            <input type="text" value={editFormData.password} onChange={e=>setEditFormData({...editFormData, password: e.target.value})} placeholder="••••••••" className="bg-black/40 border border-white/10 p-4 rounded-xl text-white outline-none"/>
+                        </div>
+                    </div>
+                    <button onClick={handleUpdateProfile} className="w-full py-5 bg-cyan-600 hover:bg-cyan-500 rounded-2xl transition-all shadow-lg active:scale-95 text-black">SAVE CHANGES</button>
+                </div>
+            </div>
+        )}
+
         <aside className="w-full md:w-64 border-b md:border-r border-white/10 p-3 md:p-8 flex flex-row md:flex-col gap-2 md:gap-4 bg-black/20 shrink-0">
             <h2 className="hidden md:flex text-[#fbbf24] items-center gap-2 mb-4"><ShieldCheck size={20}/> ADMIN</h2>
             <button onClick={()=>setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex-1 md:flex-none p-2.5 md:p-4 rounded-xl text-[9px] md:text-xs font-black ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black' : 'bg-white/5'}`}>PLAYERS</button>
@@ -524,20 +580,14 @@ const App = () => {
                                   <span className="text-emerald-400 font-mono text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span>
                                   <button 
                                     onClick={()=>{
-                                      const n = prompt("NEW WALLET", String(p.chips || 0)); 
-                                      if (n === null) return; 
-                                      const pass = prompt("NEW PASSWORD (LEAVE BLANK TO KEEP CURRENT)", "");
-                                      socket.emit('adminUpdatePlayer', {
-                                        uid: p.uid, 
-                                        chips: Number(n), 
-                                        password: pass !== "" ? pass.toLowerCase() : undefined
-                                      });
+                                      setEditingProfile(p);
+                                      setEditFormData({ chips: p.chips || 0, password: '' });
                                     }} 
-                                    className="text-cyan-400"
+                                    className="text-cyan-400 p-2 hover:bg-white/5 rounded-lg transition-colors"
                                   >
                                     <Edit3 size={14}/>
                                   </button>
-                                  <button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500"><Trash2 size={14}/></button>
+                                  <button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500 p-2 hover:bg-white/5 rounded-lg transition-colors"><Trash2 size={14}/></button>
                                 </div>
                             </div>
                         ))}
@@ -596,6 +646,7 @@ const App = () => {
             <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={16}/></button>
           </div>
         </header>
+        {/* REDESIGNED LOBBY LIST - TABLE VIEW */}
         <main className="flex-1 overflow-y-auto bg-[#06080c] scroll-smooth pt-4 px-2 md:px-12 pb-32">
             <div className="max-w-[1200px] mx-auto">
               {/* Table Header - Visible on Desktop */}
@@ -954,7 +1005,7 @@ const App = () => {
         <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center font-black">
             <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[3vw] md:border-[2vw] border-slate-900/60 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)] border-double font-black uppercase" />
             <div className="absolute inset-0 pointer-events-none z-20 font-black uppercase">
-              {(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} showdownWinnersCount={showdownWinners?.length || 0} />); })}
+              {(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} showdownWinnersCount={showdownWinners?.length || 0} isDefaultWin={isDefaultWin} />); })}
             </div>
             <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full h-full justify-center">
               {!potTransferring && ( <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}><div className={`text-[10vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div> )}
@@ -984,6 +1035,7 @@ const App = () => {
                       <Trophy size={14} className="md:size-6" /> 
                       {(() => {
                         const winner = showdownWinners[currentShowdownIdx];
+                        if (!winner) return "";
                         if (winner.rank === "!") return `${winner.name} Wins!`;
                         
                         const rankStr = String(winner.rank).toUpperCase();
@@ -995,10 +1047,10 @@ const App = () => {
                         const isScoop = showdownWinners.length > 1 && showdownWinners.every(w => w.name === showdownWinners[0].name);
                         
                         if (isScoop) {
-                           return `${winner.name} Wins with ${displayRank}`;
+                           return `${winner.name} wins the high game with ${displayRank}!`;
                         } else {
                            const prefix = showdownWinners.length > 1 ? "Split Pot: " : "";
-                           return `${prefix}${winner.name} Wins with ${displayRank}`;
+                           return `${prefix}${winner.name} wins the high game with ${displayRank}!`;
                         }
                       })()}
                     </div>
@@ -1010,7 +1062,15 @@ const App = () => {
                                     <div className="bg-yellow-500 text-black px-2 py-0.5 rounded-full font-mono text-[10px] md:text-2xl font-black shadow-inner">+${(showdownWinners[currentShowdownIdx].amount || 0).toLocaleString()}</div>
                                     <div className="text-yellow-400/80 text-[6px] md:text-[10px] tracking-widest uppercase mt-1.5 font-black italic">{showdownWinners[currentShowdownIdx].rank === "!" ? "" : String(showdownWinners[currentShowdownIdx].rank)}</div>
                                 </div>
-                                {showdownWinners[currentShowdownIdx].rank !== "!" && (
+                                
+                                {showdownWinners[currentShowdownIdx].rank === "!" ? (
+                                    <div className="flex items-center justify-center w-24 md:w-48 h-9 md:h-24">
+                                        <div className="relative">
+                                            <Coins size={48} className="text-yellow-400 animate-bounce" />
+                                            <Sparkles size={24} className="text-white absolute -top-2 -right-2 animate-pulse" />
+                                        </div>
+                                    </div>
+                                ) : (
                                     <div className="flex gap-1 md:gap-2 items-center justify-center">
                                         {(showdownWinners[currentShowdownIdx].hand || []).map((c, ci) => (
                                             <div key={ci} className="w-6 md:w-16 h-9 md:h-24 bg-white rounded-sm md:rounded-xl flex flex-col items-center justify-center text-black shadow-lg ring-1 ring-black/5 relative overflow-hidden" 
@@ -1031,7 +1091,7 @@ const App = () => {
                 {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-1 w-full max-w-[600px] font-black uppercase mt-4">
                         <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button>
-                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button>
+                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button>
                         <button disabled={activeIdx !== heroIdx} onClick={handleAllIn} className="flex-1 h-7 md:h-10 bg-red-900/30 border border-red-500/50 rounded-md text-[8px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center">ALL-IN</button>
                     </div>
                     <div className="flex flex-row gap-1 w-full items-center justify-center font-black">
@@ -1134,6 +1194,124 @@ const App = () => {
           .animate-bet-splash { animation: bet-splash 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
           html, body { overscroll-behavior-y: contain; height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; }
       `}</style>
+      
+      {/* Intelligence Access Modal (Integrated) */}
+      {intelExpanded && (
+        <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[950px] mx-auto bg-slate-900/95 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4 shrink-0">
+                <div className="flex items-center gap-2"><Eye className="text-[#fbbf24]" size={20} /><h3 className="text-xl text-[#fbbf24] font-black uppercase tracking-widest">Intelligence Access</h3></div>
+                <div className="flex items-center gap-3">
+                  <button onClick={handleCopyLogs} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest ${copySuccess ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-white/5 border-white/10 text-[#fbbf24] hover:bg-white/10'}`}>
+                    {copySuccess ? <Check size={14}/> : <Copy size={14}/>} {copySuccess ? 'Copied' : 'Copy Logs'}
+                  </button>
+                  <button onClick={() => setIntelExpanded(false)} className="text-white/40 hover:text-white"><X size={24} /></button>
+                </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto space-y-4 scrollbar-hide font-mono text-xs md:text-sm">
+                {groupedLogs.map((hand, hIdx) => {
+                  const isExpanded = expandedHands.has(hand.id) || (hIdx === 0 && hand.isOngoing);
+                  return (
+                    <div key={hand.id} className="flex flex-col border border-white/5 rounded-2xl bg-black/40 overflow-hidden shadow-lg group">
+                      <button 
+                        onClick={() => toggleHandExpansion(hand.id)}
+                        className={`flex flex-col items-start p-4 gap-2 transition-colors ${isExpanded ? 'bg-white/5' : 'hover:bg-white/10'}`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-4 overflow-hidden w-full">
+                            {isExpanded ? <ChevronDown size={14} className="text-white/40"/> : <ChevronRight size={14} className="text-white/40"/>}
+                            <span className="text-[12px] font-black uppercase text-[#fbbf24] tracking-[0.2em] border-b border-[#fbbf24]/30 pb-0.5 shrink-0">
+                              {hand.variantName} Hand
+                            </span>
+                            {!isExpanded && (
+                                <span className="text-[11px] text-white/60 truncate font-black tracking-tight leading-tight italic ml-2 border-l border-white/10 pl-4 uppercase">
+                                    {hand.winnerSummary}
+                                </span>
+                            )}
+                          </div>
+                          {hand.isOngoing && <span className="text-[9px] bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/30 animate-pulse uppercase ml-2">Active</span>}
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="flex flex-col border-t border-white/5 bg-black/60 animate-in slide-in-from-top-2 duration-300">
+                          {hand.actions.map(l => {
+                             let tag = "";
+                             let colorClass = "bg-white/5 text-white/50 border-white/10";
+                             const act = l.action.toUpperCase();
+                             
+                             if (l.type === 'win' || act.includes('WON')) { 
+                               tag = "[SHOWDOWN]"; 
+                               colorClass = "bg-purple-500/20 text-purple-400 border-purple-500/30"; 
+                             }
+                             else if (l.type === 'variant' || act.includes('CHOSEN') || act.includes('CHOICE') || act.includes('DEALER CHOICE')) { 
+                               tag = "[DEALER'S CHOICE]"; 
+                               colorClass = "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"; 
+                             }
+                             else if (act.includes('RAISED')) {
+                               tag = "[RAISE]";
+                               colorClass = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+                             }
+                             else if (act.includes('CALLED') || act.includes('POSTED')) {
+                               tag = "[CALL/POST]";
+                               colorClass = "bg-white/10 text-white/90 border-white/20";
+                             }
+                             else if (act.includes('BET')) {
+                               tag = "[BET]";
+                               colorClass = "bg-indigo-500/20 text-indigo-400 border-indigo-500/30";
+                             }
+                             else if (act.includes('CHECKED')) {
+                               tag = "[CHECK]";
+                               colorClass = "bg-slate-500/10 text-slate-300 border-slate-500/20";
+                             }
+                             else if (l.type === 'phase' || act.includes('DEALING') || act.includes('DEALT') || act.includes('START')) {
+                               if (act.includes('FLOP') || act.includes('TURN') || act.includes('RIVER')) { 
+                                 tag = "[DEALER]"; 
+                                 colorClass = "bg-cyan-500/20 text-cyan-400 border-cyan-400/30"; 
+                               } else {
+                                 tag = "[DEALER]"; 
+                                 colorClass = "bg-yellow-500/10 text-yellow-500/60 border-yellow-500/20"; 
+                               }
+                             }
+                             else if (act.includes('NUCLEAR') || act.includes('RESET')) { 
+                               tag = "[SYSTEM]"; 
+                               colorClass = "bg-red-500/20 text-red-400 border-red-500/30"; 
+                             }
+                             else if (act.includes('JOINED') || act.includes('LEFT') || act.includes('ENTERED')) { 
+                               tag = "[SYSTEM]"; 
+                               colorClass = "bg-slate-500/10 text-slate-400 border-slate-500/20"; 
+                             }
+                             else if (l.type === 'fold' || act.includes('FOLDED')) { 
+                               tag = "[FOLD]"; 
+                               colorClass = "bg-red-500/10 text-red-400 border-red-500/20"; 
+                             }
+                             else { tag = "[PLAY]"; }
+
+                             return (
+                               <div key={l.id} className="flex items-start gap-3 p-3 border-b border-white/5 hover:bg-white/5 transition-colors">
+                                 <span className="text-white/20 text-[10px] w-12 shrink-0 font-black pt-0.5">{String(l.time)}</span>
+                                 <div className="flex flex-wrap items-center gap-2 overflow-hidden">
+                                   <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${colorClass}`}>
+                                     {tag}
+                                   </span>
+                                   <span className="text-white/80 text-[12px] font-black tracking-tight uppercase">
+                                     <span className="text-white/30">{l.name}:</span> {l.action}
+                                   </span>
+                                 </div>
+                               </div>
+                             );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div ref={logEndRef} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
