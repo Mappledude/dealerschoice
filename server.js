@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v2.0.4-PRO";
+const VERSION = "v2.0.8-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -25,11 +25,11 @@ const variantNames = {
   MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks"
 };
 
-// Human names for bots
+// Curated list of human names for bots
 const BOT_NAMES = [
   "Doyle", "Stu", "Phil", "Johnny", "Vanessa", "Chris", "Annie", "Erik", "Daniel", 
   "Gus", "Tom", "Scotty", "Huck", "Jennifer", "Barry", "Justin", "Liv", "Maria", 
-  "Antonio", "Vic", "Fedor", "Bryn", "Negreanu", "Ivey", "Hellmuth"
+  "Antonio", "Vic", "Fedor", "Bryn", "Negreanu", "Ivey", "Hellmuth", "Fidua", "Galfond"
 ];
 
 let profiles = []; 
@@ -53,7 +53,7 @@ const combinations = (array, k) => {
 };
 
 const rankHand = (cards, isAceLow = false, isLowHand = false) => {
-  if (!cards || cards.length < 5) return { power: 0, name: "Pre-flop", cards: [] };
+  if (!cards || cards.length < 5) return { power: 0, name: "Pre-flop", cards: cards || [] };
   const getVal = (v) => (isAceLow && v === 'A') ? 1 : VM[v];
   const sorted = [...cards].sort((a, b) => getVal(b.value) - getVal(a.value));
   const ranks = sorted.map(c => getVal(c.value));
@@ -94,8 +94,13 @@ const rankHand = (cards, isAceLow = false, isLowHand = false) => {
 };
 
 const getBestHand = (hole, comm, variantId) => {
-  if (!hole || hole.length === 0 || !comm || comm.length < 3) return { high: { power: 0, name: "Pre-flop" }, low: null };
-  let bestHigh = { power: -1, name: "Pre-flop" };
+  const defaultHigh = { power: 0, name: "Uncontested", cards: hole || [] };
+  if (!hole || hole.length === 0) return { high: defaultHigh, low: null };
+  
+  // If pre-flop or early win, return hole cards as the rank
+  if (!comm || comm.length < 3) return { high: defaultHigh, low: null };
+  
+  let bestHigh = { power: -1, name: "Pre-flop", cards: hole };
   let bestLow = null;
   const boardCombos = combinations(comm, 3);
   const holePairs = combinations(hole, 2);
@@ -115,7 +120,9 @@ const getBestHand = (hole, comm, variantId) => {
             const resH = rankHand([...h, ...b], false, false);
             if (resH.power > bestHigh.power) bestHigh = resH;
             const resL = rankHand([...h, ...b], true, true);
-            if (!bestLow || resL.power < bestLow.power) { bestLow = { ...resL, name: resL.name.replace('High Card', 'Low') }; }
+            if (!bestLow || resL.power < bestLow.power) { 
+                bestLow = { ...resL, name: resL.name.replace('High Card', 'Low') }; 
+            }
     });});
   } else if (variantId === 'REDSBLACKS') {
       const reds = hole.filter(c => c.suit === '♥' || c.suit === '♦');
@@ -231,36 +238,39 @@ const processShowdown = (roomId) => {
     pots.forEach((pot, potIdx) => {
         const eligiblePlayers = room.players.filter(p => p && pot.eligibleUids.includes(p.uid));
         const evals = eligiblePlayers.map(p => ({ player: p, res: getBestHand(p.hand, room.community, variantId) }));
+        
+        if (evals.length === 0) return;
 
         if (variantId === 'HILOW') {
             const lowHalf = Math.floor((pot.amount * 100) / 2) / 100;
             const highHalf = ((pot.amount * 100) - (lowHalf * 100)) / 100;
             
-            const highSorted = [...evals].sort((a, b) => b.res.high.power - a.res.high.power);
+            const highSorted = [...evals].sort((a, b) => (b.res.high.power || 0) - (a.res.high.power || 0));
             const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
             winnersH.forEach(w => {
                 const share = highHalf / winnersH.length; w.player.chips += share;
-                allShowdownWinners.push({ name: w.player.name, uid: w.player.uid, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share, potIdx });
+                allShowdownWinners.push({ name: w.player.name, uid: w.player.uid, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards || [], amount: share, potIdx });
             });
             
-            const lowSorted = [...evals].sort((a, b) => a.res.low.power - b.res.low.power);
-            const winnersL = lowSorted.filter(e => e.res.low.power === lowSorted[0].res.low.power);
+            const lowSorted = [...evals].sort((a, b) => (a.res.low?.power || 0) - (b.res.low?.power || 0));
+            const winnersL = lowSorted.filter(e => e.res.low?.power === lowSorted[0].res.low?.power);
             winnersL.forEach(w => {
                 const share = lowHalf / winnersL.length; w.player.chips += share;
-                allShowdownWinners.push({ name: w.player.name, uid: w.player.uid, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share, potIdx });
+                allShowdownWinners.push({ name: w.player.name, uid: w.player.uid, rank: `LOW: ${w.res.low?.name || 'Low'}`, hand: w.res.low?.cards || [], amount: share, potIdx });
             });
         } else {
             evals.sort((a, b) => variantId === 'MUFLIS' ? (a.res.high.power - b.res.high.power) : (b.res.high.power - a.res.high.power));
             const winners = evals.filter(e => e.res.high.power === evals[0].res.high.power);
             winners.forEach(w => {
                 const share = pot.amount / winners.length; w.player.chips += share;
-                allShowdownWinners.push({ name: w.player.name, uid: w.player.uid, rank: w.res.high.name, hand: w.res.high.cards, amount: share, potIdx });
+                allShowdownWinners.push({ name: w.player.name, uid: w.player.uid, rank: w.res.high.name, hand: w.res.high.cards || [], amount: share, potIdx });
             });
         }
     });
 
     room.showdownWinners = allShowdownWinners;
-    room.winning5Ids = [...new Set(allShowdownWinners.flatMap(w => w.hand.map(c => c.id)))];
+    // CRASH FIX: Safe flatMap with default empty array and id check
+    room.winning5Ids = [...new Set(allShowdownWinners.flatMap(w => (w.hand || []).map(c => c ? c.id : null).filter(id => id)))];
     room.phase = PHASES.SHOWDOWN;
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     
@@ -637,7 +647,7 @@ io.on('connection', (socket) => {
     const botId = Math.random().toString(36).slice(2, 7);
     const botBuyIn = room.maxBuy || 10;
     
-    // Pick a human name for the bot
+    // Assign human name for bot
     const randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
     
     room.players[emptyIdx] = { 
