@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v2.0.1-PRO";
+const VERSION = "v2.0.4-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -45,7 +45,6 @@ const VARIANTS = {
   REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', rules: ["4 hole cards.", "Joker formed by color mix."] }
 };
 
-// Redesigned Intel Feed Color Helper
 const INTEL_COLORS = [
   'text-emerald-400', 'text-fuchsia-400', 'text-sky-400', 
   'text-amber-400', 'text-rose-400', 'text-indigo-400', 
@@ -332,7 +331,6 @@ const App = () => {
       setCurrentView(VIEWS.LOBBY); 
       socket.emit('getInitialData'); 
     });
-    // Forced Logout Listener
     socket.on('forcedLogout', (data) => {
       setUserProfile(null);
       setCurrentView(VIEWS.LOGIN);
@@ -524,7 +522,6 @@ const App = () => {
   return (
     <div className={`h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase transition-all duration-700`}>
       
-      {/* Redesigned Intel Feed Modal */}
       {intelExpanded && (
         <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[950px] mx-auto bg-slate-900/95 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
@@ -639,12 +636,12 @@ const App = () => {
       <header className="h-16 md:h-20 border-b border-white/10 flex items-center justify-between px-4 md:px-8 bg-black/80 backdrop-blur-md z-[80] shrink-0 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-2 overflow-hidden flex-1">
           <button onClick={() => setShowRulesModal(true)} className="bg-white/5 px-2 py-1.5 rounded-xl border border-white/5 flex flex-col justify-center min-w-[80px] hover:bg-white/10 transition-colors">
-            <span className="text-yellow-400 text-[8px] tracking-widest uppercase flex items-center gap-1">THIS HAND: <Info size={8}/></span>
-            <span className="text-white text-[10px] md:text-sm font-black truncate uppercase">{activeVariant?.name || 'Holdem'}</span>
+            <span className="text-yellow-400 text-[8px] tracking-widest uppercase flex items-center gap-1 leading-none mb-1">THIS HAND: <Info size={8}/></span>
+            <span className="text-white text-[10px] md:text-sm font-black truncate uppercase leading-none">{activeVariant?.name || 'Holdem'}</span>
           </button>
           
           <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-xl flex flex-col justify-center min-w-[100px] h-full">
-            <span className="text-cyan-400 text-[8px] uppercase tracking-wider">ON MY DEAL:</span>
+            <span className="text-cyan-400 text-[8px] uppercase tracking-wider leading-none mb-1">ON MY DEAL:</span>
             <select value={pendingVariantId} onChange={(e) => { 
               setPendingVariantId(e.target.value); 
               socket.emit('updatePlayerSettings', {uid: userProfile?.uid, pendingVariant: e.target.value}); 
@@ -750,7 +747,7 @@ const App = () => {
           <div className={`flex flex-col items-center w-full max-w-4xl mx-auto transition-all duration-500 ${activeIdx !== heroIdx && phase !== PHASES.IDLE ? 'opacity-30 grayscale pointer-events-none scale-95' : ''}`}>
              
              {heroPlayerObj && phase !== PHASES.IDLE && (
-               <div className="flex justify-between w-full px-2 mt-[-2px]">
+               <div className="flex justify-between w-full px-2 mt-[-10px]">
                   <div className="flex flex-col items-start min-w-[120px] md:min-w-[140px]">
                     {activeVariant?.id === 'HILOW' && (
                       <>
