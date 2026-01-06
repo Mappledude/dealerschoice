@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.9.7-PRO";
+const VERSION = "v1.9.9-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -27,6 +27,8 @@ const variantNames = {
 
 let profiles = []; 
 let rooms = {};
+// Track active sessions: UID -> Socket ID
+const activeSessions = new Map();
 
 const serializeRoom = (room) => {
     if (!room) return null;
@@ -193,11 +195,9 @@ const calculatePots = (room) => {
                 segAmount += diff;
                 if (!other.folded) eligible.push(other.uid);
             });
-            // If eligible is empty, this "side pot" belongs back to the last player who put it in
             if (eligible.length > 0) {
                 pots.push({ amount: segAmount, eligibleUids: eligible, isMain: idx === 0 });
             } else {
-                // Return to unmatchable player
                 const playerToRefund = room.players.find(p => p && p.uid === c.uid);
                 if (playerToRefund) {
                     playerToRefund.chips += segAmount;
@@ -218,7 +218,7 @@ const processShowdown = (roomId) => {
     if (room.timer) clearInterval(room.timer);
 
     const pots = calculatePots(room);
-    room.pots = pots; // Send tiered pot info to client
+    room.pots = pots; 
     const variantId = room.activeVariant?.id || 'HOLDEM';
     let allShowdownWinners = [];
 
@@ -295,14 +295,12 @@ const performAction = (roomId, type, amount) => {
         player.lastAction = actualCall > 0 ? "CALL" : "CHECK";
         io.to(roomId).emit('log', { name: player.name, action: actualCall > 0 ? `CALLED $${actualCall.toFixed(2)}` : `CHECKED`, type: 'bet' });
     } else if (type === 'RAISE') {
-        // Capping Logic (The Ceiling Rule)
         const others = room.players.filter(p => p && p.uid !== player.uid && !p.isFolded && !p.waitingForNextHand);
         const maxMatchable = Math.max(...others.map(o => o.chips + o.currentBet), 0);
         
         let raiseVal = Math.max(amount, room.highestBet + room.bb);
         let finalRaise = Math.min(raiseVal, player.chips + player.currentBet);
         
-        // Effective Stack Capping
         if (finalRaise > maxMatchable && maxMatchable > 0) {
             const refund = finalRaise - maxMatchable;
             io.to(roomId).emit('log', { name: "SYSTEM", action: `$${refund.toFixed(2)} returned to ${player.name} (Effective Stack Cap)` });
@@ -351,7 +349,6 @@ const moveToNextPlayer = (roomId) => {
 const collectBets = (room) => {
     room.players.forEach(p => { if (p) { room.potData[0].amount += p.currentBet; p.currentBet = 0; p.lastAction = null; p.actedThisStreet = false; } });
     room.highestBet = 0;
-    // Pre-calculate pots for UI display
     room.pots = calculatePots(room);
 };
 
@@ -478,7 +475,9 @@ const removePlayerGlobally = (uid) => {
         if (idx !== -1) {
             const p = room.players[idx];
             const prof = profiles.find(x => x.uid === uid);
-            if (prof) prof.chips += (Number(p.chips) + Number(p.currentBet || 0));
+            if (prof) {
+              prof.chips += (Number(p.chips) + Number(p.currentBet || 0));
+            }
             if (room.activeIdx === idx) {
                 moveToNextPlayer(room.id);
             }
@@ -486,6 +485,8 @@ const removePlayerGlobally = (uid) => {
             io.to(room.id).emit('roomUpdate', serializeRoom(room));
         }
     });
+    // Remove from active session tracking
+    activeSessions.delete(uid);
 };
 
 io.on('connection', (socket) => {
@@ -496,23 +497,34 @@ io.on('connection', (socket) => {
   socket.on('playerLogin', ({ password }) => {
     const profile = profiles.find(p => p.password === password);
     if (profile) {
+        // Enforce single session: Boot previous connection if it exists
+        const prevSocketId = activeSessions.get(profile.uid);
+        if (prevSocketId && prevSocketId !== socket.id) {
+            io.to(prevSocketId).emit('forcedLogout', { message: 'Logged in from another device' });
+            const prevSocket = io.sockets.sockets.get(prevSocketId);
+            if (prevSocket) prevSocket.disconnect();
+        }
+
         seatedUid = profile.uid;
+        activeSessions.set(profile.uid, socket.id);
         socket.emit('loginSuccess', profile);
     }
   });
 
   socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
     const room = rooms[roomId]; if (!room) return callback({ status: 'error' });
-    const alreadySeated = Object.values(rooms).some(r => r.players.some(p => p && p.uid === profile.uid));
-    if (alreadySeated) return callback({ status: 'error', message: 'ALREADY_SEATED' });
+    
+    // Safety check: ensure they aren't somehow in another room still
+    removePlayerGlobally(profile.uid);
+    activeSessions.set(profile.uid, socket.id); // Re-set as active since removePlayerGlobally deletes it
 
     let globalProfile = profiles.find(p => p.uid === profile.uid || p.name === profile.name);
     if (!globalProfile) { globalProfile = { ...profile, chips: 100 }; profiles.push(globalProfile); }
-    if (globalProfile.chips < Number(buyIn)) return callback({ status: 'error' });
+    if (globalProfile.chips < Number(buyIn)) return callback({ status: 'error', message: 'INSUFFICIENT_FUNDS' });
     
     globalProfile.chips -= Number(buyIn);
     const emptyIdx = room.players.findIndex(p => p === null);
-    if (emptyIdx === -1) return callback({ status: 'error' });
+    if (emptyIdx === -1) return callback({ status: 'error', message: 'ROOM_FULL' });
     
     seatedUid = profile.uid;
     room.players[emptyIdx] = { 
