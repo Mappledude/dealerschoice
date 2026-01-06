@@ -165,11 +165,12 @@ const Seat = ({
                         const offset = ci - mid;
                         const fanRotation = offset * visuals.holeCardFan;
                         const fanTranslation = offset * (player.hand.length > 2 ? 2.0 : 3.5);
+                        const isRed = c.suit === '♥' || c.suit === '♦';
                         return (
                           <div key={c.id || ci} 
                               className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isRevealed ? 'bg-white text-black' : 'bg-slate-800'} ${isRevealed && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_200px_#fbbf24]' : 'border-white/20'}`} 
                               style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${ci * 0.1}s` }}>
-                              {isRevealed && ( <><span className="text-[9px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
+                              {isRevealed && ( <><span className={`text-[9px] md:text-[12px] font-black leading-none ${isRed ? 'text-red-600' : 'text-black'}`}>{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${isRed ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
                           </div>
                         );
                     })}
