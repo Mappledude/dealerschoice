@@ -112,7 +112,6 @@ const Seat = ({
     const currentCardScale = isHero ? visuals.heroCardScale : visuals.oppCardScale;
     const currentCardY = isHero ? visuals.heroCardY : visuals.oppCardY;
 
-    // Timer Logic for the "Dash Decay" indicator
     const totalDashes = 15;
     const activeDashes = Math.max(0, Math.ceil(timeRemaining));
     const timerColorClass = timeRemaining < 5 ? 'text-red-500' : timeRemaining < 10 ? 'text-amber-400' : 'text-cyan-400';
@@ -168,7 +167,6 @@ const Seat = ({
                       <span className="text-[8.5px] md:text-[14.5px] font-black text-white/90 uppercase tracking-tight truncate max-w-[60px] md:max-w-[100px]">{String(player.name || "Anon")}</span>
                     </div>
 
-                    {/* --- NEW DASH TIMER INDICATOR --- */}
                     {isActiveTurn && timeRemaining > 0 && (
                       <div className={`text-[8px] md:text-[10px] font-mono font-black tracking-[-0.1em] leading-none mb-1 transition-colors duration-300 ${timerColorClass}`}>
                         {"-".repeat(activeDashes).padEnd(totalDashes, " ")}
@@ -242,7 +240,7 @@ const App = () => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  const [showBanner, setShowBanner] = useState(false); // New state for Deal Banner
+  const [showBanner, setShowBanner] = useState(false); 
   const joinLock = useRef(false);
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
@@ -290,13 +288,24 @@ const App = () => {
     return [PHASES.FLOP, PHASES.TURN, PHASES.RIVER, PHASES.SHOWDOWN].includes(phase);
   }, [phase]);
 
-  // Handle Phase Transition Banner
+  // Handle Phase Transition Banner (Updated logic: Center, Colors, 2s Turn delay)
   useEffect(() => {
-    if ([PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(phase)) {
-      setShowBanner(true);
-      const timer = setTimeout(() => setShowBanner(false), 1500);
-      return () => clearTimeout(timer);
+    let startTimer;
+    let endTimer;
+
+    if (phase === PHASES.TURN) {
+      startTimer = setTimeout(() => {
+        setShowBanner(true);
+        endTimer = setTimeout(() => setShowBanner(false), 1500);
+      }, 2000);
+    } else {
+      setShowBanner(false);
     }
+
+    return () => {
+      clearTimeout(startTimer);
+      clearTimeout(endTimer);
+    };
   }, [phase]);
 
   const groupedLogs = useMemo(() => {
@@ -492,6 +501,8 @@ const App = () => {
 
   const getBannerStyles = () => {
     switch (activeVariant?.id) {
+      case 'HOLDEM': return 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]';
+      case 'OMAHA': return 'text-fuchsia-500 drop-shadow-[0_0_15px_rgba(217,70,239,0.5)]';
       case 'MUFLIS': return 'text-cyan-300 drop-shadow-[0_0_20px_rgba(34,211,238,0.8)]';
       case 'HILOW': return 'bg-gradient-to-b from-amber-400 via-slate-100 to-amber-500 bg-clip-text text-transparent drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]';
       case 'REDSBLACKS': return 'bg-gradient-to-r from-red-600 via-black to-red-600 bg-clip-text text-transparent animate-red-black-shift drop-shadow-[0_0_10px_rgba(220,38,38,0.5)]';
@@ -947,9 +958,8 @@ const App = () => {
 
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)]" style={{ height: `calc(${headerHeight}px + env(safe-area-inset-top))` }}>
         <div className="flex items-center gap-1.5 overflow-hidden flex-1">
-            {/* Street Advance Glimmer Button */}
             <button 
-                key={phase} // Resets glimmer on phase change
+                key={phase} 
                 onClick={() => setShowRulesModal(true)}
                 className={`bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left relative overflow-hidden ${phase !== PHASES.IDLE ? 'animate-street-glimmer' : ''} ${isAfterFlop ? 'animate-permanent-glow' : ''}`}
             >
@@ -980,10 +990,9 @@ const App = () => {
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-emerald-950/20 to-transparent overflow-hidden px-1 py-1 font-black uppercase">
-        {/* Deal Banner */}
         {showBanner && (
           <div className="absolute inset-0 z-[500] flex items-center justify-center pointer-events-none animate-banner-pop">
-            <div className={`text-[12vw] md:text-[8vw] font-black uppercase tracking-[0.2em] italic ${getBannerStyles()}`}>
+            <div className={`text-[12vw] md:text-[8vw] font-black uppercase tracking-[0.2em] italic text-center ${getBannerStyles()}`}>
                {getBannerText()}
             </div>
           </div>
