@@ -242,6 +242,7 @@ const App = () => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [showBanner, setShowBanner] = useState(false); // New state for Deal Banner
   const joinLock = useRef(false);
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
@@ -284,6 +285,19 @@ const App = () => {
     const isHandResolved = phase === PHASES.IDLE;
     return isOutOfChips && hasNoActiveBet && isHandResolved;
   }, [heroPlayerObj, phase]);
+
+  const isAfterFlop = useMemo(() => {
+    return [PHASES.FLOP, PHASES.TURN, PHASES.RIVER, PHASES.SHOWDOWN].includes(phase);
+  }, [phase]);
+
+  // Handle Phase Transition Banner
+  useEffect(() => {
+    if ([PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(phase)) {
+      setShowBanner(true);
+      const timer = setTimeout(() => setShowBanner(false), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [phase]);
 
   const groupedLogs = useMemo(() => {
     const hands = [];
@@ -460,16 +474,13 @@ const App = () => {
       return `${name} wins $${amt} (Mucked)`;
     }
 
+    if (winner.rank === "SCOOP") {
+      return `${name} SCOOPS $${amt}! (HI/LO)`;
+    }
+
     const rankStr = String(winner.rank).toUpperCase();
     const isHi = rankStr.includes("HIGH:");
     const isLo = rankStr.includes("LOW:");
-
-    const occurrences = allWinners.filter(w => w.name === winner.name).length;
-    const isHiLoGame = allWinners.some(w => String(w.rank).includes("HIGH:") || String(w.rank).includes("LOW:"));
-
-    if (occurrences > 1 && isHiLoGame) {
-      return `${name} SCOOPS $${amt}! (HI/LO)`;
-    }
 
     const cleanRank = formatRank(String(winner.rank).replace("HIGH: ", "").replace("LOW: ", ""));
 
@@ -477,6 +488,20 @@ const App = () => {
     if (isLo) return `${name} wins $${amt} (LO) • ${cleanRank}`;
 
     return `${name} wins $${amt} • ${cleanRank}`;
+  };
+
+  const getBannerStyles = () => {
+    switch (activeVariant?.id) {
+      case 'MUFLIS': return 'text-cyan-300 drop-shadow-[0_0_20px_rgba(34,211,238,0.8)]';
+      case 'HILOW': return 'bg-gradient-to-b from-amber-400 via-slate-100 to-amber-500 bg-clip-text text-transparent drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]';
+      case 'REDSBLACKS': return 'bg-gradient-to-r from-red-600 via-black to-red-600 bg-clip-text text-transparent animate-red-black-shift drop-shadow-[0_0_10px_rgba(220,38,38,0.5)]';
+      default: return 'text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]';
+    }
+  };
+
+  const getBannerText = () => {
+    if (activeVariant?.id === 'HILOW') return 'Hi-Low';
+    return activeVariant?.name || 'Hold\'em';
   };
 
   useEffect(() => {
@@ -922,14 +947,17 @@ const App = () => {
 
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)]" style={{ height: `calc(${headerHeight}px + env(safe-area-inset-top))` }}>
         <div className="flex items-center gap-1.5 overflow-hidden flex-1">
+            {/* Street Advance Glimmer Button */}
             <button 
+                key={phase} // Resets glimmer on phase change
                 onClick={() => setShowRulesModal(true)}
-                className="bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left"
+                className={`bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left relative overflow-hidden ${phase !== PHASES.IDLE ? 'animate-street-glimmer' : ''} ${isAfterFlop ? 'animate-permanent-glow' : ''}`}
             >
-              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1">
+              {phase !== PHASES.IDLE && <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-glimmer-sweep pointer-events-none" />}
+              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1 relative z-10">
                 This Hand: <Info size={8} />
               </span>
-              <span className="text-white text-[10px] md:text-sm truncate leading-none">
+              <span className="text-white text-[10px] md:text-sm truncate leading-none relative z-10">
                 {String(activeVariant?.name || "Hold'em")}
               </span>
             </button>
@@ -952,6 +980,15 @@ const App = () => {
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-emerald-950/20 to-transparent overflow-hidden px-1 py-1 font-black uppercase">
+        {/* Deal Banner */}
+        {showBanner && (
+          <div className="absolute inset-0 z-[500] flex items-center justify-center pointer-events-none animate-banner-pop">
+            <div className={`text-[12vw] md:text-[8vw] font-black uppercase tracking-[0.2em] italic ${getBannerStyles()}`}>
+               {getBannerText()}
+            </div>
+          </div>
+        )}
+
         <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center font-black">
             <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[3vw] md:border-[2vw] border-slate-900/60 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)] border-double font-black uppercase" />
             <div className="absolute inset-0 pointer-events-none z-20 font-black uppercase">
@@ -1048,24 +1085,24 @@ const App = () => {
                         <div className="flex flex-col items-start min-w-[80px]">
                             {activeVariant?.id === 'HILOW' && (
                                 <>
-                                    <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Low Strength</span>
-                                    <span className="text-[9px] md:text-[18px] text-emerald-400 font-black uppercase leading-none">
+                                    <span className="text-[5px] md:text-[9px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Low Strength</span>
+                                    <span className="text-[11px] md:text-[23px] text-emerald-400 font-black uppercase leading-none">
                                         {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.lowStrength || "Pre-flop"))}
                                     </span>
-                                    <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
+                                    <span className="#fbbf24] text-[10px] md:text-[18px] font-mono font-black mt-0.5 tracking-tight">
                                         {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroLowWinProb)}% PROB.
                                     </span>
                                 </>
                             )}
                         </div>
                         <div className="flex flex-col items-end min-w-[80px]">
-                            <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">
+                            <span className="text-[5px] md:text-[9px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">
                                 {activeVariant?.id === 'HILOW' ? 'High Strength' : 'Strength'}
                             </span>
-                            <span className="text-[9px] md:text-[18px] text-purple-400 font-black uppercase leading-none">
+                            <span className="text-[11px] md:text-[23px] text-purple-400 font-black uppercase leading-none">
                                 {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.strength || "Pre-flop"))}
                             </span>
-                            <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
+                            <span className="#fbbf24] text-[10px] md:text-[18px] font-mono font-black mt-0.5 tracking-tight">
                                 {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroWinProb)}% PROB.
                             </span>
                         </div>
@@ -1088,6 +1125,36 @@ const App = () => {
           .animate-panic-pulse { 
             animation: panic-pulse 0.4s infinite cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             z-index: 100 !important;
+          }
+          @keyframes glimmer-sweep {
+            0% { transform: translateX(-100%) skewX(-15deg); }
+            100% { transform: translateX(200%) skewX(-15deg); }
+          }
+          .animate-glimmer-sweep {
+            animation: glimmer-sweep 1s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          @keyframes permanent-glow {
+            0% { box-shadow: 0 0 5px rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.2); }
+            50% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.7); border-color: rgba(251, 191, 36, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.2); }
+          }
+          .animate-permanent-glow {
+            animation: permanent-glow 2s infinite ease-in-out;
+          }
+          @keyframes banner-pop {
+            0% { transform: scale(0.5); opacity: 0; filter: blur(20px); }
+            20% { transform: scale(1.1); opacity: 1; filter: blur(0px); }
+            80% { transform: scale(1); opacity: 1; filter: blur(0px); }
+            100% { transform: scale(1.5); opacity: 0; filter: blur(20px); }
+          }
+          .animate-banner-pop { animation: banner-pop 1.5s cubic-bezier(0.23, 1, 0.32, 1) forwards; }
+          @keyframes red-black-shift {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+          }
+          .animate-red-black-shift {
+            background-size: 200% auto;
+            animation: red-black-shift 1s linear infinite;
           }
           @keyframes fling-to-pot { 
             0% { transform: translate(calc(-50% + 0px), 0px) scale(2.0); filter: blur(0px) brightness(2); } 
