@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.7.14-PRO";
+const VERSION = "v1.7.15-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -253,7 +253,6 @@ const processShowdown = (roomId) => {
     setTimeout(() => {
         if (!rooms[roomId]) return; 
 
-        // BOT REBUY & BOOTING LOGIC
         room.players.forEach((p, i) => {
             if (p && p.isBot) {
                 if (p.chips <= Number(room.bb)) {
@@ -446,10 +445,10 @@ const runIgnition = (roomId) => {
   if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
   const dealerSeat = room.players[room.dealerIdx];
 
-  // DEALER CHOICE: Prioritize humans, but let bots pick variety
+  // DEALER'S CHOICE Logic
   let variantId = 'HOLDEM';
   if (dealerSeat.isBot) {
-      const keys = Object.keys(VARIANTS);
+      const keys = Object.keys(holeCardsMap);
       variantId = keys[Math.floor(Math.random() * keys.length)];
   } else {
       variantId = dealerSeat.pendingVariant || 'HOLDEM';
