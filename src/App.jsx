@@ -331,6 +331,7 @@ const App = () => {
       setCurrentView(VIEWS.LOBBY); 
       socket.emit('getInitialData'); 
     });
+    // Forced Logout Listener
     socket.on('forcedLogout', (data) => {
       setUserProfile(null);
       setCurrentView(VIEWS.LOGIN);
@@ -350,12 +351,13 @@ const App = () => {
   }, []);
 
   const handleLogin = useCallback(() => {
-    if (passwordInput.toLowerCase().trim() === 'pass') {
+    const normalizedPassword = passwordInput.trim().toLowerCase();
+    if (normalizedPassword === 'pass') {
         setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin', chips: 0 });
         setCurrentView(VIEWS.ADMIN);
         socket.emit('getInitialData');
     } else {
-        socket.emit('playerLogin', { password: passwordInput });
+        socket.emit('playerLogin', { password: normalizedPassword });
     }
   }, [passwordInput]);
 
@@ -407,7 +409,7 @@ const App = () => {
                     <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10">
                         <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none text-white text-sm uppercase"/>
                         <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none text-white text-sm uppercase"/>
-                        <button onClick={()=>{ socket.emit('adminCreatePlayer', {...newPlayer, uid: Math.random().toString(36).slice(2)}); setNewPlayer({name:'', chips:100, password:''}); }} className="bg-[#fbbf24] text-black rounded-xl font-black p-3 text-sm">CREATE</button>
+                        <button onClick={()=>{ socket.emit('adminCreatePlayer', {...newPlayer, password: newPlayer.password.trim().toLowerCase(), uid: Math.random().toString(36).slice(2)}); setNewPlayer({name:'', chips:100, password:''}); }} className="bg-[#fbbf24] text-black rounded-xl font-black p-3 text-sm">CREATE</button>
                     </div>
                     <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
                         {allProfiles.map(p => (
@@ -522,6 +524,7 @@ const App = () => {
   return (
     <div className={`h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase transition-all duration-700`}>
       
+      {/* Redesigned Intel Feed Modal */}
       {intelExpanded && (
         <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[950px] mx-auto bg-slate-900/95 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
