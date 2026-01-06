@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.7.8-PRO";
+const VERSION = "v1.7.9-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -178,7 +178,7 @@ const processShowdown = (roomId) => {
 
     const activePlayers = room.players.filter(p => p !== null && !p.waitingForNextHand);
     const variantId = room.activeVariant?.id || 'HOLDEM';
-    room.showdownWinners = [];
+    let allPayouts = [];
 
     const contributions = activePlayers.map(p => ({ 
         uid: p.uid, amount: p.totalContribution, folded: p.isFolded, name: p.name, player: p
@@ -208,7 +208,7 @@ const processShowdown = (roomId) => {
         if (totalUnfolded === 1 && eligiblePlayers.length === 1) {
             const soleWinner = eligiblePlayers[0];
             soleWinner.chips += pot.amount;
-            room.showdownWinners.push({ name: soleWinner.name, rank: "!", hand: [], amount: pot.amount });
+            allPayouts.push({ name: soleWinner.name, uid: soleWinner.uid, rank: "!", hand: [], amount: pot.amount });
             return;
         }
 
@@ -221,41 +221,74 @@ const processShowdown = (roomId) => {
             const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
             winnersH.forEach(w => {
                 const share = highHalf / winnersH.length; w.player.chips += share;
-                room.showdownWinners.push({ name: w.player.name, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share });
+                allPayouts.push({ name: w.player.name, uid: w.player.uid, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share });
             });
             const lowSorted = [...evals].sort((a, b) => a.res.low.power - b.res.low.power);
             const winnersL = lowSorted.filter(e => e.res.low.power === lowSorted[0].res.low.power);
             winnersL.forEach(w => {
                 const share = lowHalf / winnersL.length; w.player.chips += share;
-                room.showdownWinners.push({ name: w.player.name, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share });
+                allPayouts.push({ name: w.player.name, uid: w.player.uid, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share });
             });
         } else {
             evals.sort((a, b) => variantId === 'MUFLIS' ? (a.res.high.power - b.res.high.power) : (b.res.high.power - a.res.high.power));
             const winners = evals.filter(e => e.res.high.power === evals[0].res.high.power);
             winners.forEach(w => {
                 const share = pot.amount / winners.length; w.player.chips += share;
-                room.showdownWinners.push({ name: w.player.name, rank: w.res.high.name, hand: w.res.high.cards, amount: share });
+                allPayouts.push({ name: w.player.name, uid: w.player.uid, rank: w.res.high.name, hand: w.res.high.cards, amount: share });
             });
         }
     });
 
-    room.phase = PHASES.SHOWDOWN;
-    io.to(roomId).emit('roomUpdate', serializeRoom(room));
-    room.showdownWinners.forEach(w => {
-      const cardStr = w.hand && w.hand.length > 0 ? ` (${w.hand.map(c => `${c.value}${c.suit}`).join(', ')})` : "";
-      const actionStr = w.rank === "!" ? `WON $${w.amount.toFixed(2)} BY DEFAULT` : `WON $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}${cardStr}`;
-      io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
+    // --- AGGREGATION LOGIC (FIX FOR PLAYING TWICE) ---
+    const winnerMap = {};
+    allPayouts.forEach(p => {
+        if (!winnerMap[p.uid]) {
+            winnerMap[p.uid] = { ...p, ranks: [p.rank], allCards: [...(p.hand || [])] };
+        } else {
+            winnerMap[p.uid].amount += p.amount;
+            winnerMap[p.uid].ranks.push(p.rank);
+            if (p.hand) winnerMap[p.uid].allCards.push(...p.hand);
+        }
     });
 
-    // --- SMART PACING LOGIC ---
-    // Synchronized with Client (Point 1, 2 & Example 3)
-    // 5s per winner for standard/split, cap total at 10s for 3+ winners.
+    room.showdownWinners = Object.values(winnerMap).map(w => {
+        const hasHi = w.ranks.some(r => r.includes("HIGH:"));
+        const hasLo = w.ranks.some(r => r.includes("LOW:"));
+        const isMucked = w.ranks.every(r => r === "!");
+
+        if (isMucked) w.rank = "!";
+        else if (hasHi && hasLo) w.rank = "SCOOP";
+        else w.rank = w.ranks[0];
+
+        const uniqueCards = [];
+        const seenIds = new Set();
+        w.allCards.forEach(c => {
+            if (c && c.id && !seenIds.has(c.id)) { seenIds.add(c.id); uniqueCards.push(c); }
+        });
+        w.hand = uniqueCards;
+        delete w.ranks;
+        delete w.allCards;
+        return w;
+    });
+
+    room.winning5Ids = [...new Set(room.showdownWinners.flatMap(w => w.hand.map(c => c.id)))];
+    room.phase = PHASES.SHOWDOWN;
+    io.to(roomId).emit('roomUpdate', serializeRoom(room));
+    
+    room.showdownWinners.forEach(w => {
+      let logAction = "";
+      if (w.rank === "!") logAction = `won $${w.amount.toFixed(2)} (Mucked)`;
+      else if (w.rank === "SCOOP") logAction = `SCOOPS $${w.amount.toFixed(2)}! (HI/LO)`;
+      else logAction = `won $${w.amount.toFixed(2)} • ${w.rank.replace("HIGH: ", "").replace("LOW: ", "")}`;
+      io.to(roomId).emit('log', { name: w.name, action: logAction.toUpperCase(), type: 'win' });
+    });
+
     const count = room.showdownWinners.length;
     const durationPerWinner = count > 2 ? (10000 / count) : 5000;
     const totalDuration = durationPerWinner * count;
 
     setTimeout(() => {
-        room.players.forEach(p => { if (p) p.waitingForNextHand = false; });
+        room.players.forEach(p => { if (p) { p.waitingForNextHand = false; p.isWinner = false; } });
         const seated = room.players.map((p, i) => (p && p.chips > Number(room.bb)) ? i : null).filter(x => x !== null);
         if (seated.length >= 2) {
             const curDealerIdx = seated.indexOf(room.dealerIdx);
@@ -513,7 +546,7 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     io.emit('profilesUpdate', profiles);
     
-    if (room.phase === PHASES.IDLE && room.players.filter(Boolean).length >= 2 && !room.ignitionTimer) {
+    if (room.phase === PHASES.IDLE && room.players.filter(p => p && p.chips > Number(room.bb)).length >= 2 && !room.ignitionTimer) {
         room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000);
     }
   });
@@ -530,6 +563,9 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('log', { name: player.name, action: `REBOUGHT FOR $${amount.toFixed(2)}`, type: 'phase' });
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
         io.emit('profilesUpdate', profiles);
+        if (room.phase === PHASES.IDLE && room.players.filter(p => p && p.chips > Number(room.bb)).length >= 2 && !room.ignitionTimer) {
+            room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000);
+        }
     }
   });
 
@@ -567,7 +603,7 @@ io.on('connection', (socket) => {
     };
     io.to(roomId).emit('log', { name: "SYSTEM", action: `BOT_${botId.toUpperCase()} ENTERED ARENA WITH $${botBuyIn}`, type: 'phase' });
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
-    if (room.phase === PHASES.IDLE && room.players.filter(Boolean).length >= 2 && !room.ignitionTimer) {
+    if (room.phase === PHASES.IDLE && room.players.filter(p => p && p.chips > Number(room.bb)).length >= 2 && !room.ignitionTimer) {
         room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000);
     }
   });
