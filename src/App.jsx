@@ -244,7 +244,6 @@ const App = () => {
     return hands.reverse();
   }, [logs]);
 
-  // Restored Banner Timing logic: exactly 2s after flop dealt for 1.5s
   useEffect(() => {
     let startTimer;
     let endTimer;
@@ -316,6 +315,12 @@ const App = () => {
       setCurrentView(VIEWS.LOBBY); 
       socket.emit('getInitialData'); 
     });
+    // Forced Logout Listener
+    socket.on('forcedLogout', (data) => {
+      setUserProfile(null);
+      setCurrentView(VIEWS.LOGIN);
+    });
+    
     socket.on('lobbyUpdate', (list) => setActiveTables(list || []));
     socket.on('profilesUpdate', (list) => setAllProfiles(list || []));
     socket.on('log', (d) => setLogs(prev => [...prev, { ...d, id: Date.now() + Math.random(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }].slice(-100)));
@@ -325,6 +330,7 @@ const App = () => {
       socket.off('lobbyUpdate'); socket.off('profilesUpdate');
       socket.off('loginSuccess'); socket.off('log'); 
       socket.off('initialDataResponse');
+      socket.off('forcedLogout');
     };
   }, []);
 
@@ -439,7 +445,7 @@ const App = () => {
         
         <main className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden">
           <div className="flex-1 flex flex-col bg-white/5 border border-white/10 rounded-[2rem] overflow-hidden shadow-2xl">
-            <div className="grid grid-cols-4 md:grid-cols-5 bg-black/60 p-4 border-b border-white/10 text-[10px] md:text-xs tracking-[0.2em] text-white/40 font-black sticky top-0 z-10 uppercase">
+            <div className="grid grid-cols-4 md:grid-cols-5 bg-black/60 p-4 border-b border-white/10 text-[10px] md:text-xs tracking-[0.2em] text-white/40 font-black sticky top-0_ z-10 uppercase">
               <div className="col-span-1 md:col-span-2">Arena Name</div>
               <div className="text-center">Stakes (SB/BB)</div>
               <div className="text-center">Players</div>
@@ -629,11 +635,6 @@ const App = () => {
         </div>
 
         <div className="flex items-center gap-2 md:gap-4">
-          <div className="text-right flex flex-col">
-            <span className="text-[8px] text-white/40 uppercase tracking-widest">WALLET</span>
-            <span className="text-emerald-400 font-mono text-xs md:text-xl font-black">${Number(heroPlayerObj?.chips || userProfile?.chips || 0).toLocaleString()}</span>
-          </div>
-          
           <div className="flex gap-1 md:gap-2">
             <button onClick={() => socket.emit('adminAddBot', { roomId: currentRoomId })} className="text-indigo-400 p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all border border-white/5"><Bot size={18}/></button>
             <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 border border-white/5 rounded-xl hover:bg-white/10 transition-colors shadow-lg`}><Eye size={18}/></button>
@@ -706,7 +707,7 @@ const App = () => {
         </div>
       </main>
 
-      <footer style={{ height: visuals.footerHeight }} className="bg-black/95 border-t border-white/10 z-[100] p-4 md:p-8 shrink-0 shadow-[0_-15px_50px_rgba(0,0,0,0.7)] flex flex-col justify-center">
+      <footer style={{ height: visuals.footerHeight }} className="bg-black/95 border-t border-white/10 z-[100] pt-0 px-2 pb-2 md:p-8 shrink-0 shadow-[0_-15px_50px_rgba(0,0,0,0.7)] flex flex-col items-center justify-start">
         {phase === PHASES.SHOWDOWN && currentWinner ? (
           <div key={currentShowdownIdx} className="h-full flex flex-col items-center justify-center animate-in zoom-in duration-700">
             <div className="flex items-center gap-4 text-yellow-400 text-2xl md:text-5xl mb-4 rank-shimmer font-black italic tracking-tighter uppercase text-center">
@@ -726,54 +727,54 @@ const App = () => {
             </div>
           </div>
         ) : (
-          <div className={`flex flex-col gap-4 items-center w-full max-w-4xl mx-auto transition-all duration-500 ${activeIdx !== heroIdx && phase !== PHASES.IDLE ? 'opacity-30 grayscale pointer-events-none scale-95' : ''}`}>
+          <div className={`flex flex-col items-center w-full max-w-4xl mx-auto transition-all duration-500 ${activeIdx !== heroIdx && phase !== PHASES.IDLE ? 'opacity-30 grayscale pointer-events-none scale-95' : ''}`}>
              
              {heroPlayerObj && phase !== PHASES.IDLE && (
-               <div className="flex justify-between w-full px-2">
-                  <div className="flex flex-col items-start min-w-[140px]">
+               <div className="flex justify-between w-full px-2 mt-0">
+                  <div className="flex flex-col items-start min-w-[120px] md:min-w-[140px]">
                     {activeVariant?.id === 'HILOW' && (
                       <>
-                        <span className="text-[8px] md:text-[10px] text-white/40 uppercase tracking-widest font-black">Low Strength</span>
-                        <span className="text-emerald-400 text-[14px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{heroPlayerObj?.lowStrength || '---'}</span>
-                        <span className="text-amber-500 text-[10px] md:text-[16px] font-mono font-black mt-1">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.lowWinProbability || 0)}% PROB.</span>
+                        <span className="text-[7px] md:text-[10px] text-white/40 uppercase tracking-widest font-black">Low Strength</span>
+                        <span className="text-emerald-400 text-[12px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{heroPlayerObj?.lowStrength || '---'}</span>
+                        <span className="text-amber-500 text-[8px] md:text-[16px] font-mono font-black mt-0.5">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.lowWinProbability || 0)}% PROB.</span>
                       </>
                     )}
                   </div>
 
-                  <div className="flex flex-col items-end min-w-[140px]">
-                    <span className="text-[8px] md:text-[10px] text-white/40 uppercase tracking-widest font-black">{activeVariant?.id === 'HILOW' ? 'High Strength' : 'Hand Strength'}</span>
-                    <span className="text-purple-400 text-[14px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{heroPlayerObj?.strength || 'Analysing...'}</span>
-                    <span className="text-amber-500 text-[10px] md:text-[16px] font-mono font-black mt-1">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.winProbability || 0)}% PROB.</span>
+                  <div className="flex flex-col items-end min-w-[120px] md:min-w-[140px]">
+                    <span className="text-[7px] md:text-[10px] text-white/40 uppercase tracking-widest font-black">{activeVariant?.id === 'HILOW' ? 'High Strength' : 'Hand Strength'}</span>
+                    <span className="text-purple-400 text-[12px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{heroPlayerObj?.strength || 'Analysing...'}</span>
+                    <span className="text-amber-500 text-[8px] md:text-[16px] font-mono font-black mt-0.5">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.winProbability || 0)}% PROB.</span>
                   </div>
                </div>
              )}
 
              {phase !== PHASES.IDLE && (
-               <div className="flex flex-col gap-2 w-full">
+               <div className="flex flex-col gap-1 md:gap-2 w-full mt-1">
                   <div className="flex gap-1 w-full font-black uppercase">
-                    <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-8 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-xs hover:bg-white/20 transition-all font-black">1/2 POT</button>
-                    <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-8 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[9px] md:text-xs hover:bg-white/20 transition-all font-black">POT</button>
-                    <button onClick={handleAllIn} className="flex-1 h-8 md:h-10 bg-red-900/40 border border-red-500/50 rounded-lg text-[9px] md:text-xs text-red-500 hover:bg-red-600 hover:text-white transition-all font-black">ALL-IN</button>
+                    <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">1/2 POT</button>
+                    <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">POT</button>
+                    <button onClick={handleAllIn} className="flex-1 h-7 md:h-10 bg-red-900/40 border border-red-500/50 rounded-lg text-[8px] md:text-xs text-red-500 hover:bg-red-600 hover:text-white transition-all font-black">ALL-IN</button>
                   </div>
 
-                  <div className="flex gap-2 w-full">
-                    <button onClick={() => handleAction('FOLD')} className="flex-1 bg-red-950/80 border-2 border-red-500/50 py-3 md:py-4 rounded-2xl text-xs md:text-lg font-black hover:bg-red-600 hover:text-white transition-all shadow-xl uppercase tracking-widest">FOLD</button>
-                    <button onClick={() => handleAction('CALL')} className="flex-1 bg-indigo-900/80 border-2 border-indigo-400/50 py-3 md:py-4 rounded-2xl text-xs md:text-lg font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl uppercase tracking-widest px-2 truncate">
+                  <div className="flex gap-1.5 md:gap-2 w-full">
+                    <button onClick={() => handleAction('FOLD')} className="flex-1 bg-red-950/80 border-2 border-red-500/50 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black hover:bg-red-600 hover:text-white transition-all shadow-xl uppercase tracking-widest">FOLD</button>
+                    <button onClick={() => handleAction('CALL')} className="flex-1 bg-indigo-900/80 border-2 border-indigo-400/50 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl uppercase tracking-widest px-1 truncate">
                       {highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toFixed(2)}` : 'CHECK'}
                     </button>
-                    <div className="flex-[2] flex bg-black/60 border-2 border-white/20 rounded-2xl overflow-hidden shadow-inner font-black">
-                      <div className="flex items-center px-2 md:px-4 text-emerald-400 text-lg md:text-2xl font-mono">$</div>
-                      <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj?.chips || 0) + Number(heroPlayerObj?.currentBet || 0), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center text-xl md:text-3xl outline-none font-mono text-white p-1 md:p-2" />
-                      <button onClick={() => handleAction('RAISE')} className="bg-emerald-600 px-4 md:px-8 text-[10px] md:text-xl font-black hover:bg-emerald-400 hover:text-black transition-all uppercase tracking-tighter shadow-lg flex items-center gap-1 md:gap-2 shrink-0"><Zap size={16}/> RAISE</button>
+                    <div className="flex-[2] flex bg-black/60 border-2 border-white/20 rounded-xl overflow-hidden shadow-inner font-black">
+                      <div className="flex items-center px-1.5 md:px-4 text-emerald-400 text-sm md:text-2xl font-mono">$</div>
+                      <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj?.chips || 0) + Number(heroPlayerObj?.currentBet || 0), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center text-sm md:text-3xl outline-none font-mono text-white p-1 md:p-2" />
+                      <button onClick={() => handleAction('RAISE')} className="bg-emerald-600 px-3 md:px-8 text-[9px] md:text-xl font-black hover:bg-emerald-400 hover:text-black transition-all uppercase tracking-tighter shadow-lg flex items-center gap-1 md:gap-2 shrink-0"><Zap size={14}/> RAISE</button>
                     </div>
                   </div>
                </div>
              )}
              
              {phase === PHASES.IDLE && (
-               <div className="flex flex-col items-center gap-2 py-10 opacity-30">
-                  <Activity className="animate-pulse text-emerald-400" />
-                  <span className="text-lg md:text-xl italic tracking-[0.5em]">Waiting for hand...</span>
+               <div className="flex flex-col items-center gap-1 py-4 md:py-10 opacity-30">
+                  <Activity className="animate-pulse text-emerald-400" size={16} />
+                  <span className="text-xs md:text-xl italic tracking-[0.5em]">Waiting...</span>
                </div>
              )}
           </div>
