@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.7.13-PRO";
+const VERSION = "v1.7.14-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -247,7 +247,6 @@ const processShowdown = (roomId) => {
       io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
     });
 
-    // TIMING LOGIC: strictly 1.5s for default fold win, 10s for hilow, 5s for others
     const isDefaultWin = room.showdownWinners.length > 0 && room.showdownWinners.every(w => w.rank === "!");
     const finalDelay = isDefaultWin ? 1500 : (variantId === 'HILOW' ? 10000 : 5000);
 
@@ -446,7 +445,16 @@ const runIgnition = (roomId) => {
   room.gameInProgress = true;
   if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
   const dealerSeat = room.players[room.dealerIdx];
-  const variantId = dealerSeat.pendingVariant || 'HOLDEM';
+
+  // DEALER CHOICE: Prioritize humans, but let bots pick variety
+  let variantId = 'HOLDEM';
+  if (dealerSeat.isBot) {
+      const keys = Object.keys(VARIANTS);
+      variantId = keys[Math.floor(Math.random() * keys.length)];
+  } else {
+      variantId = dealerSeat.pendingVariant || 'HOLDEM';
+  }
+
   room.activeVariant = { id: variantId, name: variantNames[variantId], holeCards: holeCardsMap[variantId] };
   room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
   room.community = []; room.potData = [{ amount: 0 }]; room.highestBet = Number(room.bb); room.phase = PHASES.PRE_FLOP;
