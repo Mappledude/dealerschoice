@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.7.15-PRO";
+const VERSION = "v1.7.16-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -253,6 +253,7 @@ const processShowdown = (roomId) => {
     setTimeout(() => {
         if (!rooms[roomId]) return; 
 
+        // BOT REBUY & BOOTING Logic
         room.players.forEach((p, i) => {
             if (p && p.isBot) {
                 if (p.chips <= Number(room.bb)) {
@@ -445,12 +446,13 @@ const runIgnition = (roomId) => {
   if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
   const dealerSeat = room.players[room.dealerIdx];
 
-  // DEALER'S CHOICE Logic
+  // DEALER'S CHOICE Logic Fix
   let variantId = 'HOLDEM';
   if (dealerSeat.isBot) {
       const keys = Object.keys(holeCardsMap);
       variantId = keys[Math.floor(Math.random() * keys.length)];
   } else {
+      // Use the variant explicitly selected by the player
       variantId = dealerSeat.pendingVariant || 'HOLDEM';
   }
 
@@ -496,7 +498,7 @@ const removePlayerGlobally = (uid) => {
             
             room.players[idx] = null;
 
-            // VACATED ARENA RESET: Boot bots if no humans remain
+            // VACATED ARENA RESET Logic
             const humanCount = room.players.filter(pl => pl && !pl.isBot).length;
             if (humanCount === 0) {
                 room.players.forEach((seat, sIdx) => {
