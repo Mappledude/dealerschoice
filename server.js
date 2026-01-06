@@ -239,7 +239,6 @@ const processShowdown = (roomId) => {
         }
     });
 
-    // --- AGGREGATION LOGIC (FIX FOR PLAYING TWICE) ---
     const winnerMap = {};
     allPayouts.forEach(p => {
         if (!winnerMap[p.uid]) {
