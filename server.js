@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v2.0.2-PRO";
+const VERSION = "v2.0.3-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -269,13 +269,11 @@ const processShowdown = (roomId) => {
 
     const totalDuration = allShowdownWinners.length * 4000;
     setTimeout(() => {
-        // AUTOMATIC BOT REBUY LOGIC
         room.players.forEach(p => { 
           if (p) { 
             p.waitingForNextHand = false; 
             p.isWinner = false; 
             
-            // If bot is broke, rebuy automatically
             if (p.isBot && p.chips < Number(room.bb)) {
               const rebuyAmount = room.maxBuy || 10;
               p.chips += rebuyAmount;
@@ -458,7 +456,6 @@ const runIgnition = (roomId) => {
   if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
   const dealerSeat = room.players[room.dealerIdx];
   
-  // RANDOMIZED VARIANT SELECTION FOR BOTS
   let variantId;
   if (dealerSeat.isBot) {
     const variants = Object.keys(holeCardsMap);
@@ -510,6 +507,25 @@ const removePlayerGlobally = (uid) => {
                 moveToNextPlayer(room.id);
             }
             room.players[idx] = null;
+
+            // RESET LOGIC: Boot bots if no humans are left
+            const humanPlayers = room.players.filter(player => player && !player.isBot);
+            if (humanPlayers.length === 0) {
+              if (room.timer) clearInterval(room.timer);
+              if (room.ignitionTimer) clearTimeout(room.ignitionTimer);
+              
+              room.players = Array(10).fill(null);
+              room.phase = PHASES.IDLE;
+              room.gameInProgress = false;
+              room.community = [];
+              room.potData = [{amount:0}];
+              room.activeIdx = -1;
+              room.highestBet = 0;
+              room.pots = [];
+              
+              io.to(room.id).emit('log', { name: "SYSTEM", action: "ARENA VACATED BY HUMANS. BOTS BOOTED & RESET.", type: 'phase' });
+            }
+
             io.to(room.id).emit('roomUpdate', serializeRoom(room));
         }
     });
@@ -609,6 +625,11 @@ io.on('connection', (socket) => {
 
   socket.on('adminAddBot', ({ roomId }) => {
     const room = rooms[roomId]; if (!room) return;
+    
+    // Safety: No bots allowed on empty tables
+    const humanPlayers = room.players.filter(p => p && !p.isBot);
+    if (humanPlayers.length === 0) return;
+
     const emptyIdx = room.players.findIndex(p => p === null); if (emptyIdx === -1) return;
     
     const botId = Math.random().toString(36).slice(2, 7);
