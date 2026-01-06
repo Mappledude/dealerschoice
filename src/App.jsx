@@ -164,11 +164,18 @@ const Seat = ({
                         const offset = ci - mid;
                         const fanRotation = offset * visuals.holeCardFan;
                         const fanTranslation = offset * (player.hand.length > 2 ? 2.0 : 3.5);
+                        const isRedSuit = c.suit === '♥' || c.suit === '♦';
+                        const suitColor = isRedSuit ? 'text-red-600' : 'text-black';
                         return (
                           <div key={c.id || ci} 
                               className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_200px_#fbbf24]' : 'border-white/20'}`} 
                               style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${seatIdx * 0.1}s` }}>
-                              {(isShowdown || isHero) && ( <><span className="text-[9px] md:text-[12px] font-black leading-none">{String(c.value)}</span><span className={`text-[11px] md:text-[16px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></> )}
+                              {(isShowdown || isHero) && ( 
+                                <>
+                                  <span className={`text-[9px] md:text-[12px] font-black leading-none ${suitColor}`}>{String(c.value)}</span>
+                                  <span className={`text-[11px] md:text-[16px] leading-none ${suitColor}`}>{String(c.suit)}</span>
+                                </> 
+                              )}
                           </div>
                         );
                     })}
@@ -893,7 +900,16 @@ const App = () => {
               {!potTransferring && ( <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}><div className={`text-[10vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div> )}
               {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS', 'REDSBLACKS'].includes(activeVariant?.id) && (
                 <div className="flex gap-1.5 md:gap-4 mt-4 md:mt-12 font-black uppercase transition-transform" style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
-                  {(community || []).map((c, j) => (<div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[3px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}><span className="text-[10px] md:text-[0.9vw] font-black leading-none">{String(c.value)}</span><span className={`text-[13px] md:text-[2.2vw] font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span></div>))}
+                  {(community || []).map((c, j) => {
+                    const isRedSuit = c.suit === '♥' || c.suit === '♦';
+                    const suitColor = isRedSuit ? 'text-red-600' : 'text-black';
+                    return (
+                      <div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[3px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}>
+                        <span className={`text-[10px] md:text-[0.9vw] font-black leading-none ${suitColor}`}>{String(c.value)}</span>
+                        <span className={`text-[13px] md:text-[2.2vw] font-black leading-none ${suitColor}`}>{String(c.suit)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -931,13 +947,17 @@ const App = () => {
                                 </div>
                                 {showdownWinners[currentShowdownIdx].rank !== "!" && (
                                     <div className="flex gap-1 md:gap-2 items-center justify-center">
-                                        {(showdownWinners[currentShowdownIdx].hand || []).map((c, ci) => (
-                                            <div key={ci} className="w-6 md:w-16 h-9 md:h-24 bg-white rounded-sm md:rounded-xl flex flex-col items-center justify-center text-black shadow-lg ring-1 ring-black/5 relative overflow-hidden" 
-                                                style={{ animation: `card-flip-hero 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.4 + ci * 0.2}s`, opacity: 0 }}>
-                                                <span className="text-[8px] md:text-[20px] font-black absolute top-0.5 left-1 leading-none">{String(c.value)}</span>
-                                                <span className={`text-[12px] md:text-[36px] ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
-                                            </div>
-                                        ))}
+                                        {(showdownWinners[currentShowdownIdx].hand || []).map((c, ci) => {
+                                            const isRedSuit = c.suit === '♥' || c.suit === '♦';
+                                            const suitColor = isRedSuit ? 'text-red-600' : 'text-black';
+                                            return (
+                                              <div key={ci} className="w-6 md:w-16 h-9 md:h-24 bg-white rounded-sm md:rounded-xl flex flex-col items-center justify-center text-black shadow-lg ring-1 ring-black/5 relative overflow-hidden" 
+                                                  style={{ animation: `card-flip-hero 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.4 + ci * 0.2}s`, opacity: 0 }}>
+                                                  <span className={`text-[8px] md:text-[20px] font-black absolute top-0.5 left-1 leading-none ${suitColor}`}>{String(c.value)}</span>
+                                                  <span className={`text-[12px] md:text-[36px] ${suitColor}`}>{String(c.suit)}</span>
+                                              </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
