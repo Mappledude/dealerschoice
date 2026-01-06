@@ -423,6 +423,49 @@ io.on('connection', (socket) => {
     const profile = profiles.find(p => p.password === password);
     if (profile) { seatedUid = profile.uid; socket.emit('loginSuccess', profile); }
   });
+  
+  // ADMIN HANDLERS
+  socket.on('adminCreatePlayer', (data) => {
+    const exists = profiles.find(p => p.uid === data.uid || p.name === data.name);
+    if (!exists) {
+        profiles.push({ ...data, chips: Number(data.chips) });
+        io.emit('profilesUpdate', profiles);
+    }
+  });
+
+  socket.on('adminDeletePlayer', (uid) => {
+    profiles = profiles.filter(p => p.uid !== uid);
+    removePlayerGlobally(uid);
+    io.emit('profilesUpdate', profiles);
+  });
+
+  socket.on('adminEditChips', ({ uid, chips }) => {
+    const p = profiles.find(x => x.uid === uid);
+    if (p) {
+        p.chips = Number(chips);
+        io.emit('profilesUpdate', profiles);
+    }
+  });
+
+  socket.on('adminCreateRoom', (data) => { 
+    const defaultData = { sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 };
+    rooms[data.id] = { ...defaultData, ...data, players: Array(10).fill(null), phase: PHASES.IDLE, community: [], potData: [{amount:0}], dealerIdx: 0, timeRemaining: 20, gameInProgress: false }; 
+    io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom)); 
+  });
+
+  socket.on('adminDeleteRoom', (id) => {
+    delete rooms[id];
+    io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom));
+  });
+
+  socket.on('adminNuclearReset', () => { 
+    rooms = {}; 
+    profiles = profiles.filter(p => p.role === 'admin'); 
+    io.emit('lobbyUpdate', []); 
+    io.emit('profilesUpdate', profiles); 
+    io.emit('roomUpdate', null); 
+  });
+
   socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
     const room = rooms[roomId]; if (!room) return callback({ status: 'error' });
     let globalProfile = profiles.find(p => p.uid === profile.uid || p.name === profile.name);
@@ -437,9 +480,11 @@ io.on('connection', (socket) => {
     callback({ status: 'ok' }); io.to(roomId).emit('roomUpdate', serializeRoom(room)); io.emit('profilesUpdate', profiles);
     if (room.phase === PHASES.IDLE && room.players.filter(Boolean).length >= 2 && !room.ignitionTimer) { room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000); }
   });
+
   socket.on('playerAction', ({ roomId, type, amount }) => performAction(roomId, type, amount));
   socket.on('leaveRoom', ({ uid }) => { removePlayerGlobally(uid); seatedUid = null; io.emit('profilesUpdate', profiles); });
   socket.on('disconnect', () => { if (seatedUid) { removePlayerGlobally(seatedUid); io.emit('profilesUpdate', profiles); } });
+  
   socket.on('adminAddBot', ({ roomId }) => {
     const room = rooms[roomId]; if (!room) return;
     const emptyIdx = room.players.findIndex(p => p === null); if (emptyIdx === -1) return;
@@ -449,12 +494,6 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('log', { name: "SYSTEM", action: `BOT_${botId.toUpperCase()} ENTERED ARENA WITH $${botBuyIn}`, type: 'phase' });
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     if (room.phase === PHASES.IDLE && room.players.filter(Boolean).length >= 2 && !room.ignitionTimer) { room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000); }
-  });
-  socket.on('adminNuclearReset', () => { rooms = {}; profiles = profiles.filter(p => p.role === 'admin'); io.emit('lobbyUpdate', []); io.emit('profilesUpdate', profiles); io.emit('roomUpdate', null); });
-  socket.on('adminCreateRoom', (data) => { 
-    const defaultData = { sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 };
-    rooms[data.id] = { ...defaultData, ...data, players: Array(10).fill(null), phase: PHASES.IDLE, community: [], potData: [{amount:0}], dealerIdx: 0, timeRemaining: 20, gameInProgress: false }; 
-    io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom)); 
   });
 });
 
