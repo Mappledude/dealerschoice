@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.7.13-PRO";
+const VERSION = "v1.7.14-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -476,7 +476,7 @@ const App = () => {
             setWinning5Ids(d.winning5Ids || []);
             
             const variantId = d.activeVariant?.id || 'HOLDEM';
-            const isDefWin = sortedWinners.length > 0 && sortedWinners.every(w => w.rank === "!");
+            const isDefWin = sortedWinners.every(w => w.rank === "!");
             
             let totalDuration = 5000;
             if (isDefWin) {
@@ -529,7 +529,6 @@ const App = () => {
 
   if (currentView === VIEWS.ADMIN) return (
     <div className="h-screen bg-[#06080c] flex flex-col md:flex-row text-white uppercase font-black overflow-hidden pt-[env(safe-area-inset-top)] relative">
-        {/* Profile Edit Overlay Modal */}
         {editingProfile && (
             <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/90 backdrop-blur-xl p-6">
                 <div className="w-full max-w-[400px] bg-slate-900 border-2 border-cyan-500 rounded-3xl p-8 flex flex-col gap-6 shadow-[0_0_80px_rgba(34,211,238,0.2)]">
@@ -646,10 +645,8 @@ const App = () => {
             <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={16}/></button>
           </div>
         </header>
-        {/* REDESIGNED LOBBY LIST - TABLE VIEW */}
         <main className="flex-1 overflow-y-auto bg-[#06080c] scroll-smooth pt-4 px-2 md:px-12 pb-32">
             <div className="max-w-[1200px] mx-auto">
-              {/* Table Header - Visible on Desktop */}
               <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 border-b border-white/10 text-white/40 text-[10px] tracking-[0.2em] font-black uppercase">
                 <div className="col-span-3">Arena Name</div>
                 <div className="col-span-2 text-center">Stakes</div>
@@ -667,7 +664,6 @@ const App = () => {
                 <div className="flex flex-col gap-2 mt-2">
                   {activeTables.map((t) => (
                     <div key={t.id} className="bg-white/5 border border-white/5 rounded-xl md:rounded-2xl p-3 md:p-0 transition-all hover:bg-white/10 group">
-                      {/* Desktop Row Layout */}
                       <div className="hidden md:grid grid-cols-12 items-center gap-4 px-6 py-4">
                         <div className="col-span-3">
                           <h3 className="text-lg text-white font-black truncate">{String(t.name)}</h3>
@@ -691,7 +687,6 @@ const App = () => {
                         </div>
                       </div>
 
-                      {/* Mobile Row Layout - High Density */}
                       <div className="flex md:hidden flex-col gap-2">
                          <div className="flex items-center justify-between gap-3">
                             <div className="flex flex-col min-w-0 flex-1">
@@ -704,7 +699,6 @@ const App = () => {
                             </div>
                             <button onClick={()=>setSelectedTableForJoin(t)} className="px-5 py-3 bg-emerald-600 rounded-lg text-[10px] font-black uppercase shadow-lg active:scale-95 transition-transform">ENTER</button>
                          </div>
-                         {/* Player List for Mobile */}
                          <div className="flex flex-wrap gap-1 border-t border-white/5 pt-2 mt-1">
                             {t.players?.filter(p => p).map((p, idx) => (
                               <div key={idx} className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded">
@@ -1195,7 +1189,7 @@ const App = () => {
           html, body { overscroll-behavior-y: contain; height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; }
       `}</style>
       
-      {/* Intelligence Access Modal (Integrated) */}
+      {/* Intelligence Access Modal */}
       {intelExpanded && (
         <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[950px] mx-auto bg-slate-900/95 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
