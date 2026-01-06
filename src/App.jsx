@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v2.0.4-PRO";
+const VERSION = "v2.0.5-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -638,8 +638,11 @@ const App = () => {
 
       <header className="h-16 md:h-20 border-b border-white/10 flex items-center justify-between px-4 md:px-8 bg-black/80 backdrop-blur-md z-[80] shrink-0 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-2 overflow-hidden flex-1">
-          <button onClick={() => setShowRulesModal(true)} className="bg-white/5 px-2 py-1.5 rounded-xl border border-white/5 flex flex-col justify-center min-w-[80px] hover:bg-white/10 transition-colors">
-            <span className="text-yellow-400 text-[8px] tracking-widest uppercase flex items-center gap-1 leading-none mb-1">THIS HAND: <Info size={8}/></span>
+          <button onClick={() => setShowRulesModal(true)} 
+            className={`px-2 py-1.5 rounded-xl border flex flex-col justify-center min-w-[80px] transition-all duration-500
+              ${(phase === PHASES.FLOP || phase === PHASES.TURN) ? 'bg-yellow-400/20 border-yellow-400 ring-2 ring-yellow-400 animate-attention-grabber scale-110 z-10' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+          >
+            <span className={`text-yellow-400 text-[8px] tracking-widest uppercase flex items-center gap-1 leading-none mb-1 animate-glow`}>THIS HAND: <Info size={8}/></span>
             <span className="text-white text-[10px] md:text-sm font-black truncate uppercase leading-none">{activeVariant?.name || 'Holdem'}</span>
           </button>
           
@@ -659,7 +662,7 @@ const App = () => {
             <button onClick={() => socket.emit('adminAddBot', { roomId: currentRoomId })} className="text-indigo-400 p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all border border-white/5"><Bot size={18}/></button>
             <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 border border-white/5 rounded-xl hover:bg-white/10 transition-colors shadow-lg`}><Eye size={18}/></button>
             <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-2 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all"><Settings size={18}/></button>
-            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all"><LogOut size={18}/></button>
+            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"><LogOut size={18}/></button>
           </div>
         </div>
       </header>
@@ -802,6 +805,21 @@ const App = () => {
       </footer>
 
       <style>{`
+        @keyframes indicator-glow {
+          0%, 100% { text-shadow: 0 0 2px rgba(251, 191, 36, 0); opacity: 0.7; }
+          50% { text-shadow: 0 0 10px rgba(251, 191, 36, 0.8); opacity: 1; }
+        }
+        .animate-glow {
+          animation: indicator-glow 2s ease-in-out infinite;
+        }
+        @keyframes attention-ping {
+          0% { transform: scale(1); filter: brightness(1); }
+          50% { transform: scale(1.08); filter: brightness(1.3); }
+          100% { transform: scale(1); filter: brightness(1); }
+        }
+        .animate-attention-grabber {
+          animation: attention-ping 1s ease-in-out infinite;
+        }
         @keyframes fling-to-pot { 
           0% { transform: translate(calc(-50% + 0px), 0px) scale(2.0); filter: brightness(2); } 
           15% { transform: translate(calc(-50% + 40px), -15vh) scale(1.4); filter: brightness(1.5); }
