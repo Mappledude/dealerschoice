@@ -112,11 +112,22 @@ const Seat = ({
     const currentCardScale = isHero ? visuals.heroCardScale : visuals.oppCardScale;
     const currentCardY = isHero ? visuals.heroCardY : visuals.oppCardY;
 
+    const timeRatio = timeRemaining / 15;
+    const timerColor = timeRemaining < 5 ? 'rgb(239, 68, 68)' : timeRemaining < 10 ? 'rgb(245, 158, 11)' : 'rgb(34, 211, 238)';
+    const isUrgent = timeRemaining < 5 && isActiveTurn;
+
     return (
-        <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'} ${player.waitingForNextHand ? 'opacity-50' : ''}`}>
+        <div 
+          style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} 
+          className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 
+            ${player.isFolded ? 'opacity-30 grayscale scale-95' : 'opacity-100'} 
+            ${player.waitingForNextHand ? 'opacity-50' : ''}
+            ${isUrgent ? 'animate-panic-pulse' : ''}`}
+        >
             {player.waitingForNextHand && (
                 <div className="absolute top-[-20px] bg-slate-800 text-white text-[8px] px-2 py-0.5 rounded border border-white/20 uppercase font-black tracking-widest z-[150]">Waiting...</div>
             )}
+            
             {player.lastAction && !isActiveTurn && !isCollectingBets && !player.waitingForNextHand && (
               <div className="absolute top-[-30px] animate-bounce-short z-[200]">
                 <span className={`text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg uppercase border border-white/20 ${
@@ -126,6 +137,7 @@ const Seat = ({
                 }`} style={{ transform: `scale(${visuals.betScale}) translateY(${visuals.betY}px)` }}>{String(player.lastAction)}</span>
               </div>
             )}
+
             {player.currentBet > 0 && (
                 <div className={`absolute z-[100] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot' : 'animate-bet-splash'}`}
                     style={{ 
@@ -139,17 +151,49 @@ const Seat = ({
                     </div>
                 </div>
             )}
-            <div style={{ transform: `translateY(${visuals.badgeY}px)` }}
-                className={`relative z-50 flex flex-col items-center p-1 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[180px] shadow-2xl ${isActiveTurn ? 'border-cyan-400 ring-2 ring-cyan-400/40 scale-105 shadow-[0_0_200px_rgba(34,211,238,0.2)]' : 'border-white/10'} ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 animate-pulse-glow' : ''}`}>
-                {isDealer && ( <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white shadow-[0_0_12px_rgba(220,38,38,0.9)] animate-pulse z-[110]" /> )}
+
+            <div 
+                style={{ transform: `translateY(${visuals.badgeY}px)` }}
+                className={`relative z-50 flex flex-col items-center p-1 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[180px] shadow-2xl overflow-hidden
+                  ${isActiveTurn ? 'border-cyan-400/50 ring-1 ring-cyan-400/20 scale-105 shadow-[0_0_200px_rgba(34,211,238,0.1)]' : 'border-white/10'} 
+                  ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 animate-pulse-glow' : ''}`}
+            >
                 {isActiveTurn && timeRemaining > 0 && (
-                    <div className="absolute -top-1 w-full px-1.5 h-1 z-[60]">
-                        <div className="w-full h-full bg-black/40 rounded-full overflow-hidden">
-                            <div className="h-full bg-cyan-400 transition-all duration-1000 linear" style={{ width: `${(timeRemaining / 15) * 100}%` }} />
-                        </div>
+                  <>
+                    <div 
+                      className="absolute inset-0 z-[-1] transition-all duration-1000 linear" 
+                      style={{ 
+                        background: `linear-gradient(to top, ${timerColor}22, transparent)`,
+                        height: `${(1 - timeRatio) * 100}%`,
+                        top: 'auto',
+                        bottom: 0
+                      }} 
+                    />
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                      <rect 
+                        x="0" y="0" width="100%" height="100%" 
+                        fill="none" 
+                        stroke={timerColor} 
+                        strokeWidth="4" 
+                        className="transition-all duration-1000 linear"
+                        style={{
+                          strokeDasharray: '1000',
+                          strokeDashoffset: (1000 - (timeRatio * 1000)).toString()
+                        }}
+                      />
+                    </svg>
+                    <div 
+                      className="absolute top-1 right-2 text-[10px] font-mono font-black animate-pulse" 
+                      style={{ color: timerColor }}
+                    >
+                      {timeRemaining}s
                     </div>
+                  </>
                 )}
-                <div className="flex flex-col items-center gap-0 w-full">
+
+                {isDealer && ( <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white shadow-[0_0_12px_rgba(220,38,38,0.9)] animate-pulse z-[110]" /> )}
+                
+                <div className="flex flex-col items-center gap-0 w-full relative z-10">
                     <div className="flex items-center gap-1">
                       {player.isBot && <Bot size={8} className="text-indigo-400" />}
                       <span className="text-[8.5px] md:text-[14.5px] font-black text-white/90 uppercase tracking-tight truncate max-w-[60px] md:max-w-[100px]">{String(player.name || "Anon")}</span>
@@ -157,6 +201,7 @@ const Seat = ({
                     <span className={`text-[11px] md:text-[17px] font-mono font-black ${player.chips <= 1 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                 </div>
             </div>
+
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div className="relative z-10 flex items-center justify-center w-[12vw] h-[6vw] mt-4 overflow-visible">
                     {player.hand.map((c, ci) => {
@@ -173,7 +218,7 @@ const Seat = ({
                               {(isShowdown || isHero) && ( 
                                 <>
                                   <span className={`text-[9px] md:text-[12px] font-black leading-none ${suitColor}`}>{String(c.value)}</span>
-                                  <span className={`text-[11px] md:text-[16px] leading-none ${suitColor}`}>{String(c.suit)}</span>
+                                  <span className={`text-[9px] md:text-[16px] leading-none ${suitColor}`}>{String(c.suit)}</span>
                                 </> 
                               )}
                           </div>
@@ -420,6 +465,44 @@ const App = () => {
         }
     });
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
+
+  // Helper to format rank text into Title Case
+  const formatRank = (rank) => {
+    if (!rank) return "";
+    return rank.toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  // Function to generate the requested showdown string
+  const getShowdownText = (winner, allWinners) => {
+    const name = String(winner.name);
+    const amt = Number(winner.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+    
+    // Check if it was an uncontested win (Mucked)
+    if (winner.rank === "!") {
+      return `${name} wins $${amt} (Mucked)`;
+    }
+
+    const isHi = String(winner.rank).includes("HIGH:");
+    const isLo = String(winner.rank).includes("LOW:");
+
+    // Detect Scoop (winning twice in a Hi-Low or 4-way segment)
+    const occurrences = allWinners.filter(w => w.name === winner.name).length;
+    const isHiLoGame = allWinners.some(w => String(w.rank).includes("HIGH:") || String(w.rank).includes("LOW:"));
+
+    if (occurrences > 1 && isHiLoGame) {
+      return `${name} SCOOPS $${amt}! (HI/LO)`;
+    }
+
+    const cleanRank = formatRank(String(winner.rank).replace("HIGH: ", "").replace("LOW: ", ""));
+
+    if (isHi) return `${name} wins $${amt} (HI) • ${cleanRank}`;
+    if (isLo) return `${name} wins $${amt} (LO) • ${cleanRank}`;
+
+    return `${name} wins $${amt} • ${cleanRank}`;
+  };
 
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
@@ -931,19 +1014,15 @@ const App = () => {
                     </div>
                     <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.2em] text-[10px] md:text-2xl uppercase text-center px-4 drop-shadow-[0_0_15px_rgba(251,191,36,0.6)]">
                       <Trophy size={14} className="md:size-6" /> 
-                      {showdownWinners.every(w => w.name === showdownWinners[0].name) ? (
-                        showdownWinners[0].rank === "!" ? `${showdownWinners[0].name} Wins!` : `${showdownWinners[0].name} Wins with ${showdownWinners[0].rank}`
-                      ) : (
-                        `Split Pot: ${showdownWinners[currentShowdownIdx].name} (${showdownWinners[currentShowdownIdx].rank === "!" ? "Default" : showdownWinners[currentShowdownIdx].rank})`
-                      )}
+                      {getShowdownText(showdownWinners[currentShowdownIdx], showdownWinners)}
                     </div>
                     <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-8 px-2 md:px-16 justify-center no-scrollbar pb-1">
                         {showdownWinners[currentShowdownIdx] && (
                             <div key={currentShowdownIdx} className="flex items-center gap-3 md:gap-8 bg-black/70 p-2 md:p-6 rounded-[1.5rem] md:rounded-[3.5rem] border-2 border-yellow-500/40 shadow-2xl min-w-[200px] md:min-w-[450px] animate-showdown-card-pop shrink-0">
                                 <div className="flex flex-col items-center shrink-0">
                                     <div className="text-white font-black text-[12px] md:text-3xl drop-shadow-lg uppercase truncate max-w-[80px] md:max-w-none mb-0.5">{String(showdownWinners[currentShowdownIdx].name)}</div>
-                                    <div className="bg-yellow-500 text-black px-2 py-0.5 rounded-full font-mono text-[10px] md:text-2xl font-black shadow-inner">+${(showdownWinners[currentShowdownIdx].amount || 0).toLocaleString()}</div>
-                                    <div className="text-yellow-400/80 text-[6px] md:text-[10px] tracking-widest uppercase mt-1.5 font-black italic">{showdownWinners[currentShowdownIdx].rank === "!" ? "" : String(showdownWinners[currentShowdownIdx].rank)}</div>
+                                    <div className="bg-yellow-500 text-black px-2 py-0.5 rounded-full font-mono text-[10px] md:text-2xl font-black shadow-inner">+${Number(showdownWinners[currentShowdownIdx].amount || 0).toLocaleString()}</div>
+                                    <div className="text-yellow-400/80 text-[6px] md:text-[10px] tracking-widest uppercase mt-1.5 font-black italic">{showdownWinners[currentShowdownIdx].rank === "!" ? "(Everyone Folded)" : formatRank(String(showdownWinners[currentShowdownIdx].rank).replace("HIGH: ", "").replace("LOW: ", ""))}</div>
                                 </div>
                                 {showdownWinners[currentShowdownIdx].rank !== "!" && (
                                     <div className="flex gap-1 md:gap-2 items-center justify-center">
@@ -993,7 +1072,7 @@ const App = () => {
                                 <>
                                     <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Low Strength</span>
                                     <span className="text-[9px] md:text-[18px] text-emerald-400 font-black uppercase leading-none">
-                                        {phase === PHASES.PRE_FLOP ? "Pre-flop" : String(heroPlayerObj?.lowStrength || "Pre-flop")}
+                                        {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.lowStrength || "Pre-flop"))}
                                     </span>
                                     <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
                                         {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroLowWinProb)}% PROB.
@@ -1006,7 +1085,7 @@ const App = () => {
                                 {activeVariant?.id === 'HILOW' ? 'High Strength' : 'Strength'}
                             </span>
                             <span className="text-[9px] md:text-[18px] text-purple-400 font-black uppercase leading-none">
-                                {phase === PHASES.PRE_FLOP ? "Pre-flop" : String(heroPlayerObj?.strength || "Pre-flop")}
+                                {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.strength || "Pre-flop"))}
                             </span>
                             <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
                                 {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroWinProb)}% PROB.
@@ -1023,6 +1102,15 @@ const App = () => {
         </div>
       </footer>
       <style>{`
+          @keyframes panic-pulse {
+            0% { transform: scale(1) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 0px #ef4444); }
+            50% { transform: scale(1.05) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 30px #ef4444); }
+            100% { transform: scale(1) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 0px #ef4444); }
+          }
+          .animate-panic-pulse { 
+            animation: panic-pulse 0.4s infinite cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            z-index: 100 !important;
+          }
           @keyframes fling-to-pot { 
             0% { transform: translate(calc(-50% + 0px), 0px) scale(2.0); filter: blur(0px) brightness(2); } 
             15% { transform: translate(calc(-50% + 20px), -10vh) scale(1.4); filter: blur(1px) brightness(1.5); }
