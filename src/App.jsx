@@ -45,6 +45,23 @@ const VARIANTS = {
   REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', rules: ["4 hole cards.", "Joker formed by color mix."] }
 };
 
+// Redesigned Intel Feed Color Helper
+const INTEL_COLORS = [
+  'text-emerald-400', 'text-fuchsia-400', 'text-sky-400', 
+  'text-amber-400', 'text-rose-400', 'text-indigo-400', 
+  'text-cyan-400', 'text-orange-400', 'text-lime-400', 
+  'text-violet-400', 'text-teal-400'
+];
+
+const getPlayerIntelColor = (name) => {
+  if (!name || name === 'SYSTEM') return 'text-white/60';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return INTEL_COLORS[Math.abs(hash) % INTEL_COLORS.length];
+};
+
 const Confetti = ({ active }) => {
   if (!active) return null;
   return (
@@ -507,7 +524,7 @@ const App = () => {
   return (
     <div className={`h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase transition-all duration-700`}>
       
-      {/* Intel Feed Modal */}
+      {/* Redesigned Intel Feed Modal */}
       {intelExpanded && (
         <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[950px] mx-auto bg-slate-900/95 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
@@ -541,13 +558,16 @@ const App = () => {
                     </button>
                     {expandedHands.has(hand.id) && (
                       <div className="p-4 space-y-2 bg-black/60 border-t border-white/5">
-                        {hand.actions.map((l, i) => (
-                          <div key={i} className="flex gap-4 text-[11px] leading-tight">
-                            <span className="text-white/20 shrink-0 w-10">{l.time}</span>
-                            <span className="text-white/40 w-20 shrink-0">{l.name}:</span>
-                            <span className="text-white/80">{l.action}</span>
-                          </div>
-                        ))}
+                        {hand.actions.map((l, i) => {
+                          const playerColor = getPlayerIntelColor(l.name);
+                          return (
+                            <div key={i} className={`flex gap-4 text-[11px] leading-tight ${playerColor}`}>
+                              <span className="text-white/20 shrink-0 w-10">{l.time}</span>
+                              <span className="w-20 shrink-0 font-black">{l.name}:</span>
+                              <span className="flex-1 opacity-90">{l.action}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -730,27 +750,27 @@ const App = () => {
           <div className={`flex flex-col items-center w-full max-w-4xl mx-auto transition-all duration-500 ${activeIdx !== heroIdx && phase !== PHASES.IDLE ? 'opacity-30 grayscale pointer-events-none scale-95' : ''}`}>
              
              {heroPlayerObj && phase !== PHASES.IDLE && (
-               <div className="flex justify-between w-full px-2 mt-0">
+               <div className="flex justify-between w-full px-2 mt-[-2px]">
                   <div className="flex flex-col items-start min-w-[120px] md:min-w-[140px]">
                     {activeVariant?.id === 'HILOW' && (
                       <>
-                        <span className="text-[7px] md:text-[10px] text-white/40 uppercase tracking-widest font-black">Low Strength</span>
+                        <span className="text-[7px] md:text-[10px] text-white/40 uppercase tracking-widest font-black leading-none mb-0.5">Low Strength</span>
                         <span className="text-emerald-400 text-[12px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{heroPlayerObj?.lowStrength || '---'}</span>
-                        <span className="text-amber-500 text-[8px] md:text-[16px] font-mono font-black mt-0.5">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.lowWinProbability || 0)}% PROB.</span>
+                        <span className="text-amber-500 text-[8px] md:text-[16px] font-mono font-black mt-0.5 leading-none">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.lowWinProbability || 0)}% PROB.</span>
                       </>
                     )}
                   </div>
 
                   <div className="flex flex-col items-end min-w-[120px] md:min-w-[140px]">
-                    <span className="text-[7px] md:text-[10px] text-white/40 uppercase tracking-widest font-black">{activeVariant?.id === 'HILOW' ? 'High Strength' : 'Hand Strength'}</span>
+                    <span className="text-[7px] md:text-[10px] text-white/40 uppercase tracking-widest font-black leading-none mb-0.5">{activeVariant?.id === 'HILOW' ? 'High Strength' : 'Hand Strength'}</span>
                     <span className="text-purple-400 text-[12px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{heroPlayerObj?.strength || 'Analysing...'}</span>
-                    <span className="text-amber-500 text-[8px] md:text-[16px] font-mono font-black mt-0.5">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.winProbability || 0)}% PROB.</span>
+                    <span className="text-amber-500 text-[8px] md:text-[16px] font-mono font-black mt-0.5 leading-none">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.winProbability || 0)}% PROB.</span>
                   </div>
                </div>
              )}
 
              {phase !== PHASES.IDLE && (
-               <div className="flex flex-col gap-1 md:gap-2 w-full mt-1">
+               <div className="flex flex-col gap-1 md:gap-2 w-full mt-0.5">
                   <div className="flex gap-1 w-full font-black uppercase">
                     <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">1/2 POT</button>
                     <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">POT</button>
