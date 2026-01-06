@@ -247,6 +247,13 @@ const processShowdown = (roomId) => {
       io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
     });
 
+    // --- SMART PACING LOGIC ---
+    // Synchronized with Client (Point 1, 2 & Example 3)
+    // 5s per winner for standard/split, cap total at 10s for 3+ winners.
+    const count = room.showdownWinners.length;
+    const durationPerWinner = count > 2 ? (10000 / count) : 5000;
+    const totalDuration = durationPerWinner * count;
+
     setTimeout(() => {
         room.players.forEach(p => { if (p) p.waitingForNextHand = false; });
         const seated = room.players.map((p, i) => (p && p.chips > Number(room.bb)) ? i : null).filter(x => x !== null);
@@ -258,7 +265,7 @@ const processShowdown = (roomId) => {
             room.phase = PHASES.IDLE; 
             io.to(roomId).emit('roomUpdate', serializeRoom(room));
         }
-    }, Math.max(4000, room.showdownWinners.length * 4000));
+    }, totalDuration);
 };
 
 const performAction = (roomId, type, amount) => {
@@ -396,7 +403,7 @@ const startTurnTimer = (roomId) => {
         if (room.timeRemaining <= 0) {
             clearInterval(room.timer);
             const p = room.players[room.activeIdx];
-            if (p) performAction(roomId, (room.highestBet - p.currentBet) > 0 ? 'FOLD' : 'CALL', 0);
+            if (p) performAction(room.id, (room.highestBet - p.currentBet) > 0 ? 'FOLD' : 'CALL', 0);
         } else { io.to(roomId).emit('roomUpdate', serializeRoom(room)); }
     }, 1000);
 };
