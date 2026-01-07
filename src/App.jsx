@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.7";
+const VERSION = "v1.0.8";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -110,7 +110,7 @@ const Seat = ({
         switch (player.lastAction) {
             case 'RAISE': return { text: `RAISED $${player.currentBet}`, color: "text-emerald-400", glow: "shadow-[0_0_30px_rgba(16,185,129,0.8)]" };
             case 'CALL': return { text: player.currentBet > 0 ? `CALLED $${player.currentBet}` : "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.8)]" };
-            case 'CHECK': return { text: "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30_rgba(34,211,238,0.8)]" };
+            case 'CHECK': return { text: "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.8)]" };
             default: return null;
         }
     };
@@ -463,7 +463,6 @@ const App = () => {
         }
     };
 
-    // Passive-to-Active Resync Logic for Mobile Phones
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (!socket.connected) {
@@ -471,7 +470,6 @@ const App = () => {
         }
         socket.emit('getInitialData');
         if (currentRoomId && userProfile) {
-          // Soft-rejoin to force state push
           socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 });
         }
       }
@@ -680,9 +678,9 @@ const App = () => {
         </div>
       )}
 
-      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-14 md:h-17">
+      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[50px] md:h-[60px]">
         <div className="flex-1 flex items-center">
-            <div className={`bg-slate-900 border px-3 py-1.5 rounded-lg flex flex-col min-w-[120px] transition-all duration-300 ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
+            <div className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-300 ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
               <span className="text-cyan-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">Current Hand:</span>
               <span className="text-white text-xs md:text-sm font-black truncate">{String(activeVariant?.name)}</span>
             </div>
@@ -693,7 +691,7 @@ const App = () => {
             <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={18}/></button>
         </div>
         <div className="flex-1 flex items-center justify-end">
-            <div className={`bg-slate-900 border px-3 py-1.5 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
+            <div className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
                 <span className="text-emerald-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">On My Deal:</span>
                 <div className="flex items-center">
                     <select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full">
@@ -875,20 +873,17 @@ const App = () => {
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
                         <button 
                             onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} 
-                            disabled={activeIdx !== heroIdx}
-                            className={`flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-not-allowed' : 'hover:bg-white/10'}`}>
+                            className={`flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>
                             1/2 POT
                         </button>
                         <button 
                             onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} 
-                            disabled={activeIdx !== heroIdx}
-                            className={`flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-not-allowed' : 'hover:bg-white/10'}`}>
+                            className={`flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>
                             POT
                         </button>
                         <button 
                             onClick={handleAllIn} 
-                            disabled={activeIdx !== heroIdx}
-                            className={`flex-1 h-10 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-not-allowed' : ''}`}>
+                            className={`flex-1 h-10 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
                             ALL-IN
                         </button>
                     </div>
@@ -898,7 +893,7 @@ const App = () => {
                                 if (activeIdx === heroIdx) handleAction('FOLD');
                                 else setPreAction(preAction === 'FOLD' ? null : 'FOLD');
                             }} 
-                            className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>
+                            className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>
                             {preAction === 'FOLD' && <Check size={20} className="text-emerald-400" />} FOLD
                         </button>
                         <button 
@@ -906,11 +901,15 @@ const App = () => {
                                 if (activeIdx === heroIdx) handleAction('CALL');
                                 else setPreAction(preAction === 'CHECK' ? null : 'CHECK');
                             }} 
-                            className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/20' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/5 opacity-60'}`}>
+                            className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/5 opacity-60'}`}>
                             {preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}
                         </button>
-                        <div className={`flex-[1.5] flex bg-black/40 border border-white/10 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale pointer-events-none' : ''}`}>
-                            <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase"><Zap size={20} className="mr-1"/> RAISE</button>
+                        <div className={`flex-[1.5] flex bg-black/40 border border-white/10 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
+                            <button 
+                                onClick={()=> { if(activeIdx === heroIdx) handleAction('RAISE', raiseInput); }} 
+                                className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase transition-all active:scale-95">
+                                <Zap size={20} className="mr-1"/> RAISE
+                            </button>
                         </div>
                     </div>
                 </>) : heroPlayerObj && heroPlayerObj.chips < bigBlind * 2 && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN) ? (
