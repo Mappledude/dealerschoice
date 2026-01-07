@@ -14,8 +14,8 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-// VERSION: v1.0.15 (Internal Server)
-const VERSION = "v1.0.15";
+// VERSION: v1.0.16 (Internal Server)
+const VERSION = "v1.0.16";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
