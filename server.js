@@ -10,6 +10,7 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 const VERSION = "v1.8.0-PRO";
 const APP_NAME = "Dealers Choice";
+const TOTAL_SEATS = 10; // Fixed: Defined missing constant
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 const SUITS = ['♥', '♦', '♣', '♠'];
@@ -242,7 +243,7 @@ const processShowdown = (roomId) => {
     });
 
     setTimeout(() => {
-        room.players.forEach(p => { if (p) p.waitingForNextHand = false; });
+        room.players.forEach(p => { if (p) { p.waitingForNextHand = false; p.lastAction = null; } });
         const seated = room.players.map((p, i) => (p && p.chips > Number(room.bb)) ? i : null).filter(x => x !== null);
         if (seated.length >= 2) {
             const curDealerIdx = seated.indexOf(room.dealerIdx);
@@ -310,13 +311,16 @@ const moveToNextPlayer = (roomId) => {
 };
 
 const collectBets = (room) => {
-    room.players.forEach(p => { if (p) { room.potData[0].amount += p.currentBet; p.currentBet = 0; p.lastAction = null; p.actedThisStreet = false; } });
+    room.players.forEach(p => { if (p) { room.potData[0].amount += p.currentBet; p.currentBet = 0; p.actedThisStreet = false; } });
     room.highestBet = 0;
 };
 
 const nextPhase = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
+    // Clear display actions on phase change
+    room.players.forEach(p => { if(p) p.lastAction = null; });
+    
     const activeNonAllIn = room.players.filter(p => p && !p.isFolded && p.chips > 0.01 && !p.waitingForNextHand && !p.isDisconnected);
     const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
     if (active.length <= 1 || (activeNonAllIn.length <= 1 && room.phase !== PHASES.RIVER)) {
@@ -386,7 +390,7 @@ const runIgnition = (roomId) => {
   if (!room || room.gameInProgress) return;
   if (room.ignitionTimer) clearTimeout(room.ignitionTimer);
   room.ignitionTimer = null;
-  room.players.forEach(p => { if (p) p.waitingForNextHand = false; });
+  room.players.forEach(p => { if (p) { p.waitingForNextHand = false; p.lastAction = null; } });
   const seated = room.players.map((p, i) => (p && p.chips > Number(room.bb)) ? i : null).filter(x => x !== null);
   if (seated.length < 2) { room.phase = PHASES.IDLE; io.to(roomId).emit('roomUpdate', serializeRoom(room)); return; }
   room.gameInProgress = true;
@@ -474,7 +478,6 @@ io.on('connection', (socket) => {
         }
       }
       socket.emit('loginSuccess', { profile, activeRoomId });
-      socket.emit('initialDataResponse', { profiles, rooms: Object.values(rooms).map(serializeRoom) });
     }
   });
   
