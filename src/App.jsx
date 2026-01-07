@@ -5,7 +5,7 @@ import {
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
   Zap, Target, DollarSign, User, Lock, DoorOpen, LayoutGrid, ShieldAlert, PlusCircle,
   Users, Layers, Edit3, ScrollText, ArrowLeft, Key, Save, AlertTriangle, Monitor, Bot,
-  Timer, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3, Settings, Maximize, Minimize, Copy, Check, Activity, BookOpen, Terminal, ChevronRight as ChevronRightIcon
+  Timer, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3, Settings, Maximize, Minimize, Copy, Check, Activity, BookOpen, Terminal, ChevronRight as ChevronRightIcon, HelpCircle
 } from 'lucide-react';
 import io from 'socket.io-client';
 
@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.8";
+const VERSION = "v1.0.14";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -34,6 +34,7 @@ const VARIANT_COLORS = {
   REDSBLACKS: '#f43f5e'   // Rose
 };
 
+// NEON_PALETTE constant for name glow effects
 const NEON_PALETTE = [
   'text-[#39FF14]', // Neon Lime
   'text-[#FF00FF]', // Neon Fuchsia
@@ -44,12 +45,36 @@ const NEON_PALETTE = [
 ];
 
 const VARIANTS = { 
-  HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', rules: ["2 hole cards.", "Standard high hand."] }, 
-  OMAHA: { id: 'OMAHA', name: 'OMAHA', rules: ["4 hole cards.", "Must use 2 hole + 3 board."] }, 
-  PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', rules: ["3 hole cards.", "Standard high hand."] }, 
-  MUFLIS: { id: 'MUFLIS', name: 'Muflis', rules: ["Low hand wins.", "Ace is 1."] }, 
-  HILOW: { id: 'HILOW', name: 'Hi-Low Split', rules: ["4 hole cards.", "Pot split 50/50 High/Low."] }, 
-  REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', rules: ["4 hole cards.", "Dynamic Joker mechanic."] }
+  HOLDEM: { 
+    id: 'HOLDEM', 
+    name: 'Texas Hold\'em', 
+    rules: ["Each player gets 2 hole cards.", "Standard high hand rankings apply.", "Best 5-card combination from 2 hole + 5 community cards wins."] 
+  }, 
+  OMAHA: { 
+    id: 'OMAHA', 
+    name: 'Omaha High', 
+    rules: ["Each player gets 4 hole cards.", "You MUST use EXACTLY 2 hole cards and 3 community cards.", "Standard high hand rankings apply."] 
+  }, 
+  PINEAPPLE: { 
+    id: 'PINEAPPLE', 
+    name: 'Pineapple', 
+    rules: ["Each player gets 3 hole cards.", "Standard high hand rankings.", "Similar to Hold'em but with an extra card for better drawing potential."] 
+  }, 
+  MUFLIS: { 
+    id: 'MUFLIS', 
+    name: 'Muflis (Lowball)', 
+    rules: ["Worst hand wins the pot.", "Ace is the lowest card (value 1).", "The 'best' hand is the one that would normally be the weakest."] 
+  }, 
+  HILOW: { 
+    id: 'HILOW', 
+    name: 'Hi-Low Split', 
+    rules: ["Pot is split 50/50 between the High hand and the Low hand.", "4 hole cards dealt.", "Must use 2 hole + 3 board cards for both halves.", "Low hand must be 8-or-better (Ace to 8) to qualify."] 
+  }, 
+  REDSBLACKS: { 
+    id: 'REDSBLACKS', 
+    name: 'Reds & Blacks', 
+    rules: ["4 hole cards dealt.", "Special Joker mechanic: If your hand contains specific color combinations, you may play with enhanced strength.", "Dynamic wildcards based on suit parity."] 
+  }
 };
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
@@ -110,7 +135,7 @@ const Seat = ({
         switch (player.lastAction) {
             case 'RAISE': return { text: `RAISED $${player.currentBet}`, color: "text-emerald-400", glow: "shadow-[0_0_30px_rgba(16,185,129,0.8)]" };
             case 'CALL': return { text: player.currentBet > 0 ? `CALLED $${player.currentBet}` : "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.8)]" };
-            case 'CHECK': return { text: "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.8)]" };
+            case 'CHECK': return { text: "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30_rgba(34,211,238,0.8)]" };
             default: return null;
         }
     };
@@ -245,8 +270,12 @@ const App = () => {
   const currentHandId = useRef(Date.now());
   const [rebuyAmount, setRebuyAmount] = useState(10);
   const [showRebuyModal, setShowRebuyModal] = useState(false);
-  const [phaseShine, setPhaseShine] = useState(false);
+  const [showRulesModal, setShowRulesModal] = useState(false);
   const [preAction, setPreAction] = useState(null);
+
+  const [handAttention, setHandAttention] = useState(false);
+  const [dealAttention, setDealAttention] = useState(false);
+  const [idleAlternator, setIdleAlternator] = useState(true);
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
@@ -286,12 +315,12 @@ const App = () => {
         if (currentHand) {
             currentHand.events.push(log);
             if (log.type === 'win') {
-                const match = log.action.match(/WON \$([\d.]+) WITH (.*)/);
+                const match = String(log.action).match(/WON \$([\d.]+) WITH (.*)/);
                 if (match) {
                     currentHand.winner = log.name;
                     currentHand.amount = match[1];
                     currentHand.rank = match[2];
-                } else if (log.action.includes("BY DEFAULT")) {
+                } else if (String(log.action).includes("BY DEFAULT")) {
                     currentHand.winner = log.name;
                     currentHand.rank = "Muck/Default";
                 }
@@ -331,10 +360,6 @@ const App = () => {
     socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: rebuyAmount });
     setShowRebuyModal(false);
   }, [currentRoomId, userProfile, rebuyAmount]);
-
-  const addBot = useCallback(() => { 
-    if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId });
-  }, [currentRoomId]);
 
   const handleLogin = useCallback(() => { 
     if (passwordInput.toLowerCase().trim() === 'pass') { 
@@ -376,7 +401,6 @@ const App = () => {
   const formatRank = (rank) => {
     if (!rank || typeof rank !== 'string') return "";
     const lower = rank.toLowerCase();
-    
     if (lower.includes("five of a kind")) return "5 of a KIND";
     if (lower.includes("straight flush")) return "STRAIGHT FLUSH";
     if (lower.includes("four of a kind")) return "4 of a KIND";
@@ -386,7 +410,6 @@ const App = () => {
     if (lower.includes("three of a kind")) return "3 of a KIND";
     if (lower.includes("two pair")) return "Two Pair";
     if (lower.includes("pair")) return "Pair";
-
     if (lower.includes("high card")) {
       const parts = rank.split(' ');
       return `High ${parts[parts.length - 1]}`;
@@ -395,9 +418,13 @@ const App = () => {
       const parts = rank.split(' ');
       return `Low ${parts[parts.length - 1]}`;
     }
-    
     return rank.split(',')[0].split(' of ')[0];
   };
+
+  useEffect(() => {
+    const interval = setInterval(() => setIdleAlternator(p => !p), 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const handleRoomUpdate = (d) => {
@@ -410,8 +437,12 @@ const App = () => {
         
         const isPhaseTransition = d.phase !== phaseRef.current;
         if (isPhaseTransition && [PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(d.phase)) {
-            setPhaseShine(true);
-            setTimeout(() => setPhaseShine(false), 500);
+            setHandAttention(true);
+            setTimeout(() => {
+                setHandAttention(false);
+                setDealAttention(true);
+                setTimeout(() => setDealAttention(false), 1000);
+            }, 3000);
             
             if (d.phase === PHASES.FLOP) {
                 const vId = d.activeVariant?.id || 'HOLDEM';
@@ -448,7 +479,6 @@ const App = () => {
             setShowdownWinners(rawWinners);
             setWinning5Ids(d.winning5Ids || []);
             const durationPerWinner = 4000;
-            
             if (rawWinners.length > 1) {
                 for (let i = 1; i < rawWinners.length; i++) {
                     setTimeout(() => {
@@ -465,13 +495,9 @@ const App = () => {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (!socket.connected) {
-          socket.connect();
-        }
+        if (!socket.connected) socket.connect();
         socket.emit('getInitialData');
-        if (currentRoomId && userProfile) {
-          socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 });
-        }
+        if (currentRoomId && userProfile) socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 });
       }
     };
 
@@ -491,9 +517,7 @@ const App = () => {
             return updated ? { ...prev, chips: updated.chips } : prev;
         });
     });
-    socket.on('initialDataResponse', ({ profiles: pList, rooms: rList }) => {
-        setAllProfiles(pList); setActiveTables(rList);
-    });
+    socket.on('initialDataResponse', ({ profiles: pList, rooms: rList }) => { setAllProfiles(pList); setActiveTables(rList); });
     socket.on('loginSuccess', (payload) => { 
         const profile = payload.profile || payload;
         setUserProfile(profile); setPendingVariantId(profile.pendingVariant || 'HOLDEM'); 
@@ -507,7 +531,6 @@ const App = () => {
     });
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => { 
         socket.off('connect'); socket.off('roomUpdate'); socket.off('lobbyUpdate'); 
         socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log');
@@ -519,11 +542,8 @@ const App = () => {
     if (activeIdx === heroIdx && heroPlayerObj) { 
         setRaiseInput(highestBet + bigBlind); 
         if (preAction) {
-            if (preAction === 'FOLD') {
-                handleAction('FOLD');
-            } else if (preAction === 'CHECK') {
-                handleAction('CALL'); 
-            }
+            if (preAction === 'FOLD') handleAction('FOLD');
+            else if (preAction === 'CHECK') handleAction('CALL'); 
             setPreAction(null);
         }
     }
@@ -624,7 +644,7 @@ const App = () => {
         )}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 md:px-12 bg-black/60 backdrop-blur-md shrink-0 pt-[env(safe-area-inset-top)]">
           <div className="flex flex-col"><h2 className="tracking-[0.5em] text-lg font-black flex items-center gap-3"><LayoutGrid className="text-emerald-400 w-5"/> ARENA DIRECTORY</h2><span className="text-[8px] text-white/30 tracking-[0.2em]">VERSION {VERSION}</span></div>
-          <div className="flex items-center gap-6 font-black"><div className="flex flex-col items-end"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
+          <div className="flex items-center gap-6 font-black"><div className="flex items-end flex-col"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
         </header>
         <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black font-black uppercase text-center">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
@@ -678,12 +698,33 @@ const App = () => {
         </div>
       )}
 
-      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[50px] md:h-[60px]">
-        <div className="flex-1 flex items-center">
-            <div className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-300 ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
-              <span className="text-cyan-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">Current Hand:</span>
-              <span className="text-white text-xs md:text-sm font-black truncate">{String(activeVariant?.name)}</span>
+      {showRulesModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6">
+          <div className="w-full max-w-[500px] p-8 bg-slate-900 border border-cyan-500/30 rounded-3xl shadow-2xl flex flex-col gap-6 relative">
+            <button onClick={()=>setShowRulesModal(false)} className="absolute top-4 right-4 text-white/40 hover:text-white"><X/></button>
+            <h3 className="text-2xl font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><BookOpen size={24}/> {activeVariant?.name} Rules</h3>
+            <div className="space-y-4 overflow-y-auto max-h-[60vh] pr-2 font-black">
+                {activeVariant?.rules?.map((rule, ri) => (
+                    <div key={ri} className="flex gap-3 text-sm text-white/80 leading-relaxed uppercase">
+                        <span className="text-cyan-500 shrink-0">•</span>
+                        <span>{rule}</span>
+                    </div>
+                ))}
             </div>
+            <button onClick={()=>setShowRulesModal(false)} className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase tracking-widest hover:brightness-110">Understood</button>
+          </div>
+        </div>
+      )}
+
+      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-14 md:h-17">
+        <div className="flex-1 flex items-center">
+            <button 
+                onClick={()=>setShowRulesModal(true)}
+                className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-300 relative overflow-hidden group active:scale-95 ${handAttention ? 'animate-hand-trigger border-white' : 'border-white/10'} ${!handAttention && idleAlternator ? 'animate-bounce-subtle' : ''}`}>
+              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <span className="text-cyan-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold flex items-center gap-1">This Hand is: <HelpCircle size={8}/></span>
+              <span className="text-white text-xs md:text-sm font-black truncate">{String(activeVariant?.name)}</span>
+            </button>
         </div>
         <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
             <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-2 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Feed"><Eye size={18}/></button>
@@ -691,13 +732,13 @@ const App = () => {
             <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={18}/></button>
         </div>
         <div className="flex-1 flex items-center justify-end">
-            <div className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
+            <div className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}>
                 <span className="text-emerald-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">On My Deal:</span>
                 <div className="flex items-center">
                     <select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full">
                         {Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{v.name}</option>))}
                     </select>
-                    <ChevronDown size={12} className="text-white/30 pointer-events-none ml-1 animate-bounce-subtle" />
+                    <ChevronDown size={12} className={`text-white/30 pointer-events-none ml-1 ${!dealAttention && !idleAlternator ? 'animate-bounce-subtle' : ''}`} />
                 </div>
             </div>
         </div>
@@ -709,7 +750,7 @@ const App = () => {
                 <div className="flex items-center gap-2"><Terminal size={14}/> Activity</div>
                 <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>
             </div>
-            <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1">
+            <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
                 {handHistory.length > 0 ? handHistory.map((hand) => (
                     <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
                         <button onClick={() => toggleHand(hand.id)} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
@@ -718,16 +759,16 @@ const App = () => {
                                 <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
                             </div>
                             <div className="text-[11px] font-black text-white/90 text-left">
-                                {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{hand.winner}</span> WON ${hand.amount}</span>) : (<span className="text-white/40 italic">HAND IN PROGRESS...</span>)}
+                                {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400 uppercase"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{hand.winner}</span> WON ${hand.amount}</span>) : (<span className="text-white/40 italic uppercase">HAND IN PROGRESS...</span>)}
                             </div>
-                            {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(hand.rank)}</div>)}
+                            {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(String(hand.rank))}</div>)}
                         </button>
                         {expandedHands.has(hand.id) && (
                             <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
                                 {hand.events.map((ev, i) => (
-                                    <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] font-black leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
-                                        <span className="text-white/30 font-mono mr-2">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
-                                        <span className={getNeonNameColor(ev.name)}>{ev.name}</span>: <span className="text-white/90">{ev.action}</span>
+                                    <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
+                                        <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
+                                        <span className={getNeonNameColor(ev.name)}>{ev.name}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -832,12 +873,10 @@ const App = () => {
                 if (!winner) return null;
                 const isHiLo = activeVariant?.id === 'HILOW';
                 const isLowWin = String(winner.rank).includes("LOW:");
-                
                 const themeColor = isLowWin ? "text-emerald-400" : (isHiLo ? "text-amber-400" : "text-white");
                 const bgColor = isLowWin ? "bg-emerald-400/10" : (isHiLo ? "bg-amber-400/10" : "bg-white/5");
                 const borderColor = isLowWin ? "border-emerald-400/30" : (isHiLo ? "border-amber-400/30" : "border-white/10");
                 const cardBorder = isLowWin ? "border-emerald-400/50" : (isHiLo ? "border-amber-400/50" : "border-white/20");
-                
                 const winTypeLabel = isHiLo ? (isLowWin ? "THE LOW SIDE" : "THE HIGH SIDE") : "THE POT";
                 const displayRank = formatRank(String(winner.rank).replace("LOW: ", "").replace("HIGH: ", ""));
                 
@@ -951,6 +990,7 @@ const App = () => {
             100% { transform: scale(1.3); opacity: 0; filter: blur(20px); }
           }
           .animate-announcement-pop { animation: announcement-pop 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          
           @keyframes action-flash-once {
             0% { opacity: 0; transform: scale(0.9); }
             40% { opacity: 1; transform: scale(1.05); filter: brightness(1.5); }
@@ -958,12 +998,14 @@ const App = () => {
           }
           .animate-action-flash-once { animation: action-flash-once 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
           
-          @keyframes phase-shine {
-            0% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); }
-            50% { box-shadow: 0 0 30px rgba(255,255,255,0.9); border-color: rgba(255,255,255,1); transform: scale(1.02); }
+          @keyframes attention-trigger {
+            0% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); transform: scale(1); }
+            30% { box-shadow: 0 0 40px rgba(255,255,255,0.9), inset 0 0 10px rgba(255,255,255,0.5); border-color: rgba(255,255,255,1); transform: scale(1.08); }
             100% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); transform: scale(1); }
           }
-          .animate-phase-shine { animation: phase-shine 0.5s ease-in-out; }
+          /* Custom classes for staggered durations */
+          .animate-hand-trigger { animation: attention-trigger 3s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
+          .animate-deal-trigger { animation: attention-trigger 1s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
 
           @keyframes bounce-subtle {
             0%, 100% { transform: translateY(0); }
