@@ -161,7 +161,6 @@ const Seat = ({
                 </div>
             )}
 
-            {/* PLAYER BADGE - Shrunk by 15% using scale-[0.85] */}
             <div 
                 className={`relative z-[90] flex flex-col items-center p-2 md:p-4 rounded-xl border transition-all duration-300 min-w-[120px] md:min-w-[220px] overflow-hidden backdrop-blur-xl scale-[0.85]
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
@@ -355,18 +354,31 @@ const App = () => {
     setNewTable({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
   }, [newTable]);
 
+  // Fixed formatRank: scoping/map variable safety to prevent ReferenceErrors
   const formatRank = (rank) => {
-    if (!rank) return "";
-    let clean = rank.split(',')[0].split(' of ')[0];
-    const categories = ["five of a kind", "straight flush", "four of a kind", "full house", "flush", "straight", "three of a kind", "two pair", "pair", "high card", "low"];
-    const lowerRank = clean.toLowerCase();
-    for (const cat of categories) {
-        if (lowerRank.includes(cat)) {
-            if (cat === "low" || cat === "high card") return clean.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-            return cat.split(' ').map(w => w.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    if (!rank || typeof rank !== 'string') return "";
+    let cleanVal = rank.split(',')[0].split(' of ')[0];
+    const cats = ["five of a kind", "straight flush", "four of a kind", "full house", "flush", "straight", "three of a kind", "two pair", "pair", "high card", "low"];
+    const lRank = cleanVal.toLowerCase();
+    for (let i = 0; i < cats.length; i++) {
+        const cat = cats[i];
+        if (lRank.indexOf(cat) !== -1) {
+            let words = (cat === "low" || cat === "high card") ? cleanVal.split(' ') : cat.split(' ');
+            let formattedWords = [];
+            for (let j = 0; j < words.length; j++) {
+                const w = words[j];
+                formattedWords.push(w ? w.charAt(0).toUpperCase() + w.slice(1) : "");
+            }
+            return formattedWords.join(' ');
         }
     }
-    return clean.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    let words = cleanVal.toLowerCase().split(' ');
+    let formattedWords = [];
+    for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        formattedWords.push(w ? w.charAt(0).toUpperCase() + w.slice(1) : "");
+    }
+    return formattedWords.join(' ');
   };
 
   useEffect(() => {
@@ -787,17 +799,17 @@ const App = () => {
           }
           .animate-announcement-pop { animation: announcement-pop 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
           @keyframes action-flash {
-            0% { opacity: 0.9; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.03); }
-            100% { opacity: 0.9; transform: scale(1); }
+            0% { opacity: 0.9; transform: scale(1); filter: brightness(1); }
+            50% { opacity: 1; transform: scale(1.03); filter: brightness(1.3); }
+            100% { opacity: 0.9; transform: scale(1); filter: brightness(1); }
           }
-          .animate-action-flash { animation: action-flash 0.6s infinite alternate ease-in-out; }
+          .animate-action-flash { animation: action-flash 0.4s infinite alternate ease-in-out; }
           html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #000; }
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
           .scrollbar-hide::-webkit-scrollbar { display: none; }
-          .vertical-range { -webkit-appearance: slider-vertical; width: 32px; height: 100%; background: rgba(255, 255, 255, 0.1); outline: none; border-radius: 999px; }
-          .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 64px; height: 64px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
-          .vertical-range::-moz-range-thumb { width: 64px; height: 64px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
+          .vertical-range { -webkit-appearance: slider-vertical; width: 36px; height: 100%; background: rgba(255, 255, 255, 0.1); outline: none; border-radius: 999px; }
+          .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 64px; height: 64px; background: rgba(16, 185, 129, 0.4); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(8px); }
+          .vertical-range::-moz-range-thumb { width: 64px; height: 64px; background: rgba(16, 185, 129, 0.4); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(8px); }
       `}</style>
     </div>
   );
