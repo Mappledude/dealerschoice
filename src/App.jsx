@@ -97,7 +97,6 @@ const Seat = ({
 }) => {
     if (!player || !displayPos) return null;
 
-    // --- DYNAMIC VECTOR CALCULATION ---
     const vecX = 50 - displayPos.x;
     const vecY = 50 - displayPos.y;
 
@@ -119,7 +118,6 @@ const Seat = ({
                 <div className="absolute top-[-35px] bg-slate-900 text-cyan-400 text-[8px] px-2 py-0.5 rounded-full border border-cyan-500/50 uppercase font-bold tracking-[0.2em] z-[150] backdrop-blur-md">WAITING</div>
             )}
             
-            {/* BET AMOUNT */}
             {player.currentBet > 0 && (
                 <div className={`absolute z-[80] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot' : 'animate-bet-float'}`}
                     style={{ transform: `translate(calc(-50% + ${betInwardX}vw), ${betInwardY}vw)`, left: '50%', top: '50%' }}>
@@ -129,7 +127,6 @@ const Seat = ({
                 </div>
             )}
 
-            {/* HOLE CARDS */}
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div 
                   className={`absolute flex items-center justify-center w-[15vw] h-[8vw] pointer-events-none ${isHero ? 'z-[200]' : 'z-[40]'}`}
@@ -162,7 +159,6 @@ const Seat = ({
                 </div>
             )}
 
-            {/* PLAYER BADGE */}
             <div 
                 className={`relative z-[90] flex flex-col items-center p-2 md:p-4 rounded-xl border transition-all duration-300 min-w-[120px] md:min-w-[220px] overflow-hidden backdrop-blur-xl
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
@@ -204,6 +200,7 @@ const App = () => {
   const [activeIdx, setActiveIdx] = useState(-1);
   const [dealerIdx, setDealerIdx] = useState(-1);
   const [highestBet, setHighestBet] = useState(0);
+  const [bigBlind, setBigBlind] = useState(0.5);
   const [winning5Ids, setWinning5Ids] = useState([]);
   const [logs, setLogs] = useState([]);
   const [potAmount, setPotAmount] = useState(0);
@@ -231,7 +228,7 @@ const App = () => {
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
 
-  const isMobile = window.innerWidth < 768;
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
   const [visuals, setVisuals] = useState({
     heroCardScale: 2.0, heroCardY: 20, oppCardScale: 1.0, oppCardY: -10,
@@ -387,6 +384,7 @@ const App = () => {
         setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
         setActiveIdx(d.activeIdx ?? -1);
         setHighestBet(d.highestBet || 0);
+        if (d.bb) setBigBlind(d.bb);
         setDealerIdx(d.dealerIdx ?? -1);
         setTimeRemaining(d.timeRemaining || 0);
         if (d.activeVariant) {
@@ -431,6 +429,13 @@ const App = () => {
         socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log');
     };
   }, []); 
+
+  // Reset raise input to default BB when it becomes Hero's turn
+  useEffect(() => {
+    if (activeIdx === heroIdx && heroPlayerObj) {
+      setRaiseInput(highestBet + bigBlind);
+    }
+  }, [activeIdx, heroIdx, highestBet, bigBlind, heroPlayerObj]);
 
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
@@ -672,6 +677,27 @@ const App = () => {
                 </div>
               )}
             </div>
+
+            {/* Vertical Raise Slider (Right side of table arena) */}
+            {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
+              <div className="absolute right-0 top-[20%] bottom-[20%] w-16 md:w-24 flex flex-col items-center justify-end z-[250] pointer-events-auto">
+                <div className="flex-1 w-full relative flex items-center justify-center py-8">
+                  <input 
+                    type="range" 
+                    min={highestBet + bigBlind} 
+                    max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} 
+                    step={0.25} 
+                    value={raiseInput} 
+                    onChange={(e) => setRaiseInput(Number(e.target.value))}
+                    className="vertical-range appearance-none bg-white/10 w-2 h-full rounded-full accent-emerald-500 cursor-pointer"
+                    style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }}
+                  />
+                </div>
+                <div className="mt-4 bg-black/80 border border-emerald-500/40 px-3 py-1.5 rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-in fade-in duration-300">
+                  <span className="text-emerald-400 font-mono text-lg md:text-2xl font-black">${raiseInput.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
         </div>
       </main>
 
@@ -726,7 +752,7 @@ const App = () => {
                         <button onClick={()=>handleAction('FOLD')} className="flex-1 h-16 bg-red-950/60 border border-red-500/50 rounded-xl text-lg font-black tracking-widest uppercase font-black">FOLD</button>
                         <button onClick={()=>handleAction('CALL')} className="flex-1 h-16 bg-white/10 border border-white/20 rounded-xl text-xl font-black truncate px-2">{highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK'}</button>
                         <div className="flex-[1.5] flex gap-2 items-center bg-black/40 border border-white/10 p-2 rounded-xl">
-                            <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.max(0, Number(e.target.value)))} className="w-full bg-transparent text-center font-mono text-xl text-[#fbbf24] outline-none font-black" />
+                            {/* Text entry box removed per request */}
                             <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-12 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase"><Zap size={20} className="mr-1"/> RAISE</button>
                         </div>
                     </div>
@@ -780,6 +806,14 @@ const App = () => {
           html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #000; }
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
           .scrollbar-hide::-webkit-scrollbar { display: none; }
+          .vertical-range {
+            -webkit-appearance: slider-vertical;
+            width: 8px;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            border-radius: 999px;
+          }
       `}</style>
     </div>
   );
