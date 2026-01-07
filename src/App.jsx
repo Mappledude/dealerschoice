@@ -245,6 +245,7 @@ const App = () => {
   const currentHandId = useRef(Date.now());
   const [rebuyAmount, setRebuyAmount] = useState(10);
   const [showRebuyModal, setShowRebuyModal] = useState(false);
+  const [phaseShine, setPhaseShine] = useState(false);
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
@@ -407,12 +408,18 @@ const App = () => {
           return next; 
         });
         
-        if (d.phase !== phaseRef.current && d.phase === PHASES.FLOP) {
-            const vId = d.activeVariant?.id || 'HOLDEM';
-            setTimeout(() => {
-                setAnnouncement({ text: VARIANTS[vId]?.name || "Poker", color: VARIANT_COLORS[vId] || '#fff' });
-                setTimeout(() => setAnnouncement(null), 1500);
-            }, 3000); 
+        const isPhaseTransition = d.phase !== phaseRef.current;
+        if (isPhaseTransition && [PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(d.phase)) {
+            setPhaseShine(true);
+            setTimeout(() => setPhaseShine(false), 500);
+            
+            if (d.phase === PHASES.FLOP) {
+                const vId = d.activeVariant?.id || 'HOLDEM';
+                setTimeout(() => {
+                    setAnnouncement({ text: VARIANTS[vId]?.name || "Poker", color: VARIANT_COLORS[vId] || '#fff' });
+                    setTimeout(() => setAnnouncement(null), 1500);
+                }, 3000); 
+            }
         }
 
         if (d.phase === PHASES.PRE_FLOP && phaseRef.current !== PHASES.PRE_FLOP) {
@@ -639,7 +646,7 @@ const App = () => {
 
       <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-15 md:h-19">
         <div className="flex-1 flex items-center">
-            <div className="bg-slate-900 border border-white/10 px-3 py-1.5 rounded-lg flex flex-col min-w-[120px]">
+            <div className={`bg-slate-900 border px-3 py-1.5 rounded-lg flex flex-col min-w-[120px] transition-all duration-300 ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
               <span className="text-cyan-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">Current Hand:</span>
               <span className="text-white text-xs md:text-sm font-black truncate">{String(activeVariant?.name)}</span>
             </div>
@@ -656,7 +663,7 @@ const App = () => {
                     <select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full">
                         {Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{v.name}</option>))}
                     </select>
-                    <ChevronDown size={12} className="text-white/30 pointer-events-none ml-1" />
+                    <ChevronDown size={12} className="text-white/30 pointer-events-none ml-1 animate-bounce-subtle" />
                 </div>
             </div>
         </div>
@@ -886,12 +893,26 @@ const App = () => {
             100% { opacity: 1; transform: scale(1); filter: brightness(1.1); }
           }
           .animate-action-flash-once { animation: action-flash-once 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          
+          @keyframes phase-shine {
+            0% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); }
+            50% { box-shadow: 0 0 20px rgba(255,255,255,0.8); border-color: rgba(255,255,255,1); }
+            100% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); }
+          }
+          .animate-phase-shine { animation: phase-shine 0.5s ease-in-out; }
+
+          @keyframes bounce-subtle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(3px); }
+          }
+          .animate-bounce-subtle { animation: bounce-subtle 1.5s infinite ease-in-out; }
+
           html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #000; }
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
           .scrollbar-hide::-webkit-scrollbar { display: none; }
           .vertical-range { -webkit-appearance: slider-vertical; width: 32px; height: 100%; background: rgba(255, 255, 255, 0.1); outline: none; border-radius: 999px; }
-          .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 64px; height: 64px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
-          .vertical-range::-moz-range-thumb { width: 64px; height: 64px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
+          .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
+          .vertical-range::-moz-range-thumb { width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
       `}</style>
     </div>
   );
