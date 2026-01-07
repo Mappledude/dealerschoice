@@ -54,9 +54,18 @@ const VARIANTS = {
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
+// Mathematically perfect 10-way elliptical distribution
 const DISPLAY_POSITIONS = [
-  { x: 50, y: 92 }, { x: 25, y: 84 }, { x: 10, y: 62 }, { x: 10, y: 38 }, { x: 25, y: 16 }, 
-  { x: 50, y: 8  }, { x: 75, y: 16 }, { x: 90, y: 38 }, { x: 90, y: 62 }, { x: 75, y: 84 }
+  { x: 50, y: 92 }, // Seat 0 (Bottom / Hero)
+  { x: 25, y: 84 }, // Seat 1
+  { x: 10, y: 62 }, // Seat 2
+  { x: 10, y: 38 }, // Seat 3
+  { x: 25, y: 16 }, // Seat 4
+  { x: 50, y: 8  }, // Seat 5 (Top / Dealer)
+  { x: 75, y: 16 }, // Seat 6
+  { x: 90, y: 38 }, // Seat 7
+  { x: 90, y: 62 }, // Seat 8
+  { x: 75, y: 84 }  // Seat 9
 ];
 
 // --- COMPONENTS ---
@@ -88,10 +97,13 @@ const Seat = ({
 }) => {
     if (!player || !displayPos) return null;
 
+    // --- DYNAMIC VECTOR CALCULATION ---
     const vecX = 50 - displayPos.x;
     const vecY = 50 - displayPos.y;
+
     const betInwardX = vecX * 0.25;
     const betInwardY = vecY * 0.35;
+
     const cardInwardX = vecX * 0.15;
     const cardInwardY = vecY * 0.20;
 
@@ -117,7 +129,7 @@ const Seat = ({
 
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div 
-                  className="absolute z-[40] flex items-center justify-center w-[15vw] h-[8vw] pointer-events-none"
+                  className={`absolute flex items-center justify-center w-[15vw] h-[8vw] pointer-events-none ${isHero ? 'z-[200]' : 'z-[40]'}`}
                   style={{ transform: `translate(${cardInwardX}vw, ${cardInwardY}vw)` }}
                 >
                     {player.hand.map((c, ci) => {
@@ -279,7 +291,6 @@ const App = () => {
 
   const getNeonNameColor = (name) => {
     if (!name || name === "SYSTEM") return "text-white";
-    // Simple hash to persist color per name
     let hash = 0;
     for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
     return NEON_PALETTE[Math.abs(hash) % NEON_PALETTE.length];
@@ -337,7 +348,14 @@ const App = () => {
     const categories = ["five of a kind", "straight flush", "four of a kind", "full house", "flush", "straight", "three of a kind", "two pair", "pair", "high card", "low"];
     const lowerRank = clean.toLowerCase();
     for (const cat of categories) {
-        if (lowerRank.includes(cat)) return cat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        if (lowerRank.includes(cat)) {
+            // For Low hands and High Card hands, preserve the specific value (e.g. Low 7 or High Card Ace)
+            if (cat === "low" || cat === "high card") {
+                return clean.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            }
+            // For structured hands, return the title-cased category name
+            return cat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
     }
     return clean.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
@@ -541,7 +559,7 @@ const App = () => {
           </div>
       )}
 
-      {/* HEADER: CENTER-ALIGNED CORE BUTTONS */}
+      {/* HEADER */}
       <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-16 md:h-20">
         <div className="flex-1 flex items-center">
             <div className="bg-slate-900 border border-white/10 px-3 py-1.5 rounded-lg flex flex-col min-w-[120px]">
@@ -569,9 +587,9 @@ const App = () => {
         </div>
       </header>
 
-      {/* ACTIVITY FEED (COLLAPSIBLE PER HAND) */}
+      {/* ACTIVITY FEED */}
       {intelExpanded && (
-        <div className="absolute bottom-[240px] left-4 w-[85vw] md:w-96 bg-black/20 border border-indigo-500/30 rounded-2xl p-4 backdrop-blur-2xl z-[150] shadow-[0_0_50px_rgba(0,0,0,0.8)] animate-in slide-in-from-left duration-300 flex flex-col h-[50vh] max-h-[500px]">
+        <div className="absolute bottom-[240px] left-4 w-[85vw] md:w-96 bg-black/20 border border-indigo-500/30 rounded-2xl p-4 backdrop-blur-sm z-[150] shadow-[0_0_50px_rgba(0,0,0,0.4)] animate-in slide-in-from-left duration-300 flex flex-col h-[50vh] max-h-[500px]">
             <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2 font-black tracking-[0.2em] uppercase">
                 <div className="flex items-center gap-2"><Terminal size={14}/> Activity</div>
                 <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>
@@ -579,32 +597,18 @@ const App = () => {
             <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1">
                 {handHistory.length > 0 ? handHistory.map((hand) => (
                     <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
-                        <button 
-                            onClick={() => toggleHand(hand.id)}
-                            className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5"
-                        >
+                        <button onClick={() => toggleHand(hand.id)} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
                             <div className="flex items-center justify-between w-full">
                                 <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{hand.variant} HAND</span>
                                 <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
                             </div>
                             <div className="text-[11px] font-black text-white/90 text-left">
-                                {hand.winner ? (
-                                    <span className="flex items-center gap-2 text-emerald-400">
-                                        <Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{hand.winner}</span> WON ${hand.amount}
-                                    </span>
-                                ) : (
-                                    <span className="text-white/40 italic">HAND IN PROGRESS...</span>
-                                )}
+                                {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{hand.winner}</span> WON ${hand.amount}</span>) : (<span className="text-white/40 italic">HAND IN PROGRESS...</span>)}
                             </div>
-                            {hand.winner && (
-                                <div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">
-                                    {hand.rank}
-                                </div>
-                            )}
+                            {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(hand.rank)}</div>)}
                         </button>
-                        
                         {expandedHands.has(hand.id) && (
-                            <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
+                            <div className="px-3 pb-3 border-t border-white/5 bg-transparent space-y-1 pt-2">
                                 {hand.events.map((ev, i) => (
                                     <div key={i} className={`text-[9px] md:text-[10px] font-black leading-tight py-0.5 border-l-2 pl-2 opacity-50 ${ev.type === 'win' ? 'border-emerald-500' : ev.type === 'fold' ? 'border-red-500' : 'border-cyan-500'}`}>
                                         <span className="text-white/30 font-mono">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> <span className={getNeonNameColor(ev.name)}>{ev.name}</span>: <span className="text-white">{ev.action}</span>
@@ -613,34 +617,25 @@ const App = () => {
                             </div>
                         )}
                     </div>
-                )) : (
-                    <div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3">
-                        <Activity size={32} className="animate-pulse" />
-                        <span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span>
-                    </div>
-                )}
+                )) : (<div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3"><Activity size={32} className="animate-pulse" /><span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span></div>)}
             </div>
         </div>
       )}
 
-      {/* TABLE AREA */}
-      <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-slate-900 to-black overflow-hidden font-black uppercase">
+      {/* TABLE */}
+      <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-slate-900 to-black overflow-hidden font-black uppercase text-center">
         {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
           <>
             {activeVariant?.id === 'HILOW' && (
                <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
                 <span className="text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                <span className="text-2xl md:text-4xl text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">
-                    {phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}
-                </span>
+                <span className="text-2xl md:text-4xl text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
                 <span className="text-[#fbbf24] text-[14px] md:text-2xl font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
               </div>
             )}
             <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
               <span className="text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-              <span className="text-2xl md:text-4xl text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">
-                {phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}
-              </span>
+              <span className="text-2xl md:text-4xl text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
               <span className="text-[#fbbf24] text-[14px] md:text-2xl font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
             </div>
           </>
@@ -660,9 +655,7 @@ const App = () => {
               {!potTransferring && ( 
                 <div className="flex flex-col items-center mb-6">
                   <span className="text-white/20 text-[10px] tracking-[0.5em] mb-1 uppercase font-bold">Total Pot:</span>
-                  <div className="text-[12vw] md:text-[8vw] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">
-                    ${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                  </div>
+                  <div className="text-[12vw] md:text-[8vw] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                 </div> 
               )}
               {community.length > 0 && (
@@ -685,31 +678,52 @@ const App = () => {
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]">
         <div className="flex-1 flex flex-col justify-start pt-2 px-4 relative">
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
-            <div className="flex items-center justify-between w-full h-full animate-in fade-in duration-300">
-                <div className="flex flex-col flex-1 items-start">
-                    <div className="flex items-center gap-2 text-yellow-400 font-black text-lg md:text-2xl mb-1"><Trophy size={20} />{String(showdownWinners[currentShowdownIdx].name).toUpperCase()} WINS</div>
-                    <div className="text-white/60 text-xs md:text-lg font-black truncate max-w-[200px] md:max-w-none">{showdownWinners[currentShowdownIdx].rank === "!" ? "DEFAULT WIN" : formatRank(String(showdownWinners[currentShowdownIdx].rank))}</div>
-                    <div className="text-emerald-400 text-2xl md:text-4xl font-mono mt-1 font-black">+${Number(showdownWinners[currentShowdownIdx].amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                </div>
-                <div className="flex gap-2">
-                    {(showdownWinners[currentShowdownIdx].hand || []).map((c, ci) => (
-                        <div key={ci} className="w-12 md:w-20 h-16 md:h-28 bg-white rounded-lg flex flex-col items-center justify-center text-black shadow-xl border-2 border-yellow-400/50">
-                            <span className={`text-sm md:text-xl font-black ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
-                            <span className={`text-xl md:text-4xl ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
+            (() => {
+                const winner = showdownWinners[currentShowdownIdx];
+                const isLowWin = String(winner.rank).includes("LOW:");
+                const winLabel = isLowWin ? "LOW" : "HIGH";
+                const themeColor = isLowWin ? "text-emerald-400" : "text-amber-400";
+                const bgColor = isLowWin ? "bg-emerald-400/10" : "bg-amber-400/10";
+                const borderColor = isLowWin ? "border-emerald-400/30" : "border-amber-400/30";
+                const cardBorder = isLowWin ? "border-emerald-400/50" : "border-amber-400/50";
+                const displayRank = formatRank(String(winner.rank).replace("LOW: ", "").replace("HIGH: ", ""));
+
+                return (
+                    <div className="flex flex-col items-center justify-center w-full h-full animate-in slide-in-from-bottom duration-500 gap-2">
+                        <div className={`flex items-center gap-2 ${bgColor} px-4 py-2 rounded-full border ${borderColor}`}>
+                            <Trophy size={18} className={themeColor + " animate-bounce"} />
+                            <div className="text-sm md:text-xl font-black tracking-tight flex items-center gap-1.5 leading-none">
+                                <span className={getNeonNameColor(winner.name)}>{String(winner.name).toUpperCase()}</span>
+                                <span className="text-white opacity-60">WON</span>
+                                <span className={themeColor}>{winLabel}</span>
+                                <span className="text-white opacity-60">WITH</span>
+                                <span className={themeColor}>{winner.rank === "!" ? "A DEFAULT WIN" : displayRank}</span>
+                                <span className="text-emerald-400 ml-1">+${Number(winner.amount).toLocaleString()}</span>
+                            </div>
                         </div>
-                    ))}
-                </div>
-            </div>
+                        
+                        <div className="flex gap-1.5">
+                            {(winner.hand || []).map((c, ci) => (
+                                <div key={ci} className={`w-10 md:w-16 h-12 md:h-20 bg-white rounded-t-lg flex flex-col items-center justify-start pt-2 text-black shadow-xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
+                                    <span className={`text-[11px] md:text-lg font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
+                                    <span className={`text-[14px] md:text-2xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
+                                    <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })()
           ) : (
             <div className={`flex flex-col gap-3 items-center w-full transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
                 {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE ? (<>
-                    <div className="flex gap-2 w-full max-w-[600px] font-black">
+                    <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
                         <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] hover:bg-white/10 font-black">1/2 POT</button>
                         <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] hover:bg-white/10 font-black">POT</button>
                         <button onClick={handleAllIn} className="flex-1 h-10 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black">ALL-IN</button>
                     </div>
                     <div className="flex flex-row gap-2 w-full max-w-[800px] items-center justify-center font-black">
-                        <button onClick={()=>handleAction('FOLD')} className="flex-1 h-16 bg-red-950/60 border border-red-500/50 rounded-xl text-lg font-black tracking-widest uppercase font-black">FOLD</button>
+                        <button onClick={()=>handleAction('FOLD')} className="flex-1 h-16 bg-red-950/60 border border-red-500/50 rounded-xl text-lg font-black tracking-widest">FOLD</button>
                         <button onClick={()=>handleAction('CALL')} className="flex-1 h-16 bg-white/10 border border-white/20 rounded-xl text-xl font-black truncate px-2">{highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK'}</button>
                         <div className="flex-[1.5] flex gap-2 items-center bg-black/40 border border-white/10 p-2 rounded-xl">
                             <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.max(0, Number(e.target.value)))} className="w-full bg-transparent text-center font-mono text-xl text-[#fbbf24] outline-none font-black" />
