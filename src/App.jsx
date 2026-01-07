@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.8.0-PRO";
+const VERSION = "v1.0.1";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -243,7 +243,8 @@ const App = () => {
   const joinLock = useRef(false);
   const phaseRef = useRef(PHASES.IDLE); 
   const currentHandId = useRef(Date.now());
-  const showdownSequenceActive = useRef(false);
+  const [rebuyAmount, setRebuyAmount] = useState(10);
+  const [showRebuyModal, setShowRebuyModal] = useState(false);
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
@@ -323,15 +324,22 @@ const App = () => {
     handleAction('RAISE', totalStack);
   }, [heroPlayerObj, handleAction]);
 
+  const handleRebuy = useCallback(() => {
+    if (!currentRoomId || !userProfile) return;
+    socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: rebuyAmount });
+    setShowRebuyModal(false);
+  }, [currentRoomId, userProfile, rebuyAmount]);
+
   const addBot = useCallback(() => { 
     if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId });
   }, [currentRoomId]);
 
   const handleLogin = useCallback(() => { 
+    // CASE-INSENSITIVE PASSWORD LOGIN
     if (passwordInput.toLowerCase().trim() === 'pass') { 
         setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin' }); 
         setCurrentView(VIEWS.ADMIN); socket.emit('getInitialData'); 
-    } else socket.emit('playerLogin', { password: passwordInput });
+    } else socket.emit('playerLogin', { password: passwordInput.toLowerCase().trim() });
   }, [passwordInput]);
 
   const joinRoom = useCallback(() => {
@@ -486,7 +494,10 @@ const App = () => {
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
         <div className="w-full max-w-[400px] p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8">
-            <Lock size={32} className="text-[#fbbf24] animate-pulse" />
+            <div className="flex items-center gap-4">
+              <Lock size={32} className="text-[#fbbf24] animate-pulse" />
+              <span className="text-white/20 text-xs font-mono tracking-widest mt-auto pb-1">{VERSION}</span>
+            </div>
             <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-center tracking-[0.5em] text-[#fbbf24] outline-none text-xl font-black focus:bg-white/10 transition-all"/>
             <button onClick={handleLogin} className="w-full p-6 bg-[#fbbf24] text-black rounded-2xl font-black text-lg hover:scale-105 active:scale-95 transition-transform uppercase">SIT AT TABLE</button>
         </div>
@@ -519,7 +530,8 @@ const App = () => {
                                 <span className="text-[10px] md:text-sm font-black truncate max-w-[100px]">{String(p.name)}</span>
                                 <div className="flex gap-2 md:gap-4 items-center">
                                   <span className="text-emerald-400 font-mono text-xs md:text-lg">${Number(p.chips || 0).toLocaleString()}</span>
-                                  <button onClick={()=>{const n = prompt("NEW WALLET", String(p.chips || 0)); if(n !== null && n !== "") socket.emit('adminEditChips', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400"><Edit3 size={14}/></button>
+                                  <button onClick={()=>{const n = prompt("NEW WALLET", String(p.chips || 0)); if(n !== null && n !== "") socket.emit('adminUpdatePlayer', {uid: p.uid, chips: Number(n)})}} className="text-cyan-400" title="Edit Wallet"><Edit3 size={14}/></button>
+                                  <button onClick={()=>{const n = prompt("NEW PASSWORD", String(p.password || "")); if(n !== null && n !== "") socket.emit('adminUpdatePlayer', {uid: p.uid, password: n})}} className="text-amber-400" title="Edit Password"><Key size={14}/></button>
                                   <button onClick={()=>socket.emit('adminDeletePlayer', p.uid)} className="text-red-500"><Trash2 size={14}/></button>
                                 </div>
                             </div>
@@ -574,7 +586,7 @@ const App = () => {
         )}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 md:px-12 bg-black/60 backdrop-blur-md shrink-0 pt-[env(safe-area-inset-top)]">
           <div className="flex flex-col"><h2 className="tracking-[0.5em] text-lg font-black flex items-center gap-3"><LayoutGrid className="text-emerald-400 w-5"/> ARENA DIRECTORY</h2><span className="text-[8px] text-white/30 tracking-[0.2em]">VERSION {VERSION}</span></div>
-          <div className="flex items-center gap-6 font-black"><div className="flex flex-col items-end"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
+          <div className="flex items-center gap-6 font-black"><div className="flex items-end flex-col"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
         </header>
         <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black font-black uppercase text-center">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
@@ -593,7 +605,7 @@ const App = () => {
                           </div>
                         </div>
                       </div>
-                      <button onClick={()=>setSelectedTableForJoin(t)} className="w-full py-4 md:py-6 bg-emerald-600 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black tracking-[0.2em] shadow-lg transition-all active:scale-95 hover:brightness-110 flex items-center justify-center gap-2 group-hover:bg-emerald-500">JOIN ARENA <ChevronRight size={14}/></button>
+                      <button onClick={()=>{ setSelectedTableForJoin(t); setBuyInAmount(t.maxBuy); }} className="w-full py-4 md:py-6 bg-emerald-600 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black tracking-[0.2em] shadow-lg transition-all active:scale-95 hover:brightness-110 flex items-center justify-center gap-2 group-hover:bg-emerald-500">JOIN ARENA <ChevronRight size={14}/></button>
                     </div>
                 ))}
             </div>
@@ -608,6 +620,23 @@ const App = () => {
               <h1 className="text-[10vw] font-black uppercase italic animate-announcement-pop drop-shadow-[0_0_50px_rgba(0,0,0,1)] text-center px-10" style={{ color: announcement.color }}>{announcement.text}</h1>
           </div>
       )}
+
+      {showRebuyModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6">
+          <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col gap-10">
+            <h3 className="text-3xl text-center text-indigo-400 uppercase font-black">ARENA RE-BUY</h3>
+            <div className="space-y-4 font-black text-center uppercase">
+              <div className="flex justify-between items-center text-[10px] text-white/40 tracking-[0.2em] font-black"><span>CREDIT AMOUNT</span><span className="text-indigo-400 text-2xl font-mono">${Math.min(rebuyAmount, userProfile?.chips || 0).toLocaleString()}</span></div>
+              <input type="range" min={5} max={userProfile?.chips || 10} step={0.25} value={rebuyAmount} onChange={(e) => setRebuyAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+            </div>
+            <div className="flex gap-4">
+              <button onClick={()=>setShowRebuyModal(false)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl font-black text-xs uppercase">CANCEL</button>
+              <button onClick={handleRebuy} className="flex-2 p-4 bg-indigo-600 rounded-xl shadow-lg transition-all text-xs font-black uppercase">INJECT FUNDS</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-15 md:h-19">
         <div className="flex-1 flex items-center">
             <div className="bg-slate-900 border border-white/10 px-3 py-1.5 rounded-lg flex flex-col min-w-[120px]">
@@ -718,8 +747,9 @@ const App = () => {
               )}
             </div>
 
+            {/* Vertical Betting Slider HUD */}
             {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
-              <div className="absolute right-[-160px] top-[15%] bottom-[15%] w-16 flex flex-col items-center justify-end z-[250] pointer-events-auto">
+              <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                 <div className="flex-1 w-full relative flex items-center justify-center py-4">
                   <input 
                     type="range" 
@@ -728,12 +758,25 @@ const App = () => {
                     step={0.25} 
                     value={raiseInput} 
                     onChange={(e) => setRaiseInput(Number(e.target.value))}
-                    className="vertical-range appearance-none bg-white/10 w-8 h-full rounded-full accent-emerald-500 cursor-pointer border-2 border-white/20"
+                    className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer border-2 border-white/20"
                     style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }}
                   />
                 </div>
-                <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-4 py-2 rounded-xl shadow-[0_0_40px_rgba(52,211,153,0.6)] animate-in zoom-in duration-300">
-                  <span className="text-emerald-400 font-mono text-xl md:text-4xl font-black">${Math.floor(raiseInput).toLocaleString()}</span>
+                <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl shadow-[0_0_40px_rgba(52,211,153,0.6)] animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]">
+                  <span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span>
+                  <div className="flex items-center justify-center w-full">
+                    <span className="text-emerald-500 font-mono text-lg md:text-2xl mr-0.5">$</span>
+                    <input 
+                      type="number"
+                      value={raiseInput}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        const max = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
+                        setRaiseInput(Math.min(val, max));
+                      }}
+                      className="bg-transparent text-emerald-400 font-mono text-xl md:text-3xl font-black text-center outline-none w-full"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -784,8 +827,8 @@ const App = () => {
                 );
             })()
           ) : (
-            <div className={`flex flex-col gap-4 items-center w-full transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
-                {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE ? (<>
+            <div className={`flex flex-col gap-4 items-center w-full transition-all duration-500 ${activeIdx !== heroIdx && (!heroPlayerObj || heroPlayerObj.chips > 0) ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
+                {heroPlayerObj && !heroPlayerObj.isFolded && heroPlayerObj.chips > 0 && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
                         <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] hover:bg-white/10 font-black">1/2 POT</button>
                         <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] hover:bg-white/10 font-black">POT</button>
@@ -798,7 +841,12 @@ const App = () => {
                             <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase"><Zap size={20} className="mr-1"/> RAISE</button>
                         </div>
                     </div>
-                </>) : (
+                </>) : heroPlayerObj && heroPlayerObj.chips <= 0 && phase !== PHASES.IDLE ? (
+                    <div className="flex flex-col items-center gap-4 py-6">
+                        <span className="text-white/40 tracking-[0.2em] text-xs font-black italic uppercase">Broke in Arena • Funds Available in Wallet</span>
+                        <button onClick={()=>setShowRebuyModal(true)} className="px-12 py-5 bg-indigo-600 border-2 border-indigo-400 rounded-2xl font-black text-xl hover:scale-105 transition-transform flex items-center gap-3 shadow-[0_0_40px_rgba(79,70,229,0.4)] uppercase"><Coins size={24}/> Re-buy & Continue</button>
+                    </div>
+                ) : (
                     <div className="flex flex-col items-center gap-1 py-10"><span className="text-white/10 tracking-[0.8em] text-sm font-black italic animate-pulse">ARENA OBSERVATION</span></div>
                 )}
             </div>
