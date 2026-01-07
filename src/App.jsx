@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.19
+// VERSION: v1.0.22
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.19";
+const VERSION = "v1.0.22";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -141,7 +141,7 @@ const Seat = ({
         if (!player.lastAction) return null;
         switch (player.lastAction) {
             case 'RAISE': return { text: `RAISED $${player.currentBet}`, color: "text-emerald-400", glow: "shadow-[0_0_30px_rgba(16,185,129,0.8)]" };
-            case 'CALL': return { text: player.currentBet > 0 ? `CALLED $${player.currentBet}` : "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.8)]" };
+            case 'CALL': return { text: `CALLED $${player.currentBet}`, color: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.8)]" };
             case 'CHECK': return { text: "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30_rgba(34,211,238,0.8)]" };
             default: return null;
         }
@@ -251,7 +251,8 @@ const App = () => {
   const [activeIdx, setActiveIdx] = useState(-1);
   const [dealerIdx, setDealerIdx] = useState(-1);
   const [highestBet, setHighestBet] = useState(0);
-  const [bigBlind, setBigBlind] = useState(0.5);
+  const [bigBlind, setBigBlind] = useState(2);
+  const [minRaiseAmount, setMinRaiseAmount] = useState(0);
   const [winning5Ids, setWinning5Ids] = useState([]);
   const [logs, setLogs] = useState([]);
   const [potAmount, setPotAmount] = useState(0);
@@ -259,7 +260,7 @@ const App = () => {
   const [activeTables, setActiveTables] = useState([]);
   const [allProfiles, setAllProfiles] = useState([]);
   const [selectedTableForJoin, setSelectedTableForJoin] = useState(null);
-  const [buyInAmount, setBuyInAmount] = useState(10); 
+  const [buyInAmount, setBuyInAmount] = useState(100); 
   const [raiseInput, setRaiseInput] = useState(0);
   const [currentRoomId, setCurrentRoomId] = useState(null);
   const [potTransferring, setPotTransferring] = useState(false);
@@ -272,7 +273,7 @@ const App = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [announcement, setAnnouncement] = useState(null); 
-  const [rebuyAmount, setRebuyAmount] = useState(10);
+  const [rebuyAmount, setRebuyAmount] = useState(100);
   const [showRebuyModal, setShowRebuyModal] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [preAction, setPreAction] = useState(null);
@@ -284,10 +285,10 @@ const App = () => {
   const joinLock = useRef(false);
   const phaseRef = useRef(PHASES.IDLE); 
   const currentHandId = useRef(Date.now());
-  const turnInitializedRef = useRef(-1); // Fixes slider reset bug
+  const turnInitializedRef = useRef(-1); 
   
-  const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
-  const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
+  const [newPlayer, setNewPlayer] = useState({ name: '', chips: 1000, password: '' });
+  const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'HOLDEM' });
 
   // --- DERIVED ---
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
@@ -355,7 +356,7 @@ const App = () => {
     if (!newPlayer.name.trim()) return;
     const playerUid = 'p_' + Math.random().toString(36).slice(2, 7);
     socket.emit('adminCreatePlayer', { ...newPlayer, uid: playerUid });
-    setNewPlayer({ name: '', chips: 100, password: '' });
+    setNewPlayer({ name: '', chips: 1000, password: '' });
   }, [newPlayer]);
 
   const handleSpawnArena = useCallback(() => {
@@ -366,7 +367,7 @@ const App = () => {
         minBuy: Number(newTable.minBuy), maxBuy: Number(newTable.maxBuy)
     };
     socket.emit('adminCreateRoom', roomData);
-    setNewTable({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
+    setNewTable({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'HOLDEM' });
   }, [newTable]);
 
   const formatRank = (rank) => {
@@ -474,6 +475,7 @@ const App = () => {
         setActiveIdx(d.activeIdx ?? -1);
         setHighestBet(d.highestBet || 0);
         if (d.bb) setBigBlind(d.bb);
+        if (d.minRaiseAmount !== undefined) setMinRaiseAmount(d.minRaiseAmount);
         setDealerIdx(d.dealerIdx ?? -1);
         setTimeRemaining(d.timeRemaining || 0);
         if (d.activeVariant) {
@@ -551,10 +553,10 @@ const App = () => {
 
   useEffect(() => {
     if (activeIdx === heroIdx && heroPlayerObj) { 
-        // Sync raise slider to minimum bet ONLY when turn begins (detected via turnInitializedRef)
+        // Sync raise slider to minimum bet ONLY when turn begins
         if (turnInitializedRef.current !== activeIdx) {
           turnInitializedRef.current = activeIdx;
-          const minAllowed = highestBet + bigBlind;
+          const minAllowed = minRaiseAmount || (highestBet + bigBlind);
           const maxAllowed = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
           setRaiseInput(Math.min(minAllowed, maxAllowed)); 
         }
@@ -567,7 +569,7 @@ const App = () => {
     } else {
         turnInitializedRef.current = -1;
     }
-  }, [activeIdx, heroIdx, highestBet, bigBlind, heroPlayerObj, preAction, handleAction]);
+  }, [activeIdx, heroIdx, highestBet, bigBlind, minRaiseAmount, heroPlayerObj, preAction, handleAction]);
 
   // --- VIEWS ---
   if (currentView === VIEWS.LOGIN) return (
@@ -654,7 +656,7 @@ const App = () => {
                 <h3 className="text-3xl text-center text-emerald-400 uppercase font-black">{String(selectedTableForJoin.name)}</h3>
                 <div className="space-y-4 font-black text-center uppercase">
                   <div className="flex justify-between items-center text-[10px] text-white/40 tracking-[0.2em] font-black"><span>SEATING AMOUNT</span><span className="text-emerald-400 text-2xl font-mono">${Math.min(buyInAmount, userProfile?.chips || 0).toLocaleString()}</span></div>
-                  <input type="range" min={selectedTableForJoin.minBuy || 5} max={Math.min(selectedTableForJoin.maxBuy || 10, userProfile?.chips || 10)} step={0.25} value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
+                  <input type="range" min={selectedTableForJoin.minBuy || 50} max={Math.min(selectedTableForJoin.maxBuy || 100, userProfile?.chips || 100)} step={1} value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
                 </div>
                 <div className="flex gap-4">
                   <button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl font-black text-xs uppercase">CANCEL</button>
@@ -709,7 +711,7 @@ const App = () => {
             <h3 className="text-3xl text-center text-indigo-400 uppercase font-black">ARENA RE-BUY</h3>
             <div className="space-y-4 font-black text-center uppercase">
               <div className="flex justify-between items-center text-[10px] text-white/40 tracking-[0.2em] font-black"><span>CREDIT AMOUNT</span><span className="text-indigo-400 text-2xl font-mono">${Math.min(rebuyAmount, userProfile?.chips || 0).toLocaleString()}</span></div>
-              <input type="range" min={5} max={userProfile?.chips || 10} step={0.25} value={rebuyAmount} onChange={(e) => setRebuyAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+              <input type="range" min={50} max={userProfile?.chips || 100} step={1} value={rebuyAmount} onChange={(e) => setRebuyAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
             </div>
             <div className="flex gap-4">
               <button onClick={()=>setShowRebuyModal(false)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl font-black text-xs uppercase">CANCEL</button>
@@ -856,9 +858,9 @@ const App = () => {
                 <div className="flex-1 w-full relative flex items-center justify-center py-4">
                   <input 
                     type="range" 
-                    min={Math.min(highestBet + bigBlind, Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} 
+                    min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} 
                     max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} 
-                    step={0.25} 
+                    step={1} 
                     value={raiseInput} 
                     onChange={(e) => setRaiseInput(Number(e.target.value))}
                     className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer border-2 border-white/20"
@@ -874,7 +876,7 @@ const App = () => {
                       value={raiseInput}
                       onChange={(e) => {
                         const val = Number(e.target.value);
-                        const min = highestBet + bigBlind;
+                        const min = minRaiseAmount || (highestBet + bigBlind);
                         const max = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
                         setRaiseInput(Math.max(min, Math.min(val, max)));
                       }}
