@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v2.1.3-PRO";
+const VERSION = "v2.1.5-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -26,16 +26,14 @@ const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN',
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
-// LANDSCAPE positions (Desktop) - Pushed to the extreme edges
 const LANDSCAPE_POSITIONS = [
   { x: 50, y: 98 }, { x: 10, y: 85 }, { x: 2,  y: 50 }, { x: 10, y: 15 }, { x: 30, y: 2  },
   { x: 50, y: 0  }, { x: 70, y: 2  }, { x: 90, y: 15 }, { x: 98, y: 50 }, { x: 90, y: 85 }
 ];
 
-// PORTRAIT positions (Mobile) - Optimized for vertical stadium
 const PORTRAIT_POSITIONS = [
-  { x: 50, y: 98 }, { x: 15, y: 88 }, { x: 2,  y: 65 }, { x: 2,  y: 35 }, { x: 15, y: 12 },
-  { x: 50, y: 2  }, { x: 85, y: 12 }, { x: 98, y: 35 }, { x: 98, y: 65 }, { x: 85, y: 88 }
+  { x: 50, y: 98 }, { x: 15, y: 90 }, { x: 2,  y: 65 }, { x: 2,  y: 35 }, { x: 15, y: 10 },
+  { x: 50, y: 2  }, { x: 85, y: 10 }, { x: 98, y: 35 }, { x: 98, y: 65 }, { x: 85, y: 90 }
 ];
 
 const BET_OFFSETS = [
@@ -148,7 +146,7 @@ const Seat = ({
 
             <div 
                 style={{ transform: `translateY(${visuals.badgeY}px)` }}
-                className={`relative z-50 flex flex-col items-center p-2 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[150px] shadow-2xl
+                className={`relative z-50 flex flex-col items-center p-2 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[180px] shadow-2xl
                   ${isActiveTurn ? 'border-white/30 ring-2 ring-white/10 scale-105' : 'border-white/10'} 
                   ${isWinner ? 'border-yellow-400 ring-4 ring-yellow-400/40 scale-110' : ''}`}
             >
@@ -243,14 +241,13 @@ const App = () => {
 
   const logEndRef = useRef(null);
 
-  // Resize listener to toggle portrait/landscape table modes
   useEffect(() => {
     const handleResize = () => {
       const portrait = window.innerHeight > window.innerWidth;
       setIsPortrait(portrait);
       setVisuals(prev => ({
         ...prev,
-        tableZoom: portrait ? 0.95 : 0.85,
+        tableZoom: portrait ? 1.05 : 0.85,
         heroCardScale: portrait ? 3.0 : 4.0
       }));
     };
@@ -548,7 +545,6 @@ const App = () => {
   return (
     <div className={`h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase transition-all duration-700`}>
       
-      {/* Redesigned Intel Feed Modal */}
       {intelExpanded && (
         <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[950px] mx-auto bg-slate-900/95 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
@@ -703,7 +699,6 @@ const App = () => {
         )}
 
         <div style={{ transform: `scale(${visuals.tableZoom})` }} className={`relative w-full max-w-[1400px] flex items-center justify-center transition-all duration-500 ${isPortrait ? 'aspect-[10/16]' : 'aspect-[18/9]'}`}>
-            {/* STADIUM TABLE SHAPE - Responsive rounding */}
             <div className={`absolute inset-0 bg-[#0f3d2e]/40 border-[1.5vw] border-slate-900 shadow-[inset_0_0_10vw_rgba(0,0,0,0.8)] ${isPortrait ? 'rounded-[15vw]' : 'rounded-[4vw]'}`} />
             
             <div className="absolute inset-0 z-20 pointer-events-none font-black">
@@ -749,7 +744,7 @@ const App = () => {
                 )}
               </div>
 
-              <div className={`flex gap-2.5 ${isPortrait ? 'mt-10 scale-125' : 'mt-6'}`} style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
+              <div className={`flex gap-1 ${isPortrait ? 'mt-8 scale-125' : 'mt-6'}`} style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
                 {community.map((c, j) => {
                   const isRed = c.suit === '♥' || c.suit === '♦';
                   const isWin = currentWinner?.hand.some(wc => wc.id === c.id);
@@ -808,37 +803,37 @@ const App = () => {
 
              {phase !== PHASES.IDLE && (
                <div className="flex flex-col gap-1 md:gap-2 w-full mt-1.5">
-                  {/* PRE-ACTION QUEUING UI */}
-                  {activeIdx !== heroIdx && phase !== PHASES.IDLE && heroIdx !== -1 && (
-                    <div className="flex gap-1 w-full animate-in slide-in-from-bottom-2 duration-300">
-                      <button onClick={() => setQueuedAction(queuedAction === 'FOLD' ? null : 'FOLD')} className={`flex-1 h-10 rounded-xl text-[10px] font-black border-2 transition-all ${queuedAction === 'FOLD' ? 'bg-red-600 border-white text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-red-950/20 border-red-500/30 text-red-500'}`}>
-                        FOLD {queuedAction === 'FOLD' && '✓'}
-                      </button>
-                      <button onClick={() => setQueuedAction(queuedAction === 'CALL' ? null : 'CALL')} className={`flex-1 h-10 rounded-xl text-[10px] font-black border-2 transition-all ${queuedAction === 'CALL' ? 'bg-indigo-600 border-white text-white shadow-[0_0_15px_rgba(129,140,248,0.5)]' : 'bg-indigo-950/20 border-indigo-400/30 text-indigo-400'}`}>
-                        CHECK/CALL {queuedAction === 'CALL' && '✓'}
-                      </button>
-                      {(highestBet <= (heroPlayerObj?.currentBet || 0)) && (
-                        <button onClick={() => setQueuedAction(queuedAction === 'CHECK_ONLY' ? null : 'CHECK_ONLY')} className={`flex-1 h-10 rounded-xl text-[10px] font-black border-2 transition-all ${queuedAction === 'CHECK_ONLY' ? 'bg-emerald-600 border-white text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-emerald-950/20 border-emerald-400/30 text-emerald-400'}`}>
-                          CHECK ONLY {queuedAction === 'CHECK_ONLY' && '✓'}
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* ACTIVE ACTION UI */}
-                  <div className={`flex flex-col gap-1 md:gap-2 w-full transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-30 grayscale pointer-events-none scale-95 origin-bottom' : ''}`}>
-                    <div className="flex gap-1 w-full font-black uppercase">
+                  <div className="flex flex-col gap-1 md:gap-2 w-full">
+                    {/* Top Row: Multipliers or All-In (Only active during turn) */}
+                    <div className={`flex gap-1 w-full font-black uppercase transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-20 pointer-events-none' : ''}`}>
                       <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">1/2 POT</button>
                       <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">POT</button>
                       <button onClick={handleAllIn} className="flex-1 h-7 md:h-10 bg-red-900/40 border border-red-500/50 rounded-lg text-[8px] md:text-xs text-red-500 hover:bg-red-600 hover:text-white transition-all font-black">ALL-IN</button>
                     </div>
 
+                    {/* Bottom Row: Main actions & Pre-action Queue */}
                     <div className="flex gap-1.5 md:gap-2 w-full">
-                      <button onClick={() => handleAction('FOLD')} className="flex-1 bg-red-950/80 border-2 border-red-500/50 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black hover:bg-red-600 hover:text-white transition-all shadow-xl uppercase tracking-widest">FOLD</button>
-                      <button onClick={() => handleAction('CALL')} className="flex-1 bg-indigo-900/80 border-2 border-indigo-400/50 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl uppercase tracking-widest px-1 truncate">
-                        {highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toFixed(2)}` : 'CHECK'}
+                      {/* FOLD / PRE-FOLD */}
+                      <button 
+                        onClick={() => activeIdx === heroIdx ? handleAction('FOLD') : setQueuedAction(queuedAction === 'FOLD' ? null : 'FOLD')} 
+                        className={`flex-1 border-2 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black transition-all shadow-xl uppercase tracking-widest
+                          ${activeIdx === heroIdx ? 'bg-red-950/80 border-red-500/50 hover:bg-red-600 hover:text-white' : (queuedAction === 'FOLD' ? 'bg-red-600 border-white text-white shadow-[0_0_15px_rgba(239,68,68,0.6)]' : 'bg-red-950/20 border-red-500/20 text-red-500/50')}`}
+                      >
+                        FOLD {queuedAction === 'FOLD' && '✓'}
                       </button>
-                      <div className="flex-[2] flex bg-black/60 border-2 border-white/20 rounded-xl overflow-hidden shadow-inner font-black">
+
+                      {/* CALL / PRE-CALL */}
+                      <button 
+                        onClick={() => activeIdx === heroIdx ? handleAction('CALL') : setQueuedAction(queuedAction === 'CALL' ? null : 'CALL')} 
+                        className={`flex-1 border-2 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black transition-all shadow-xl uppercase tracking-widest px-1 truncate
+                          ${activeIdx === heroIdx ? 'bg-indigo-900/80 border-indigo-400/50 hover:bg-indigo-500 hover:text-white' : (queuedAction === 'CALL' ? 'bg-indigo-600 border-white text-white shadow-[0_0_15px_rgba(129,140,248,0.6)]' : 'bg-indigo-950/20 border-indigo-400/20 text-indigo-400/50')}`}
+                      >
+                        {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toFixed(2)}` : 'CHECK') : 'CHECK/CALL'}
+                        {queuedAction === 'CALL' && ' ✓'}
+                      </button>
+
+                      {/* RAISE (Only active during turn) */}
+                      <div className={`flex-[2] flex bg-black/60 border-2 border-white/20 rounded-xl overflow-hidden shadow-inner font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 pointer-events-none' : ''}`}>
                         <div className="flex items-center px-1.5 md:px-4 text-emerald-400 text-sm md:text-2xl font-mono">$</div>
                         <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj?.chips || 0) + Number(heroPlayerObj?.currentBet || 0), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center text-sm md:text-3xl outline-none font-mono text-white p-1 md:p-2" />
                         <button onClick={() => handleAction('RAISE')} className="bg-emerald-600 px-3 md:px-8 text-[9px] md:text-xl font-black hover:bg-emerald-400 hover:text-black transition-all uppercase tracking-tighter shadow-lg flex items-center gap-1 md:gap-2 shrink-0"><Zap size={14}/> RAISE</button>
