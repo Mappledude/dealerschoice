@@ -97,9 +97,6 @@ const Seat = ({
     const vecX = 50 - displayPos.x;
     const vecY = 50 - displayPos.y;
 
-    const betInwardX = vecX * 0.25;
-    const betInwardY = vecY * 0.35;
-
     const cardInwardX = vecX * 0.15;
     const cardInwardY = vecY * 0.20;
 
@@ -115,15 +112,16 @@ const Seat = ({
                 <div className="absolute top-[-35px] bg-slate-900 text-cyan-400 text-[8px] px-2 py-0.5 rounded-full border border-cyan-500/50 uppercase font-bold tracking-[0.2em] z-[150] backdrop-blur-md">WAITING</div>
             )}
             
+            {/* PLAYER BET AMOUNT - Positioned explicitly on top of badge */}
             {player.currentBet > 0 && (
-                <div className={`absolute z-[80] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot' : 'animate-bet-float'}`}
-                    style={{ transform: `translate(calc(-50% + ${betInwardX}vw), ${betInwardY}vw)`, left: '50%', top: '50%' }}>
-                    <div className="text-yellow-400 font-mono font-black text-[20px] md:text-[32px] drop-shadow-[0_0_15px_rgba(0,0,0,1)] tracking-tighter filter saturate-150">
+                <div className={`absolute -top-12 z-[110] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot opacity-0' : 'animate-bet-float'}`}>
+                    <div className="bg-yellow-400/90 text-black px-3 py-0.5 rounded-full border-2 border-black font-mono font-black text-xs md:text-lg shadow-[0_0_15px_rgba(251,191,36,0.5)]">
                         ${String(player.currentBet)}
                     </div>
                 </div>
             )}
 
+            {/* HOLE CARDS */}
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div 
                   className={`absolute flex items-center justify-center w-[15vw] h-[8vw] pointer-events-none ${isHero ? 'z-[200]' : 'z-[40]'}`}
@@ -156,6 +154,7 @@ const Seat = ({
                 </div>
             )}
 
+            {/* PLAYER BADGE */}
             <div 
                 className={`relative z-[90] flex flex-col items-center p-2 md:p-4 rounded-xl border transition-all duration-300 min-w-[120px] md:min-w-[220px] overflow-hidden backdrop-blur-xl
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
@@ -697,10 +696,10 @@ const App = () => {
               )}
             </div>
 
-            {/* Vertical Raise Slider */}
+            {/* Vertical Raise Slider - Moved 50px right, thicker, neon styling */}
             {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
-              <div className="absolute right-0 top-[20%] bottom-[20%] w-16 md:w-24 flex flex-col items-center justify-end z-[250] pointer-events-auto">
-                <div className="flex-1 w-full relative flex items-center justify-center py-8">
+              <div className="absolute right-[-60px] top-[15%] bottom-[15%] w-12 flex flex-col items-center justify-end z-[250] pointer-events-auto">
+                <div className="flex-1 w-full relative flex items-center justify-center py-4">
                   <input 
                     type="range" 
                     min={highestBet + bigBlind} 
@@ -708,20 +707,21 @@ const App = () => {
                     step={0.25} 
                     value={raiseInput} 
                     onChange={(e) => setRaiseInput(Number(e.target.value))}
-                    className="vertical-range appearance-none bg-white/10 w-2 h-full rounded-full accent-emerald-500 cursor-pointer"
+                    className="vertical-range appearance-none bg-white/5 w-4 h-full rounded-full accent-emerald-500 cursor-pointer border border-white/10"
                     style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }}
                   />
                 </div>
-                <div className="mt-4 bg-black/80 border border-emerald-500/40 px-3 py-1.5 rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-in fade-in duration-300">
-                  <span className="text-emerald-400 font-mono text-lg md:text-2xl font-black">${raiseInput.toLocaleString()}</span>
+                <div className="mt-2 bg-black/90 border border-emerald-400 px-3 py-1 rounded-lg shadow-[0_0_20px_rgba(52,211,153,0.4)] animate-in zoom-in duration-300">
+                  <span className="text-emerald-400 font-mono text-xl md:text-2xl font-black">${Math.floor(raiseInput).toLocaleString()}</span>
                 </div>
               </div>
             )}
         </div>
       </main>
 
+      {/* HUD FOOTER - Redesigned Showdown Layout */}
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="flex-1 flex flex-col justify-start pt-2 px-4 relative">
+        <div className="flex-1 flex flex-col justify-center px-4 relative">
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
                 const winner = showdownWinners[currentShowdownIdx];
@@ -734,25 +734,30 @@ const App = () => {
                 const displayRank = formatRank(String(winner.rank).replace("LOW: ", "").replace("HIGH: ", ""));
 
                 return (
-                    <div className="flex flex-col items-center justify-center w-full h-full animate-in slide-in-from-bottom duration-500 gap-2">
-                        <div className={`flex items-center gap-2 ${bgColor} px-4 py-2 rounded-full border ${borderColor}`}>
-                            <Trophy size={18} className={themeColor + " animate-bounce"} />
-                            <div className="text-sm md:text-xl font-black tracking-tight flex items-center gap-1.5 leading-none">
+                    <div className="flex flex-col items-center justify-center w-full h-full gap-2 animate-in fade-in duration-500">
+                        {/* Winner Info Header - Shrink to fit */}
+                        <div className={`flex items-center gap-3 ${bgColor} px-4 py-1.5 rounded-full border ${borderColor} max-w-full overflow-hidden`}>
+                            <Trophy size={14} className={themeColor + " animate-bounce shrink-0"} />
+                            <div className="text-xs md:text-lg font-black tracking-tighter flex items-center gap-1.5 leading-none whitespace-nowrap">
                                 <span className={getNeonNameColor(winner.name)}>{String(winner.name).toUpperCase()}</span>
-                                <span className="text-white opacity-60">WON</span>
+                                <span className="text-white opacity-40">WON</span>
                                 <span className={themeColor}>{winLabel}</span>
-                                <span className="text-white opacity-60">WITH</span>
-                                <span className={themeColor}>{winner.rank === "!" ? "A DEFAULT WIN" : displayRank}</span>
-                                <span className="text-emerald-400 ml-1">+${Number(winner.amount).toLocaleString()}</span>
+                                <span className="text-emerald-400">+${Number(winner.amount).toLocaleString()}</span>
                             </div>
                         </div>
+
+                        {/* Hand Rank Text - Separate line for better spacing */}
+                        <div className="text-[10px] md:text-sm font-black text-white/60 tracking-wider">
+                          USING <span className={themeColor}>{winner.rank === "!" ? "A DEFAULT WIN" : displayRank}</span>
+                        </div>
                         
-                        <div className="flex gap-1.5">
+                        {/* Winning Cards - Slightly smaller and layout optimized */}
+                        <div className="flex gap-1">
                             {(winner.hand || []).map((c, ci) => (
-                                <div key={ci} className={`w-10 md:w-16 h-12 md:h-20 bg-white rounded-t-lg flex flex-col items-start justify-start p-1.5 text-black shadow-xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
-                                    <span className={`text-[9px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
-                                    <span className={`text-[12px] md:text-lg leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
-                                    <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
+                                <div key={ci} className={`w-9 md:w-14 h-12 md:h-18 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
+                                    <span className={`text-[10px] md:text-sm font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
+                                    <span className={`text-[12px] md:text-xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
+                                    <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/20 to-transparent" />
                                 </div>
                             ))}
                         </div>
@@ -826,11 +831,30 @@ const App = () => {
           .scrollbar-hide::-webkit-scrollbar { display: none; }
           .vertical-range {
             -webkit-appearance: slider-vertical;
-            width: 8px;
+            width: 14px;
             height: 100%;
             background: rgba(255, 255, 255, 0.1);
             outline: none;
             border-radius: 999px;
+          }
+          .vertical-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 36px;
+            height: 36px;
+            background: rgba(16, 185, 129, 0.5);
+            border: 3px solid #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 1), 0 0 5px #fff;
+            cursor: pointer;
+          }
+          .vertical-range::-moz-range-thumb {
+            width: 36px;
+            height: 36px;
+            background: rgba(16, 185, 129, 0.5);
+            border: 3px solid #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 1), 0 0 5px #fff;
+            cursor: pointer;
           }
       `}</style>
     </div>
