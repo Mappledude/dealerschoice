@@ -17,7 +17,8 @@ const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'
 const VM = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
 const V_LABEL = { 1: 'Ace(Low)', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'Jack', 12: 'Queen', 13: 'King', 14: 'Ace' };
 
-const TURN_TIME_LIMIT = 22; 
+const TURN_TIME_LIMIT = 24; 
+const SECURE_SEAT_TIME = 3 * 60 * 1000; // 3 Minutes
 
 const holeCardsMap = { HOLDEM: 2, OMAHA: 4, PINEAPPLE: 3, MUFLIS: 2, HILOW: 4, REDSBLACKS: 4 };
 const variantNames = {
@@ -25,19 +26,19 @@ const variantNames = {
   MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks"
 };
 
-const BOT_NAMES = [
-    "Marshall", "Eleanor", "Cassidy", "Silas", "Julian", "Beatrix", 
-    "Gideon", "Clara", "Desmond", "Fiona", "Arthur", "Sloane"
-];
+const BOT_NAMES = ["Marshall", "Eleanor", "Cassidy", "Silas", "Julian", "Beatrix", "Gideon", "Clara", "Desmond", "Fiona", "Arthur", "Sloane"];
 
 let profiles = []; 
 let rooms = {};
+let disconnectTimeouts = {}; // Track security timers
 
 const serializeRoom = (room) => {
     if (!room) return null;
     const { timer, deck, ignitionTimer, ...rest } = room;
     return rest;
 };
+
+// ... (combinations, rankHand, getBestHand, updateRoomStrengths, processShowdown, performAction, moveToNextPlayer, collectBets, nextPhase, triggerBotTurn, startTurnTimer, runIgnition remain logically consistent)
 
 const combinations = (array, k) => {
   let result = [];
@@ -288,7 +289,7 @@ const moveToNextPlayer = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
     updateRoomStrengths(roomId);
-    const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand);
+    const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
     const allMatched = active.every(p => p.chips < 0.01 || p.currentBet === room.highestBet);
     const allActed = active.every(p => p.chips < 0.01 || p.actedThisStreet);
     if (active.length <= 1) {
@@ -298,7 +299,7 @@ const moveToNextPlayer = (roomId) => {
         room.activeIdx = -1; collectBets(room); io.to(roomId).emit('roomUpdate', serializeRoom(room));
         setTimeout(() => nextPhase(roomId), 1200);
     } else {
-        const seated = room.players.map((p, i) => (p && !p.isFolded && !p.waitingForNextHand) ? i : null).filter(x => x !== null);
+        const seated = room.players.map((p, i) => (p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected) ? i : null).filter(x => x !== null);
         const curIdxInSeated = seated.indexOf(room.activeIdx);
         room.activeIdx = seated[(curIdxInSeated + 1) % seated.length];
         if (room.players[room.activeIdx].chips < 0.01) {
@@ -318,8 +319,8 @@ const collectBets = (room) => {
 const nextPhase = (roomId) => {
     const room = rooms[roomId];
     if (!room) return;
-    const activeNonAllIn = room.players.filter(p => p && !p.isFolded && p.chips > 0.01 && !p.waitingForNextHand);
-    const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand);
+    const activeNonAllIn = room.players.filter(p => p && !p.isFolded && p.chips > 0.01 && !p.waitingForNextHand && !p.isDisconnected);
+    const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
     if (active.length <= 1 || (activeNonAllIn.length <= 1 && room.phase !== PHASES.RIVER)) {
         if (room.phase === PHASES.PRE_FLOP) { room.phase = PHASES.FLOP; room.community = room.deck.splice(0, 3); }
         else if (room.phase === PHASES.FLOP) { room.phase = PHASES.TURN; room.community.push(...room.deck.splice(0, 1)); }
@@ -336,7 +337,7 @@ const nextPhase = (roomId) => {
     else { processShowdown(roomId); return; }
     io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.phase} DEALT - TOTAL POT $${room.potData[0].amount.toFixed(2)}`, type: 'phase' });
     updateRoomStrengths(roomId);
-    const seated = room.players.map((p, i) => (p && !p.isFolded && p.chips > 0.01 && !p.waitingForNextHand) ? i : null).filter(x => x !== null);
+    const seated = room.players.map((p, i) => (p && !p.isFolded && p.chips > 0.01 && !p.waitingForNextHand && !p.isDisconnected) ? i : null).filter(x => x !== null);
     room.activeIdx = seated.length > 0 ? seated[0] : -1;
     if (room.activeIdx !== -1) {
         startTurnTimer(roomId); io.to(roomId).emit('roomUpdate', serializeRoom(room));
@@ -403,6 +404,7 @@ const runIgnition = (roomId) => {
         p.currentBet = 0; p.totalContribution = 0; p.isFolded = false; p.isWinner = false; p.lastAction = null; p.actedThisStreet = false; p.winProbability = 0; p.lowWinProbability = 0;
         p.strength = "Pre-flop"; p.lowStrength = null;
         p.waitingForNextHand = false;
+        p.isDisconnected = false;
       } else {
         p.waitingForNextHand = true; p.hand = [];
       }
@@ -421,27 +423,41 @@ const runIgnition = (roomId) => {
   triggerBotTurn(roomId);
 };
 
-const removePlayerGlobally = (uid) => {
+const removePlayerGlobally = (uid, force = false) => {
     Object.values(rooms).forEach(room => {
         const idx = room.players.findIndex(p => p && p.uid === uid);
         if (idx !== -1) {
-            const p = room.players[idx];
-            const prof = profiles.find(x => x.uid === uid);
-            if (prof) prof.chips += (Number(p.chips) + Number(p.currentBet || 0));
-            if (room.activeIdx === idx) { moveToNextPlayer(room.id); }
-            room.players[idx] = null;
-            
-            const humanCount = room.players.filter(pl => pl && !pl.isBot).length;
-            if (humanCount === 0) {
-                if (room.timer) clearInterval(room.timer);
-                room.players = Array(10).fill(null);
-                room.phase = PHASES.IDLE;
-                room.gameInProgress = false;
-                room.community = [];
-                room.potData = [{amount: 0}];
-                io.to(room.id).emit('log', { name: "SYSTEM", action: "ALL HUMANS LEFT. BOTS EVICTED. ARENA RESET.", type: 'phase' });
+            const player = room.players[idx];
+            if (force || player.isBot) {
+                // Final hard removal
+                const prof = profiles.find(x => x.uid === uid);
+                if (prof) prof.chips += (Number(player.chips) + Number(player.currentBet || 0));
+                if (room.activeIdx === idx) { moveToNextPlayer(room.id); }
+                room.players[idx] = null;
+                
+                const humanCount = room.players.filter(pl => pl && !pl.isBot).length;
+                if (humanCount === 0) {
+                    if (room.timer) clearInterval(room.timer);
+                    room.players = Array(10).fill(null);
+                    room.phase = PHASES.IDLE;
+                    room.gameInProgress = false;
+                    room.community = [];
+                    room.potData = [{amount: 0}];
+                }
+                io.to(room.id).emit('roomUpdate', serializeRoom(room));
+            } else {
+                // Soft secure: mark disconnected
+                player.isDisconnected = true;
+                io.to(room.id).emit('log', { name: "SYSTEM", action: `${player.name.toUpperCase()} DISCONNECTED. SEAT SECURED FOR 3 MINS.`, type: 'phase' });
+                io.to(room.id).emit('roomUpdate', serializeRoom(room));
+
+                const timeoutKey = `${uid}_${room.id}`;
+                if (disconnectTimeouts[timeoutKey]) clearTimeout(disconnectTimeouts[timeoutKey]);
+                disconnectTimeouts[timeoutKey] = setTimeout(() => {
+                    removePlayerGlobally(uid, true);
+                    delete disconnectTimeouts[timeoutKey];
+                }, SECURE_SEAT_TIME);
             }
-            io.to(room.id).emit('roomUpdate', serializeRoom(room));
         }
     });
 };
@@ -453,10 +469,30 @@ io.on('connection', (socket) => {
     const profile = profiles.find(p => p.password === password);
     if (profile) { seatedUid = profile.uid; socket.emit('loginSuccess', profile); }
   });
+  
   socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
     const room = rooms[roomId]; if (!room) return callback({ status: 'error' });
-    const alreadySeated = Object.values(rooms).some(r => r.players.some(p => p && p.uid === profile.uid));
-    if (alreadySeated) return callback({ status: 'error', message: 'ALREADY_SEATED' });
+    
+    // Check if player is already seated (Secured seat recovery)
+    const existingIdx = room.players.findIndex(p => p && p.uid === profile.uid);
+    if (existingIdx !== -1) {
+        const timeoutKey = `${profile.uid}_${roomId}`;
+        if (disconnectTimeouts[timeoutKey]) {
+            clearTimeout(disconnectTimeouts[timeoutKey]);
+            delete disconnectTimeouts[timeoutKey];
+        }
+        room.players[existingIdx].isDisconnected = false;
+        seatedUid = profile.uid;
+        socket.join(roomId);
+        io.to(roomId).emit('log', { name: String(profile.name), action: 'RE-JOINED THE ARENA (SEAT SECURED)', type: 'phase' });
+        callback({ status: 'ok' });
+        io.to(roomId).emit('roomUpdate', serializeRoom(room));
+        return;
+    }
+
+    const alreadyInOtherRoom = Object.values(rooms).some(r => r.players.some(p => p && p.uid === profile.uid));
+    if (alreadyInOtherRoom) return callback({ status: 'error', message: 'ALREADY_SEATED' });
+
     let globalProfile = profiles.find(p => p.uid === profile.uid || p.name === profile.name);
     if (!globalProfile) { globalProfile = { ...profile, chips: 100 }; profiles.push(globalProfile); }
     if (globalProfile.chips < Number(buyIn)) return callback({ status: 'error' });
@@ -464,7 +500,7 @@ io.on('connection', (socket) => {
     const emptyIdx = room.players.findIndex(p => p === null);
     if (emptyIdx === -1) return callback({ status: 'error' });
     seatedUid = profile.uid;
-    room.players[emptyIdx] = { ...profile, chips: Number(buyIn), seatIdx: emptyIdx, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: globalProfile.pendingVariant || profile.pendingVariant || 'HOLDEM' };
+    room.players[emptyIdx] = { ...profile, chips: Number(buyIn), seatIdx: emptyIdx, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: globalProfile.pendingVariant || profile.pendingVariant || 'HOLDEM', isDisconnected: false };
     socket.join(roomId);
     io.to(roomId).emit('log', { name: String(profile.name), action: 'JOINED THE ARENA', type: 'phase' });
     callback({ status: 'ok' });
@@ -476,8 +512,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('playerAction', ({ roomId, type, amount }) => performAction(roomId, type, amount));
-  socket.on('leaveRoom', ({ uid }) => { removePlayerGlobally(uid); seatedUid = null; io.emit('profilesUpdate', profiles); });
-  socket.on('disconnect', () => { if (seatedUid) { removePlayerGlobally(seatedUid); io.emit('profilesUpdate', profiles); } });
+  socket.on('leaveRoom', ({ uid }) => { removePlayerGlobally(uid, true); seatedUid = null; io.emit('profilesUpdate', profiles); });
+  socket.on('disconnect', () => { if (seatedUid) { removePlayerGlobally(seatedUid, false); io.emit('profilesUpdate', profiles); } });
 
   socket.on('adminAddBot', ({ roomId }) => {
     const room = rooms[roomId]; if (!room) return;
@@ -485,7 +521,7 @@ io.on('connection', (socket) => {
     const botName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
     const botId = Math.random().toString(36).slice(2, 7);
     const botBuyIn = room.maxBuy || 10;
-    room.players[emptyIdx] = { uid: `bot_${botId}`, name: botName, isBot: true, chips: Number(botBuyIn), seatIdx: emptyIdx, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: 'HOLDEM' };
+    room.players[emptyIdx] = { uid: `bot_${botId}`, name: botName, isBot: true, chips: Number(botBuyIn), seatIdx: emptyIdx, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: 'HOLDEM', isDisconnected: false };
     io.to(roomId).emit('log', { name: "SYSTEM", action: `${botName} ENTERED ARENA WITH $${botBuyIn}`, type: 'phase' });
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     if (room.phase === PHASES.IDLE && room.players.filter(Boolean).length >= 2 && !room.ignitionTimer) {
@@ -499,7 +535,6 @@ io.on('connection', (socket) => {
         const player = room.players.find(pl => pl && pl.uid === uid);
         if (player) { 
             player.pendingVariant = pendingVariant; 
-            io.to(room.id).emit('log', { name: String(player.name), action: `SET DEALER CHOICE TO ${variantNames[pendingVariant].toUpperCase()}`, type: 'variant' });
             io.to(room.id).emit('roomUpdate', serializeRoom(room)); 
         }
     });
