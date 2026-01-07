@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v2.1.5-PRO";
+const VERSION = "v2.1.6-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -70,13 +70,18 @@ const formatHandStrength = (str, currentPhase) => {
   if (!str || str === 'Analysing...' || str === '---') return str;
   if (currentPhase === PHASES.PRE_FLOP) return 'Pre-flop';
   
-  let s = str.toUpperCase();
+  // Strip specific cards (e.g., "Two Pair, Aces and Kings" -> "Two Pair")
+  let s = str.split(',')[0].toUpperCase();
+  // Strip "of" (e.g., "Pair of Aces" -> "Pair")
+  s = s.split(' OF ')[0];
+  
   s = s.replace("THREE OF A KIND", "3 of a KIND");
   s = s.replace("FOUR OF A KIND", "4 of a KIND");
   s = s.replace("FIVE OF A KIND", "5 of a KIND");
   s = s.replace("TWO PAIR", "2 PAIR");
   s = s.replace("STRAIGHT FLUSH", "STR FLUSH");
   s = s.replace("HIGH CARD", "HIGH");
+  
   if (s === "UNCONTESTED") return "Pre-flop";
   
   return s;
@@ -233,22 +238,44 @@ const App = () => {
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 });
 
+  // USER CALIBRATION DEFAULTS
   const [visuals, setVisuals] = useState({
-    heroCardScale: 4.0, heroCardY: 22, oppCardScale: 1.0, oppCardY: -31,
-    commCardScale: 1.8, commCardY: -7, betScale: 2.0, betY: 47,
-    badgeY: 85, footerHeight: 270, tableZoom: window.innerWidth < 768 ? 0.75 : 0.85, holeCardFan: 25
+    heroCardScale: 4.5, heroCardY: 0, oppCardScale: 1.0, oppCardY: -31,
+    commCardScale: 4.0, commCardY: 5, betScale: 4.0, betY: 215,
+    badgeY: 85, footerHeight: 260, tableZoom: 0.6, holeCardFan: 32
   });
 
   const logEndRef = useRef(null);
 
+  // FLOP BANNER LOGIC
+  useEffect(() => {
+    let startTimer;
+    let endTimer;
+
+    if (phase === PHASES.FLOP) {
+      startTimer = setTimeout(() => {
+        setShowBanner(true);
+        endTimer = setTimeout(() => setShowBanner(false), 1500);
+      }, 2000);
+    } else {
+      setShowBanner(false);
+    }
+
+    return () => {
+      clearTimeout(startTimer);
+      clearTimeout(endTimer);
+    };
+  }, [phase]);
+
+  // Orientation Sync
   useEffect(() => {
     const handleResize = () => {
       const portrait = window.innerHeight > window.innerWidth;
       setIsPortrait(portrait);
+      // We keep the calibrated zoom/scale but let zoom scale slightly for portrait comfort
       setVisuals(prev => ({
         ...prev,
-        tableZoom: portrait ? 1.05 : 0.85,
-        heroCardScale: portrait ? 3.0 : 4.0
+        tableZoom: portrait ? 0.75 : 0.6 
       }));
     };
     window.addEventListener('resize', handleResize);
@@ -545,6 +572,7 @@ const App = () => {
   return (
     <div className={`h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase transition-all duration-700`}>
       
+      {/* Redesigned Intel Feed Modal */}
       {intelExpanded && (
         <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[950px] mx-auto bg-slate-900/95 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
@@ -699,6 +727,7 @@ const App = () => {
         )}
 
         <div style={{ transform: `scale(${visuals.tableZoom})` }} className={`relative w-full max-w-[1400px] flex items-center justify-center transition-all duration-500 ${isPortrait ? 'aspect-[10/16]' : 'aspect-[18/9]'}`}>
+            {/* STADIUM TABLE SHAPE */}
             <div className={`absolute inset-0 bg-[#0f3d2e]/40 border-[1.5vw] border-slate-900 shadow-[inset_0_0_10vw_rgba(0,0,0,0.8)] ${isPortrait ? 'rounded-[15vw]' : 'rounded-[4vw]'}`} />
             
             <div className="absolute inset-0 z-20 pointer-events-none font-black">
