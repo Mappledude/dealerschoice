@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.14";
+const VERSION = "v1.0.15";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -34,7 +34,6 @@ const VARIANT_COLORS = {
   REDSBLACKS: '#f43f5e'   // Rose
 };
 
-// NEON_PALETTE constant for name glow effects
 const NEON_PALETTE = [
   'text-[#39FF14]', // Neon Lime
   'text-[#FF00FF]', // Neon Fuchsia
@@ -164,7 +163,6 @@ const Seat = ({
                         const mid = (player.hand.length - 1) / 2;
                         const offset = ci - mid;
                         const isRedSuit = c.suit === '♥' || c.suit === '♦';
-                        
                         const cardSpacing = isHero ? 2 : (isMobile ? 3.75 : 2);
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         const scale = isHero ? 1.6 : 1.0;
@@ -497,7 +495,10 @@ const App = () => {
       if (document.visibilityState === 'visible') {
         if (!socket.connected) socket.connect();
         socket.emit('getInitialData');
-        if (currentRoomId && userProfile) socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 });
+        // FIXED: Added callback check in joinRoom sync call to prevent server crash
+        if (currentRoomId && userProfile) {
+          socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 }, (res) => {});
+        }
       }
     };
 
@@ -644,7 +645,7 @@ const App = () => {
         )}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 md:px-12 bg-black/60 backdrop-blur-md shrink-0 pt-[env(safe-area-inset-top)]">
           <div className="flex flex-col"><h2 className="tracking-[0.5em] text-lg font-black flex items-center gap-3"><LayoutGrid className="text-emerald-400 w-5"/> ARENA DIRECTORY</h2><span className="text-[8px] text-white/30 tracking-[0.2em]">VERSION {VERSION}</span></div>
-          <div className="flex items-center gap-6 font-black"><div className="flex items-end flex-col"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
+          <div className="flex items-center gap-6 font-black"><div className="flex flex-col items-end"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
         </header>
         <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black font-black uppercase text-center">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
