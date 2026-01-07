@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v2.1.2-PRO";
+const VERSION = "v2.1.3-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -26,9 +26,16 @@ const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN',
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
-const DISPLAY_POSITIONS = [
-  { x: 50, y: 92 }, { x: 15, y: 82 }, { x: 6,  y: 45 }, { x: 12, y: 12 }, { x: 30, y: 3  },
-  { x: 50, y: 1  }, { x: 70, y: 3  }, { x: 88, y: 12 }, { x: 94, y: 45 }, { x: 85, y: 82 }
+// LANDSCAPE positions (Desktop) - Pushed to the extreme edges
+const LANDSCAPE_POSITIONS = [
+  { x: 50, y: 98 }, { x: 10, y: 85 }, { x: 2,  y: 50 }, { x: 10, y: 15 }, { x: 30, y: 2  },
+  { x: 50, y: 0  }, { x: 70, y: 2  }, { x: 90, y: 15 }, { x: 98, y: 50 }, { x: 90, y: 85 }
+];
+
+// PORTRAIT positions (Mobile) - Optimized for vertical stadium
+const PORTRAIT_POSITIONS = [
+  { x: 50, y: 98 }, { x: 15, y: 88 }, { x: 2,  y: 65 }, { x: 2,  y: 35 }, { x: 15, y: 12 },
+  { x: 50, y: 2  }, { x: 85, y: 12 }, { x: 98, y: 35 }, { x: 98, y: 65 }, { x: 85, y: 88 }
 ];
 
 const BET_OFFSETS = [
@@ -59,6 +66,22 @@ const getPlayerIntelColor = (name) => {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
   return INTEL_COLORS[Math.abs(hash) % INTEL_COLORS.length];
+};
+
+const formatHandStrength = (str, currentPhase) => {
+  if (!str || str === 'Analysing...' || str === '---') return str;
+  if (currentPhase === PHASES.PRE_FLOP) return 'Pre-flop';
+  
+  let s = str.toUpperCase();
+  s = s.replace("THREE OF A KIND", "3 of a KIND");
+  s = s.replace("FOUR OF A KIND", "4 of a KIND");
+  s = s.replace("FIVE OF A KIND", "5 of a KIND");
+  s = s.replace("TWO PAIR", "2 PAIR");
+  s = s.replace("STRAIGHT FLUSH", "STR FLUSH");
+  s = s.replace("HIGH CARD", "HIGH");
+  if (s === "UNCONTESTED") return "Pre-flop";
+  
+  return s;
 };
 
 const Confetti = ({ active }) => {
@@ -125,7 +148,7 @@ const Seat = ({
 
             <div 
                 style={{ transform: `translateY(${visuals.badgeY}px)` }}
-                className={`relative z-50 flex flex-col items-center p-2 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[180px] shadow-2xl
+                className={`relative z-50 flex flex-col items-center p-2 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[150px] shadow-2xl
                   ${isActiveTurn ? 'border-white/30 ring-2 ring-white/10 scale-105' : 'border-white/10'} 
                   ${isWinner ? 'border-yellow-400 ring-4 ring-yellow-400/40 scale-110' : ''}`}
             >
@@ -205,6 +228,7 @@ const App = () => {
   const [nuclearConfirm, setNuclearConfirm] = useState(false);
   const [showBanner, setShowBanner] = useState(false); 
   const [queuedAction, setQueuedAction] = useState(null);
+  const [isPortrait, setIsPortrait] = useState(window.innerHeight > window.innerWidth);
 
   const [pots, setPots] = useState([]); 
 
@@ -218,6 +242,23 @@ const App = () => {
   });
 
   const logEndRef = useRef(null);
+
+  // Resize listener to toggle portrait/landscape table modes
+  useEffect(() => {
+    const handleResize = () => {
+      const portrait = window.innerHeight > window.innerWidth;
+      setIsPortrait(portrait);
+      setVisuals(prev => ({
+        ...prev,
+        tableZoom: portrait ? 0.95 : 0.85,
+        heroCardScale: portrait ? 3.0 : 4.0
+      }));
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
     return players.findIndex(p => p && p.uid === userProfile.uid);
@@ -260,36 +301,6 @@ const App = () => {
     if (currentHand.actions.length > 0) hands.push(currentHand);
     return hands.reverse();
   }, [logs]);
-
-  useEffect(() => {
-    let startTimer;
-    let endTimer;
-
-    if (phase === PHASES.FLOP) {
-      startTimer = setTimeout(() => {
-        setShowBanner(true);
-        endTimer = setTimeout(() => setShowBanner(false), 1500);
-      }, 2000);
-    } else {
-      setShowBanner(false);
-    }
-
-    return () => {
-      clearTimeout(startTimer);
-      clearTimeout(endTimer);
-    };
-  }, [phase]);
-
-  const getBannerStyles = () => {
-    switch (activeVariant?.id) {
-      case 'HOLDEM': return 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]';
-      case 'OMAHA': return 'text-fuchsia-500 drop-shadow-[0_0_15px_rgba(217,70,239,0.5)]';
-      case 'MUFLIS': return 'text-cyan-300 drop-shadow-[0_0_20px_rgba(34,211,238,0.8)]';
-      case 'HILOW': return 'bg-gradient-to-b from-amber-400 via-slate-100 to-amber-500 bg-clip-text text-transparent drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]';
-      case 'REDSBLACKS': return 'bg-gradient-to-r from-red-600 via-black to-red-600 bg-clip-text text-transparent animate-red-black-shift drop-shadow-[0_0_10px_rgba(220,38,38,0.5)]';
-      default: return 'text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]';
-    }
-  };
 
   const handleAction = useCallback((type, amt = 0) => {
     socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(amt || raiseInput) : 0 });
@@ -391,8 +402,8 @@ const App = () => {
     const sIdx = players.findIndex(p => p && p.uid === currentWinner.uid);
     if (sIdx === -1) return null;
     const rIdx = (sIdx - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS;
-    return DISPLAY_POSITIONS[rIdx];
-  }, [currentWinner, players, heroIdx]);
+    return (isPortrait ? PORTRAIT_POSITIONS : LANDSCAPE_POSITIONS)[rIdx];
+  }, [currentWinner, players, heroIdx, isPortrait]);
 
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
@@ -675,7 +686,7 @@ const App = () => {
             <button onClick={() => socket.emit('adminAddBot', { roomId: currentRoomId })} className="text-indigo-400 p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all border border-white/5"><Bot size={18}/></button>
             <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 border border-white/5 rounded-xl hover:bg-white/10 transition-colors shadow-lg`}><Eye size={18}/></button>
             <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-2 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all"><Settings size={18}/></button>
-            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all"><LogOut size={18}/></button>
+            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"><LogOut size={18}/></button>
           </div>
         </div>
       </header>
@@ -691,19 +702,20 @@ const App = () => {
           </div>
         )}
 
-        <div style={{ transform: `scale(${visuals.tableZoom})` }} className="relative w-full max-w-[1400px] aspect-[18/9] flex items-center justify-center transition-transform duration-500">
-            {/* STADIUM TABLE SHAPE */}
-            <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[4vw] border-[1.5vw] border-slate-900 shadow-[inset_0_0_10vw_rgba(0,0,0,0.8)]" />
+        <div style={{ transform: `scale(${visuals.tableZoom})` }} className={`relative w-full max-w-[1400px] flex items-center justify-center transition-all duration-500 ${isPortrait ? 'aspect-[10/16]' : 'aspect-[18/9]'}`}>
+            {/* STADIUM TABLE SHAPE - Responsive rounding */}
+            <div className={`absolute inset-0 bg-[#0f3d2e]/40 border-[1.5vw] border-slate-900 shadow-[inset_0_0_10vw_rgba(0,0,0,0.8)] ${isPortrait ? 'rounded-[15vw]' : 'rounded-[4vw]'}`} />
             
             <div className="absolute inset-0 z-20 pointer-events-none font-black">
               {players.map((p, i) => { 
                 if (!p) return null; 
                 const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; 
-                return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={currentWinner?.uid === p.uid ? currentWinner.hand.map(c => c.id) : []} currentWinnerUid={currentWinner?.uid} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} pots={pots} />); 
+                const pos = isPortrait ? PORTRAIT_POSITIONS[rIdx] : LANDSCAPE_POSITIONS[rIdx];
+                return (<Seat key={i} player={p} displayPos={pos} phase={phase} winning5Ids={currentWinner?.uid === p.uid ? currentWinner.hand.map(c => c.id) : []} currentWinnerUid={currentWinner?.uid} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} pots={pots} />); 
               })}
             </div>
 
-            <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none">
+            <div className={`absolute left-1/2 -translate-x-1/2 flex flex-col items-center z-30 pointer-events-none ${isPortrait ? 'top-[42%]' : 'top-[48%] -translate-y-1/2'}`}>
               <div className="flex flex-col-reverse items-center gap-2">
                 {pots.length > 0 ? (
                   pots.length === 1 ? (
@@ -737,7 +749,7 @@ const App = () => {
                 )}
               </div>
 
-              <div className="flex gap-2.5 mt-6" style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
+              <div className={`flex gap-2.5 ${isPortrait ? 'mt-10 scale-125' : 'mt-6'}`} style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
                 {community.map((c, j) => {
                   const isRed = c.suit === '♥' || c.suit === '♦';
                   const isWin = currentWinner?.hand.some(wc => wc.id === c.id);
@@ -780,7 +792,7 @@ const App = () => {
                     {activeVariant?.id === 'HILOW' && (
                       <>
                         <span className="text-[7px] md:text-[10px] text-white/40 uppercase tracking-widest font-black leading-none mb-0.5">Low Strength</span>
-                        <span className="text-emerald-400 text-[12px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{heroPlayerObj?.lowStrength || '---'}</span>
+                        <span className="text-emerald-400 text-[12px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{formatHandStrength(heroPlayerObj?.lowStrength, phase) || '---'}</span>
                         <span className="text-amber-500 text-[8px] md:text-[16px] font-mono font-black mt-0.5 leading-none">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.lowWinProbability || 0)}% PROB.</span>
                       </>
                     )}
@@ -788,7 +800,7 @@ const App = () => {
 
                   <div className="flex flex-col items-end min-w-[120px] md:min-w-[140px]">
                     <span className="text-[7px] md:text-[10px] text-white/40 uppercase tracking-widest font-black leading-none mb-0.5">{activeVariant?.id === 'HILOW' ? 'High Strength' : 'Hand Strength'}</span>
-                    <span className="text-purple-400 text-[12px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{heroPlayerObj?.strength || 'Analysing...'}</span>
+                    <span className="text-purple-400 text-[12px] md:text-[22px] font-black leading-none truncate max-w-[150px]">{formatHandStrength(heroPlayerObj?.strength, phase) || 'Analysing...'}</span>
                     <span className="text-amber-500 text-[8px] md:text-[16px] font-mono font-black mt-0.5 leading-none">{phase === PHASES.PRE_FLOP ? '-' : Math.round(heroPlayerObj?.winProbability || 0)}% PROB.</span>
                   </div>
                </div>
