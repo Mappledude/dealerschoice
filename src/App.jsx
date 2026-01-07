@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.29
+// VERSION: v1.0.30
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.29";
+const VERSION = "v1.0.30";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -129,8 +129,10 @@ const Seat = ({
     const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
     const vecX = 50 - displayPos.x;
     const vecY = 50 - displayPos.y;
-    const cardInwardX = vecX * 0.15;
-    const cardInwardY = vecY * 0.20;
+    
+    // Improved scaling for desktop using VH to prevent giant cards
+    const cardInwardX = isMobile ? vecX * 0.15 : vecX * 0.12;
+    const cardInwardY = isMobile ? vecY * 0.20 : vecY * 0.18;
 
     const getActionDisplay = () => {
         if (player.isFolded) return { text: "FOLDED", color: "text-red-500", glow: "shadow-[0_0_30px_rgba(239,68,68,0.8)]" };
@@ -150,11 +152,9 @@ const Seat = ({
     const action = getActionDisplay();
     const showActionOverlay = action && !isCollectingBets;
 
-    // IMPROVEMENT: Logic to hide cards if everyone else folded (Win by default/muck)
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !isMuckWin);
     
-    // IMPROVEMENT: During showdown, bring opponent cards above the HUD (z-index higher than z-90)
     const cardZIndex = isHero ? 'z-[200]' : (phase === PHASES.SHOWDOWN ? 'z-[150]' : 'z-[40]');
 
     return (
@@ -171,29 +171,31 @@ const Seat = ({
 
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div 
-                  className={`absolute flex items-center justify-center w-[15vw] h-[8vw] pointer-events-none ${cardZIndex}`}
-                  style={{ transform: `translate(${cardInwardX}vw, ${cardInwardY}vw)` }}
+                  className={`absolute flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none ${cardZIndex}`}
+                  style={{ transform: isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw)` : `translate(${cardInwardX * 0.4}vh, ${cardInwardY * 0.4}vh)` }}
                 >
                     {player.hand.map((c, ci) => {
                         const mid = (player.hand.length - 1) / 2;
                         const offset = ci - mid;
                         const isRedSuit = c.suit === '♥' || c.suit === '♦';
-                        const cardSpacing = isHero ? 2 : (isMobile ? 3.75 : 2);
+                        const cardSpacing = isHero ? (isMobile ? 2 : 1.5) : (isMobile ? 3.75 : 1.8);
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
-                        const scale = isHero ? 1.6 : 1.0;
+                        const scale = isHero ? (isMobile ? 1.6 : 1.4) : 1.0;
 
                         return (
                           <div key={`${c.id || ci}-${ci}`} 
-                              className={`w-[7.5vw] md:w-[4vw] h-[10.5vw] md:h-[5.5vw] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-slate-900 border-white/20'}`} 
+                              className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-slate-900 border-white/20'}`} 
                               style={{ 
-                                transform: `translateX(${offset * cardSpacing}vw) rotate(${rotation}deg) scale(${scale})`, 
+                                transform: isMobile 
+                                  ? `translateX(${offset * cardSpacing}vw) rotate(${rotation}deg) scale(${scale})`
+                                  : `translateX(${offset * cardSpacing}vh) rotate(${rotation}deg) scale(${scale})`, 
                                 transformOrigin: 'bottom center', 
                                 zIndex: 100 + ci
                               }}>
                               {shouldRevealCards && ( 
                                 <>
-                                  <span className={`text-[10px] md:text-sm font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
-                                  <span className={`text-[12px] md:text-lg leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
+                                  <span className={`text-[10px] lg:text-[1.4vh] font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
+                                  <span className={`text-[12px] lg:text-[2vh] leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
                                 </> 
                               )}
                               {phase === PHASES.SHOWDOWN && player.isWinner && (winning5Ids || []).includes(c.id) && !isMuckWin && (
@@ -206,7 +208,7 @@ const Seat = ({
             )}
 
             <div 
-                className={`relative z-[90] flex flex-col items-center p-2 md:p-4 rounded-xl border transition-all duration-300 min-w-[120px] md:min-w-[220px] overflow-hidden backdrop-blur-xl scale-[0.85]
+                className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-xl scale-[0.85]
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}
             >
@@ -215,7 +217,7 @@ const Seat = ({
                       key={`action-${String(action.text)}`} 
                       className={`absolute inset-0 z-50 flex items-center justify-center bg-black animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
                     >
-                        <span className={`text-sm md:text-3xl font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
+                        <span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
                             {String(action.text)}
                         </span>
                     </div>
@@ -230,15 +232,14 @@ const Seat = ({
                 <div className="flex flex-col items-center w-full relative z-10 py-1">
                     <div className="flex items-center gap-1 opacity-60 mb-0.5">
                       {player.isBot && <Bot size={10} className="text-indigo-400" />}
-                      <span className="text-[12px] md:text-lg font-black text-white uppercase tracking-wider truncate max-w-[80px] md:max-w-[150px]">{String(player.name)}</span>
+                      <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
                     </div>
-                    <span className={`text-[20px] md:text-[36px] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
+                    <span className={`text-[20px] lg:text-[3vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
                       ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
                     {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
                 </div>
 
-                {/* IMPROVEMENT: Higher z-index for dealer button so it stays on top of action overlays */}
                 {isDealer && <div className="absolute bottom-[6px] left-1/2 -translate-x-1/2 w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full shadow-[0_0_15px_#ef4444] animate-pulse z-[60]" />}
             </div>
         </div>
@@ -299,7 +300,7 @@ const App = () => {
   const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'HOLDEM' });
 
   // --- DERIVED ---
-  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
 
   const [visuals, setVisuals] = useState({
     heroCardScale: 2.0, heroCardY: 20, oppCardScale: 1.0, oppCardY: -10,
@@ -582,6 +583,41 @@ const App = () => {
     }
   }, [activeIdx, heroIdx, highestBet, bigBlind, minRaiseAmount, heroPlayerObj, preAction, handleAction]);
 
+  const ActivityFeedContent = () => (
+    <div className="flex-1 flex flex-col h-full overflow-hidden p-4">
+        <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2 font-black tracking-[0.2em] uppercase">
+            <div className="flex items-center gap-2"><Terminal size={14}/> Activity</div>
+            {isMobile && <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>}
+        </div>
+        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
+            {handHistory.length > 0 ? handHistory.map((hand) => (
+                <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
+                    <button onClick={() => toggleHand(hand.id)} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
+                        <div className="flex items-center justify-between w-full">
+                            <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span>
+                            <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
+                        </div>
+                        <div className="text-[11px] text-white/90 text-left">
+                            {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400 uppercase"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic uppercase">HAND IN PROGRESS...</span>)}
+                        </div>
+                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(String(hand.rank))}</div>)}
+                    </button>
+                    {expandedHands.has(hand.id) && (
+                        <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
+                            {hand.events.map((ev, i) => (
+                                <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
+                                    <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
+                                    <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )) : (<div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3"><Activity size={32} className="animate-pulse" /><span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span></div>)}
+        </div>
+    </div>
+  );
+
   // --- VIEWS ---
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
@@ -785,137 +821,115 @@ const App = () => {
         </div>
       </header>
 
-      {intelExpanded && (
-        <div className="absolute bottom-[240px] left-4 w-[85vw] md:w-96 bg-black/20 border border-indigo-500/30 rounded-2xl p-4 backdrop-blur-sm z-[150] shadow-[0_0_50px_rgba(0,0,0,0.4)] animate-in slide-in-from-left duration-300 flex flex-col h-[50vh] max-h-[500px]">
-            <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2 font-black tracking-[0.2em] uppercase">
-                <div className="flex items-center gap-2"><Terminal size={14}/> Activity</div>
-                <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>
-            </div>
-            <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
-                {handHistory.length > 0 ? handHistory.map((hand) => (
-                    <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
-                        <button onClick={() => toggleHand(hand.id)} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
-                            <div className="flex items-center justify-between w-full">
-                                <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span>
-                                <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
-                            </div>
-                            <div className="text-[11px] text-white/90 text-left">
-                                {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400 uppercase"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic uppercase">HAND IN PROGRESS...</span>)}
-                            </div>
-                            {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(String(hand.rank))}</div>)}
-                        </button>
-                        {expandedHands.has(hand.id) && (
-                            <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
-                                {hand.events.map((ev, i) => (
-                                    <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
-                                        <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
-                                        <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )) : (<div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3"><Activity size={32} className="animate-pulse" /><span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span></div>)}
-            </div>
+      {intelExpanded && isMobile && (
+        <div className="absolute bottom-[240px] left-4 w-[85vw] md:w-96 bg-black/20 border border-indigo-500/30 rounded-2xl backdrop-blur-sm z-[150] shadow-[0_0_50px_rgba(0,0,0,0.4)] animate-in slide-in-from-left duration-300 flex flex-col h-[50vh] max-h-[500px]">
+            <ActivityFeedContent />
         </div>
       )}
 
-      <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-slate-900 to-black overflow-hidden font-black uppercase text-center">
-        {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
-          <>
-            {activeVariant?.id === 'HILOW' && (
-               <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
-                <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                <span className="text-[12px] md:text-[25px] text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
-                <span className="text-[#fbbf24] text-[9px] md:text-[17px] font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
-              </div>
-            )}
-            <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
-              <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-              <span className="text-[12px] md:text-[25px] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-              <span className="text-[#fbbf24] text-[9px] md:text-[17px] font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
-            </div>
-          </>
+      <div className="flex-1 flex flex-row overflow-hidden relative">
+        {/* Desktop Sidebar */}
+        {intelExpanded && !isMobile && (
+            <aside className="w-80 bg-black/40 border-r border-white/5 hidden lg:flex flex-col animate-in slide-in-from-left duration-300">
+                <ActivityFeedContent />
+            </aside>
         )}
 
-        <div style={{ transform: `scale(${visuals.tableZoom})` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center">
-            <div className="absolute inset-0 bg-[#06080c] rounded-[50%] border-[2px] border-cyan-500/20 shadow-[inset_0_0_100px_rgba(34,211,238,0.1)]" />
-            
-            {/* Manual Sync Button (Mobile Persistence Fix) */}
-            <button 
-              onClick={handleForceSync}
-              className="absolute bottom-6 right-6 z-[150] bg-black/60 border border-white/20 p-3 rounded-full text-white/40 hover:text-white hover:border-white/40 transition-all shadow-xl active:scale-95 group pointer-events-auto"
-              title="Force Sync State"
-            >
-              <RefreshCcw size={20} className="group-active:animate-spin" />
-            </button>
-
-            <div className="absolute inset-0 pointer-events-none z-20">
-              {(players || []).map((p, i) => { 
-                if (!p) return null; 
-                const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; 
-                return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} bigBlind={bigBlind} showdownWinners={showdownWinners} />); 
-              })}
-            </div>
-            
-            <div className="absolute top-[calc(48%-50px)] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full">
-              {!potTransferring && ( 
-                <div className="flex flex-col items-center mb-6">
-                  <span className="text-white/20 text-[10px] tracking-[0.5em] mb-1 uppercase font-bold">Total Pot:</span>
-                  <div className="text-[6vw] md:text-[4vw] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                </div> 
-              )}
-              {community.length > 0 && (
-                <div className="flex gap-2 md:gap-4 mt-4 transition-transform" style={{ transform: `scale(${visuals.commCardScale})` }}>
-                  {(community || []).map((c, j) => {
-                    const isRedSuit = c.suit === '♥' || c.suit === '♦';
-                    return (
-                      <div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] md:w-[4vw] h-[11vw] md:h-[6vw] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10'}`}>
-                        <span className={`text-[12px] md:text-sm font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
-                        <span className={`text-[14px] md:text-lg font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
-                      </div>
-                    );
-                  })}
+        <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-slate-900 to-black overflow-hidden font-black uppercase text-center">
+            {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
+            <>
+                {activeVariant?.id === 'HILOW' && (
+                <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
+                    <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
+                    <span className="text-[12px] lg:text-[2.5vh] text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
+                    <span className="text-[#fbbf24] text-[9px] lg:text-[1.5vh] font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
                 </div>
-              )}
-            </div>
-
-            {/* Vertical Betting Slider HUD */}
-            {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
-              <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto">
-                <div className="flex-1 w-full relative flex items-center justify-center py-4">
-                  <input 
-                    type="range" 
-                    min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} 
-                    max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} 
-                    step={1} 
-                    value={raiseInput} 
-                    onChange={(e) => setRaiseInput(Number(e.target.value))}
-                    className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer border-2 border-white/20"
-                    style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }}
-                  />
+                )}
+                <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
+                <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
+                <span className="text-[12px] lg:text-[2.5vh] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
+                <span className="text-[#fbbf24] text-[9px] lg:text-[1.5vh] font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
                 </div>
-                <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl shadow-[0_0_40px_rgba(52,211,153,0.6)] animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]">
-                  <span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span>
-                  <div className="flex items-center justify-center w-full">
-                    <span className="text-emerald-500 font-mono text-lg md:text-2xl mr-0.5">$</span>
-                    <input 
-                      type="number"
-                      value={raiseInput}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        const min = minRaiseAmount || (highestBet + bigBlind);
-                        const max = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
-                        setRaiseInput(Math.max(min, Math.min(val, max)));
-                      }}
-                      className="bg-transparent text-emerald-400 font-mono text-xl md:text-3xl font-black text-center outline-none w-full"
-                    />
-                  </div>
-                </div>
-              </div>
+            </>
             )}
-        </div>
-      </main>
+
+            <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
+                <div className="absolute inset-0 bg-[#06080c] rounded-[50%] border-[2px] border-cyan-500/20 shadow-[inset_0_0_100px_rgba(34,211,238,0.1)]" />
+                
+                <button 
+                onClick={handleForceSync}
+                className="absolute bottom-6 right-6 z-[150] bg-black/60 border border-white/20 p-3 rounded-full text-white/40 hover:text-white hover:border-white/40 transition-all shadow-xl active:scale-95 group pointer-events-auto"
+                title="Force Sync State"
+                >
+                <RefreshCcw size={20} className="group-active:animate-spin" />
+                </button>
+
+                <div className="absolute inset-0 pointer-events-none z-20">
+                {(players || []).map((p, i) => { 
+                    if (!p) return null; 
+                    const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; 
+                    return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} bigBlind={bigBlind} showdownWinners={showdownWinners} />); 
+                })}
+                </div>
+                
+                <div className="absolute top-[calc(48%-50px)] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full">
+                {!potTransferring && ( 
+                    <div className="flex flex-col items-center mb-6">
+                    <span className="text-white/20 text-[10px] tracking-[0.5em] mb-1 uppercase font-bold">Total Pot:</span>
+                    <div className="text-[6vw] lg:text-[6vh] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                    </div> 
+                )}
+                {community.length > 0 && (
+                    <div className="flex gap-2 md:gap-4 mt-4 transition-transform" style={{ transform: isMobile ? `scale(${visuals.commCardScale})` : `scale(${visuals.commCardScale * 0.8})` }}>
+                    {(community || []).map((c, j) => {
+                        const isRedSuit = c.suit === '♥' || c.suit === '♦';
+                        return (
+                        <div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] lg:w-[6vh] h-[11vw] lg:h-[9vh] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10'}`}>
+                            <span className={`text-[12px] lg:text-[1.6vh] font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
+                            <span className={`text-[14px] lg:text-[2.2vh] font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
+                        </div>
+                        );
+                    })}
+                    </div>
+                )}
+                </div>
+
+                {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
+                <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto">
+                    <div className="flex-1 w-full relative flex items-center justify-center py-4">
+                    <input 
+                        type="range" 
+                        min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} 
+                        max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} 
+                        step={1} 
+                        value={raiseInput} 
+                        onChange={(e) => setRaiseInput(Number(e.target.value))}
+                        className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer border-2 border-white/20"
+                        style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }}
+                    />
+                    </div>
+                    <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl shadow-[0_0_40px_rgba(52,211,153,0.6)] animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]">
+                    <span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span>
+                    <div className="flex items-center justify-center w-full">
+                        <span className="text-emerald-500 font-mono text-lg md:text-2xl mr-0.5">$</span>
+                        <input 
+                        type="number"
+                        value={raiseInput}
+                        onChange={(e) => {
+                            const val = Number(e.target.value);
+                            const min = minRaiseAmount || (highestBet + bigBlind);
+                            const max = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
+                            setRaiseInput(Math.max(min, Math.min(val, max)));
+                        }}
+                        className="bg-transparent text-emerald-400 font-mono text-xl md:text-3xl font-black text-center outline-none w-full"
+                        />
+                    </div>
+                    </div>
+                </div>
+                )}
+            </div>
+        </main>
+      </div>
 
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]">
         <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-6"> 
