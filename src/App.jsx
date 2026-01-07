@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.1";
+const VERSION = "v1.0.3";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -246,6 +246,7 @@ const App = () => {
   const [rebuyAmount, setRebuyAmount] = useState(10);
   const [showRebuyModal, setShowRebuyModal] = useState(false);
   const [phaseShine, setPhaseShine] = useState(false);
+  const [preAction, setPreAction] = useState(null);
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
@@ -336,7 +337,6 @@ const App = () => {
   }, [currentRoomId]);
 
   const handleLogin = useCallback(() => { 
-    // CASE-INSENSITIVE PASSWORD LOGIN
     if (passwordInput.toLowerCase().trim() === 'pass') { 
         setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin' }); 
         setCurrentView(VIEWS.ADMIN); socket.emit('getInitialData'); 
@@ -373,30 +373,32 @@ const App = () => {
     setNewTable({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
   }, [newTable]);
 
+  // UPDATED: Standardized Poker Rank formatting logic
   const formatRank = (rank) => {
     if (!rank || typeof rank !== 'string') return "";
-    let cleanVal = rank.split(',')[0].split(' of ')[0];
-    const cats = ["five of a kind", "straight flush", "four of a kind", "full house", "flush", "straight", "three of a kind", "two pair", "pair", "high card", "low"];
-    const lRank = cleanVal.toLowerCase();
-    for (let i = 0; i < cats.length; i++) {
-        const cat = cats[i];
-        if (lRank.indexOf(cat) !== -1) {
-            let words = (cat === "low" || cat === "high card") ? cleanVal.split(' ') : cat.split(' ');
-            let formattedWords = [];
-            for (let j = 0; j < words.length; j++) {
-                const w = words[j];
-                formattedWords.push(w ? w.charAt(0).toUpperCase() + w.slice(1) : "");
-            }
-            return formattedWords.join(' ');
-        }
+    const lower = rank.toLowerCase();
+    
+    if (lower.includes("five of a kind")) return "5 of a KIND";
+    if (lower.includes("straight flush")) return "STRAIGHT FLUSH";
+    if (lower.includes("four of a kind")) return "4 of a KIND";
+    if (lower.includes("full house")) return "FULL HOUSE";
+    if (lower.includes("flush")) return "FLUSH";
+    if (lower.includes("straight")) return "STRAIGHT";
+    if (lower.includes("three of a kind")) return "3 of a KIND";
+    if (lower.includes("two pair")) return "Two Pair";
+    if (lower.includes("pair")) return "Pair";
+
+    if (lower.includes("high card")) {
+      const parts = rank.split(' ');
+      return `High ${parts[parts.length - 1]}`;
     }
-    let words = cleanVal.toLowerCase().split(' ');
-    let formattedWords = [];
-    for (let i = 0; i < words.length; i++) {
-        const w = words[i];
-        formattedWords.push(w ? w.charAt(0).toUpperCase() + w.slice(1) : "");
+    if (lower.includes("low")) {
+      const parts = rank.split(' ');
+      return `Low ${parts[parts.length - 1]}`;
     }
-    return formattedWords.join(' ');
+    
+    // Default fallback to keep things readable
+    return rank.split(',')[0].split(' of ')[0];
   };
 
   useEffect(() => {
@@ -495,8 +497,19 @@ const App = () => {
   }, []); 
 
   useEffect(() => {
-    if (activeIdx === heroIdx && heroPlayerObj) { setRaiseInput(highestBet + bigBlind); }
-  }, [activeIdx, heroIdx, highestBet, bigBlind, heroPlayerObj]);
+    if (activeIdx === heroIdx && heroPlayerObj) { 
+        setRaiseInput(highestBet + bigBlind); 
+        // Execute Pre-Action if set
+        if (preAction) {
+            if (preAction === 'FOLD') {
+                handleAction('FOLD');
+            } else if (preAction === 'CHECK') {
+                handleAction('CALL'); // Call(0) is Check
+            }
+            setPreAction(null);
+        }
+    }
+  }, [activeIdx, heroIdx, highestBet, bigBlind, heroPlayerObj, preAction, handleAction]);
 
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
@@ -593,7 +606,7 @@ const App = () => {
         )}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 md:px-12 bg-black/60 backdrop-blur-md shrink-0 pt-[env(safe-area-inset-top)]">
           <div className="flex flex-col"><h2 className="tracking-[0.5em] text-lg font-black flex items-center gap-3"><LayoutGrid className="text-emerald-400 w-5"/> ARENA DIRECTORY</h2><span className="text-[8px] text-white/30 tracking-[0.2em]">VERSION {VERSION}</span></div>
-          <div className="flex items-center gap-6 font-black"><div className="flex items-end flex-col"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
+          <div className="flex items-center gap-6 font-black"><div className="flex flex-col items-end"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
         </header>
         <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black font-black uppercase text-center">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
@@ -624,7 +637,10 @@ const App = () => {
     <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
       {announcement && (
           <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
-              <h1 className="text-[10vw] font-black uppercase italic animate-announcement-pop drop-shadow-[0_0_50px_rgba(0,0,0,1)] text-center px-10" style={{ color: announcement.color }}>{announcement.text}</h1>
+              <div className="relative">
+                <div className="absolute inset-0 blur-[40px] opacity-50 bg-current scale-150 animate-pulse" style={{ color: announcement.color }} />
+                <h1 className="text-[10vw] font-black uppercase italic animate-announcement-pop drop-shadow-[0_0_50px_rgba(0,0,0,1)] text-center px-10 relative z-10" style={{ color: announcement.color }}>{announcement.text}</h1>
+              </div>
           </div>
       )}
 
@@ -657,7 +673,7 @@ const App = () => {
             <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={18}/></button>
         </div>
         <div className="flex-1 flex items-center justify-end">
-            <div className="bg-slate-900 border border-white/10 px-3 py-1.5 rounded-lg flex flex-col min-w-[120px] relative transition-colors hover:bg-slate-800 group">
+            <div className={`bg-slate-900 border px-3 py-1.5 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
                 <span className="text-emerald-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">On My Deal:</span>
                 <div className="flex items-center">
                     <select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full">
@@ -834,17 +850,46 @@ const App = () => {
                 );
             })()
           ) : (
-            <div className={`flex flex-col gap-4 items-center w-full transition-all duration-500 ${activeIdx !== heroIdx && (!heroPlayerObj || heroPlayerObj.chips > 0) ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
-                {heroPlayerObj && !heroPlayerObj.isFolded && heroPlayerObj.chips > 0 && phase !== PHASES.IDLE ? (<>
+            <div className={`flex flex-col gap-4 items-center w-full transition-all duration-500`}>
+                {heroPlayerObj && heroPlayerObj.chips > 0 && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
-                        <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] hover:bg-white/10 font-black">1/2 POT</button>
-                        <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] hover:bg-white/10 font-black">POT</button>
-                        <button onClick={handleAllIn} className="flex-1 h-10 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black">ALL-IN</button>
+                        <button 
+                            onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} 
+                            disabled={activeIdx !== heroIdx}
+                            className={`flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-not-allowed' : 'hover:bg-white/10'}`}>
+                            1/2 POT
+                        </button>
+                        <button 
+                            onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} 
+                            disabled={activeIdx !== heroIdx}
+                            className={`flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-not-allowed' : 'hover:bg-white/10'}`}>
+                            POT
+                        </button>
+                        <button 
+                            onClick={handleAllIn} 
+                            disabled={activeIdx !== heroIdx}
+                            className={`flex-1 h-10 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-not-allowed' : ''}`}>
+                            ALL-IN
+                        </button>
                     </div>
                     <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-16">
-                        <button onClick={()=>handleAction('FOLD')} className="flex-1 bg-red-950/60 border border-red-500/50 rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center">FOLD</button>
-                        <button onClick={()=>handleAction('CALL')} className="flex-1 bg-white/10 border border-white/20 rounded-xl text-xl font-black truncate px-2 flex items-center justify-center">{highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK'}</button>
-                        <div className="flex-[1.5] flex bg-black/40 border border-white/10 rounded-xl overflow-hidden">
+                        <button 
+                            onClick={() => {
+                                if (activeIdx === heroIdx) handleAction('FOLD');
+                                else setPreAction(preAction === 'FOLD' ? null : 'FOLD');
+                            }} 
+                            className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>
+                            {preAction === 'FOLD' && <Check size={20} className="text-emerald-400" />} FOLD
+                        </button>
+                        <button 
+                            onClick={() => {
+                                if (activeIdx === heroIdx) handleAction('CALL');
+                                else setPreAction(preAction === 'CHECK' ? null : 'CHECK');
+                            }} 
+                            className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/20' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/5 opacity-60'}`}>
+                            {preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}
+                        </button>
+                        <div className={`flex-[1.5] flex bg-black/40 border border-white/10 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale pointer-events-none' : ''}`}>
                             <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase"><Zap size={20} className="mr-1"/> RAISE</button>
                         </div>
                     </div>
@@ -896,8 +941,8 @@ const App = () => {
           
           @keyframes phase-shine {
             0% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); }
-            50% { box-shadow: 0 0 20px rgba(255,255,255,0.8); border-color: rgba(255,255,255,1); }
-            100% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); }
+            50% { box-shadow: 0 0 30px rgba(255,255,255,0.9); border-color: rgba(255,255,255,1); transform: scale(1.02); }
+            100% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); transform: scale(1); }
           }
           .animate-phase-shine { animation: phase-shine 0.5s ease-in-out; }
 
