@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import io from 'socket.io-client';
 
+// --- CONSTANTS ---
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -18,23 +19,20 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.7.6-PRO";
+const VERSION = "v1.8.0-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 
-const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
-
-const DISPLAY_POSITIONS = [
-  { x: 50, y: 92 }, { x: 15, y: 82 }, { x: 6,  y: 45 }, { x: 12, y: 12 }, { x: 30, y: 3  },
-  { x: 50, y: 1  }, { x: 70, y: 3  }, { x: 88, y: 12 }, { x: 94, y: 45 }, { x: 85, y: 82 }
-];
-
-const BET_OFFSETS = [
-  { x: 0, y: -160 },   { x: 100, y: -110 }, { x: 130, y: 0 },    { x: 100, y: 110 },  { x: 60, y: 130 },    
-  { x: 0, y: 150 },    { x: -60, y: 130 },  { x: -100, y: 110 }, { x: -130, y: 0 },   { x: -100, y: -110 } 
-];
+const VARIANT_COLORS = {
+  HOLDEM: '#22d3ee',      // Cyan
+  OMAHA: '#a855f7',       // Purple
+  PINEAPPLE: '#10b981',   // Emerald
+  MUFLIS: '#ef4444',      // Red
+  HILOW: '#f59e0b',       // Amber
+  REDSBLACKS: '#f43f5e'   // Rose
+};
 
 const VARIANTS = { 
   HOLDEM: { 
@@ -101,18 +99,31 @@ const VARIANTS = {
   }
 };
 
+const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
+
+const DISPLAY_POSITIONS = [
+  { x: 50, y: 92 }, { x: 15, y: 82 }, { x: 6,  y: 45 }, { x: 12, y: 12 }, { x: 30, y: 3  },
+  { x: 50, y: 1  }, { x: 70, y: 3  }, { x: 88, y: 12 }, { x: 94, y: 45 }, { x: 85, y: 82 }
+];
+
+const BET_OFFSETS = [
+  { x: 0, y: -160 },   { x: 100, y: -110 }, { x: 130, y: 0 },    { x: 100, y: 110 },  { x: 60, y: 130 },    
+  { x: 0, y: 150 },    { x: -60, y: 130 },  { x: -100, y: 110 }, { x: -130, y: 0 },   { x: -100, y: -110 } 
+];
+
+// --- COMPONENTS ---
+
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, 
   isDealer, potTransferring, timeRemaining, isHero, 
-  relativeIdx, seatIdx, visuals, showdownWinnersCount
+  relativeIdx, seatIdx, visuals, showdownWinnersCount, dealerIdx, players
 }) => {
     if (!player || !displayPos) return null;
-    const isShowdown = phase === PHASES.SHOWDOWN && showdownWinnersCount > 1;
+
     const betOffset = BET_OFFSETS[relativeIdx] || { x: 0, y: 0 };
     const currentCardScale = isHero ? visuals.heroCardScale : visuals.oppCardScale;
     const currentCardY = isHero ? visuals.heroCardY : visuals.oppCardY;
 
-    // Timer calculation for 22 seconds
     const timeRatio = timeRemaining / 22;
     const timerColor = timeRemaining < 6 ? '#ef4444' : timeRemaining < 12 ? '#f59e0b' : '#22d3ee';
     const isUrgent = timeRemaining < 6 && isActiveTurn;
@@ -129,25 +140,15 @@ const Seat = ({
                 <div className="absolute top-[-20px] bg-slate-800 text-white text-[8px] px-2 py-0.5 rounded border border-white/20 uppercase font-black tracking-widest z-[150]">Waiting...</div>
             )}
             
-            {player.lastAction && !isActiveTurn && !isCollectingBets && !player.waitingForNextHand && (
-              <div className="absolute top-[-30px] animate-bounce-short z-[200]">
-                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg uppercase border border-white/20 ${
-                  player.lastAction === 'FOLD' ? 'bg-red-600 text-white' : 
-                  player.lastAction === 'RAISE' ? 'bg-amber-500 text-black' : 
-                  'bg-blue-600 text-white'
-                }`} style={{ transform: `scale(${visuals.betScale}) translateY(${visuals.betY}px)` }}>{String(player.lastAction)}</span>
-              </div>
-            )}
-
             {player.currentBet > 0 && (
                 <div className={`absolute z-[100] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot' : 'animate-bet-splash'}`}
                     style={{ 
-                      transform: `translate(calc(-50% + ${betOffset.x}px), ${betOffset.y + visuals.betY}px) scale(${visuals.betScale})`, 
+                      transform: `translate(calc(-50% + ${betOffset.x}px), ${betOffset.y + visuals.betY}px) scale(1.0)`, 
                       left: '50%', 
                       top: '50%' 
                     }}>
-                    <div className="bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-black text-[9px] md:text-[12px] px-2 py-0.5 rounded-full shadow-[0_4px_0_rgba(0,0,0,0.4),0_8px_15px_rgba(0,0,0,0.6)] border border-white/30 flex items-center gap-1 whitespace-nowrap">
-                        <Coins size={8} className="animate-pulse" />
+                    <div className="bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-black text-[14px] md:text-[24px] px-5 py-1.5 rounded-full shadow-[0_6px_0_rgba(0,0,0,0.4),0_12px_24px_rgba(0,0,0,0.6)] border-2 border-white/40 flex items-center gap-2 whitespace-nowrap leading-none">
+                        <Coins size={16} className="animate-pulse" />
                         ${String(player.currentBet)}
                     </div>
                 </div>
@@ -155,51 +156,45 @@ const Seat = ({
 
             <div 
                 style={{ transform: `translateY(${visuals.badgeY}px)` }}
-                className={`relative z-50 flex flex-col items-center p-1 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[180px] shadow-2xl overflow-hidden
-                  ${isActiveTurn ? 'border-transparent ring-2 ring-white/5 scale-105' : 'border-white/10'} 
+                className={`relative z-50 flex flex-col items-center p-1.5 md:p-3 rounded-2xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[100px] md:min-w-[210px] shadow-2xl overflow-hidden
+                  ${isActiveTurn ? 'border-transparent ring-2 ring-white/10 scale-105 shadow-[0_0_50px_rgba(255,255,255,0.1)]' : 'border-white/10'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 animate-pulse-glow' : ''}`}
             >
                 {isActiveTurn && timeRemaining > 0 && (
                   <>
-                    <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-                    {/* ENHANCED NEON TIMER SVG */}
                     <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" preserveAspectRatio="none">
-                      <filter id="timerGlow">
-                        <feGaussianBlur stdDeviation="2" result="blur" />
-                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                      </filter>
                       <rect 
                         x="0" y="0" width="100%" height="100%" 
                         fill="none" 
                         stroke={timerColor} 
-                        strokeWidth="6" 
-                        filter="url(#timerGlow)"
+                        strokeWidth="8" 
                         className="transition-all duration-1000 linear"
                         style={{
                           strokeDasharray: '600',
                           strokeDashoffset: (600 - (timeRatio * 600)).toString(),
-                          opacity: 0.8
                         }}
                       />
                     </svg>
-                    <div 
-                      className="absolute top-1 right-1.5 w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-black/60 border border-white/10 backdrop-blur-sm z-20"
-                    >
-                      <span className="text-[10px] md:text-sm font-mono font-black animate-pulse" style={{ color: timerColor }}>
-                        {timeRemaining}
-                      </span>
+                    <div className="absolute top-1 right-1.5 w-7 h-7 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-black/80 border border-white/10 z-20">
+                      <span className="text-[10px] md:text-base font-mono font-black" style={{ color: timerColor }}>{timeRemaining}</span>
                     </div>
                   </>
                 )}
 
-                {isDealer && ( <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white shadow-[0_0_12px_rgba(220,38,38,0.9)] animate-pulse z-[110]" /> )}
+                {isDealer && (
+                  <div className="absolute top-1.5 right-1.5 flex flex-col items-center gap-0.5 z-[110]">
+                    <div className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 bg-red-500 rounded-full shadow-[0_0_12px_rgba(239,68,68,0.8)] animate-status-flash" />
+                  </div>
+                )}
                 
-                <div className="flex flex-col items-center gap-0 w-full relative z-10">
-                    <div className="flex items-center gap-1">
-                      {player.isBot && <Bot size={8} className="text-indigo-400" />}
-                      <span className="text-[8.5px] md:text-[14.5px] font-black text-white/90 uppercase tracking-tight truncate max-w-[60px] md:max-w-[100px]">{String(player.name || "Anon")}</span>
+                <div className="flex flex-col items-center gap-0.5 w-full relative z-10">
+                    <div className="flex items-center gap-1 opacity-70">
+                      {player.isBot && <Bot size={10} className="text-indigo-400" />}
+                      <span className="text-[9px] md:text-[16px] font-black text-white/90 uppercase truncate max-w-[80px] md:max-w-[130px]">{String(player.name || "Anon")}</span>
                     </div>
-                    <span className={`text-[11px] md:text-[17px] font-mono font-black ${player.chips <= 1 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                    <span className={`text-[15px] md:text-[28px] font-mono font-black ${player.chips <= 1 ? 'text-red-500 animate-pulse' : 'text-emerald-400'} leading-none drop-shadow-[0_2px_10px_rgba(16,185,129,0.3)]`}>
+                      ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                    </span>
                 </div>
             </div>
 
@@ -214,9 +209,9 @@ const Seat = ({
                         const suitColor = isRedSuit ? 'text-red-600' : 'text-black';
                         return (
                           <div key={c.id || ci} 
-                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${isShowdown || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${isShowdown && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_200px_#fbbf24]' : 'border-white/20'}`} 
+                              className={`w-[5vw] md:w-[3vw] h-[7vw] md:h-[5vw] rounded-[3px] flex flex-col items-start p-[2px] border shadow-xl absolute transition-all duration-300 animate-deal-card ${phase === PHASES.SHOWDOWN || isHero ? 'bg-white text-black' : 'bg-slate-800'} ${phase === PHASES.SHOWDOWN && player.isWinner && (winning5Ids || []).includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_200px_#fbbf24]' : 'border-white/20'}`} 
                               style={{ transform: `translateX(${fanTranslation}vw) rotate(${fanRotation}deg) scale(${currentCardScale})`, transformOrigin: 'bottom center', top: `${currentCardY}px`, animationDelay: `${seatIdx * 0.1}s` }}>
-                              {(isShowdown || isHero) && ( 
+                              {(phase === PHASES.SHOWDOWN || isHero) && ( 
                                 <>
                                   <span className={`text-[9px] md:text-[12px] font-black leading-none ${suitColor}`}>{String(c.value)}</span>
                                   <span className={`text-[9px] md:text-[16px] leading-none ${suitColor}`}>{String(c.suit)}</span>
@@ -247,7 +242,7 @@ const App = () => {
   const [winning5Ids, setWinning5Ids] = useState([]);
   const [logs, setLogs] = useState([{ id: 'init', time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), name: 'SYSTEM', action: 'INTELLIGENCE LINK ESTABLISHED', type: 'phase' }]);
   const [potAmount, setPotAmount] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(22); // Updated to 22s
+  const [timeRemaining, setTimeRemaining] = useState(22);
   const [activeTables, setActiveTables] = useState([]);
   const [allProfiles, setAllProfiles] = useState([]);
   const [selectedTableForJoin, setSelectedTableForJoin] = useState(null);
@@ -266,13 +261,15 @@ const App = () => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [announcement, setAnnouncement] = useState(null); 
   const joinLock = useRef(false);
+  const phaseRef = useRef(PHASES.IDLE); 
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
 
   const isMobile = window.innerWidth < 768;
-  const headerHeight = isMobile ? 56 : 72; 
+  const headerHeight = isMobile ? 64 : 80; 
 
   const [visuals, setVisuals] = useState({
     heroCardScale: 4.0, heroCardY: 22, oppCardScale: 1.0, oppCardY: -25,
@@ -285,7 +282,6 @@ const App = () => {
 
   const footerHeight = visuals.footerHeight;
   const tableZoom = visuals.tableZoom;
-  const logEndRef = useRef(null);
 
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
@@ -300,93 +296,6 @@ const App = () => {
     const currentBetsSum = players.reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
     return Number(potAmount) + currentBetsSum;
   }, [potAmount, players]);
-
-  const isBrokeStatus = useMemo(() => {
-    if (!heroPlayerObj) return false;
-    const isOutOfChips = Number(heroPlayerObj.chips) <= 1;
-    const hasNoActiveBet = Number(heroPlayerObj.currentBet) <= 0;
-    const isHandResolved = phase === PHASES.IDLE;
-    return isOutOfChips && hasNoActiveBet && isHandResolved;
-  }, [heroPlayerObj, phase]);
-
-  const groupedLogs = useMemo(() => {
-    const hands = [];
-    let currentHand = { id: 'init-hand', actions: [], summaries: [], variantName: 'Standard', isOngoing: true, winnerSummary: "In Progress..." };
-    
-    logs.forEach((log) => {
-      const actRaw = log.action.toUpperCase();
-      const isHandStart = log.name === 'SYSTEM' && (actRaw.includes('IS DEALING') || actRaw.includes('HAND START'));
-      
-      if (isHandStart) {
-        if (currentHand.actions.length > 0) {
-          currentHand.isOngoing = false;
-          if (currentHand.summaries.length > 0) {
-            currentHand.winnerSummary = currentHand.summaries.map(s => 
-              `${s.name} won ${s.amount} w/ ${s.rank} ${s.cards}`
-            ).join('; ');
-          } else {
-            currentHand.winnerSummary = "Pot Swept / Hand Reset";
-          }
-          hands.push(currentHand);
-        }
-        
-        let detectedVariant = 'Standard';
-        Object.values(VARIANTS).forEach(v => {
-           if (actRaw.includes(v.name.toUpperCase()) || actRaw.includes(v.id.toUpperCase())) {
-             detectedVariant = v.name;
-           }
-        });
-
-        currentHand = { 
-          id: log.id, 
-          actions: [log], 
-          summaries: [], 
-          variantName: detectedVariant,
-          isOngoing: true,
-          winnerSummary: "Live actions..."
-        };
-      } else {
-        currentHand.actions.push(log);
-        if (log.type === 'win') {
-          const amtMatch = log.action.match(/\$(\d+\.?\d*)/);
-          const rankMatch = log.action.split('WITH ')[1];
-          const isSweep = actRaw.includes("WON!");
-          const matchWinner = showdownWinners?.find(w => w.name === log.name);
-          const cardStr = matchWinner?.hand?.map(c => `${c.value}${c.suit}`).join(', ') || '';
-
-          currentHand.summaries.push({
-            name: log.name,
-            amount: amtMatch ? amtMatch[0] : (isSweep ? "Pot" : ""),
-            rank: isSweep ? " Everyone Folded" : (rankMatch || "Winning Hand"),
-            cards: cardStr ? `[${cardStr}]` : ""
-          });
-        }
-      }
-    });
-    
-    if (currentHand.actions.length > 0) {
-       if (!currentHand.isOngoing && currentHand.summaries.length > 0) {
-          currentHand.winnerSummary = currentHand.summaries.map(s => 
-            `${s.name} won ${s.amount} w/ ${s.rank} ${s.cards}`
-          ).join('; ');
-       }
-       hands.push(currentHand);
-    }
-    return hands.reverse(); 
-  }, [logs, showdownWinners]);
-
-  const toggleHandExpansion = (id) => {
-    setExpandedHands(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  useEffect(() => {
-    if (intelExpanded) logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs, intelExpanded]);
 
   const handleAction = useCallback((type, amt = 0) => {
     const finalAmount = amt !== 0 ? amt : raiseInput;
@@ -404,42 +313,6 @@ const App = () => {
       socket.emit('adminAddBot', { roomId: currentRoomId });
     }
   }, [currentRoomId, isConnected]);
-
-  const handleCreatePlayer = useCallback(() => {
-    if (!newPlayer.name) return;
-    socket.emit('adminCreatePlayer', { ...newPlayer, uid: Math.random().toString(36).slice(2) });
-    setNewPlayer({ name: '', chips: 100, password: '' });
-  }, [newPlayer]);
-
-  const handleSpawnArena = useCallback(() => {
-    if (!newTable.name) return;
-    socket.emit('adminCreateRoom', { ...newTable, id: 'room_' + Math.random().toString(36).slice(2, 9) });
-    setNewTable({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
-  }, [newTable]);
-
-  const handleNuclear = useCallback(() => {
-      if (!nuclearConfirm) {
-          setNuclearConfirm(true);
-          setTimeout(() => setNuclearConfirm(false), 3000);
-          return;
-      }
-      socket.emit('adminNuclearReset');
-      setNuclearConfirm(false);
-  }, [nuclearConfirm]);
-
-  const handleCopyLogs = useCallback(() => {
-    const text = logs.map(l => `[${l.time}] ${l.name}: ${l.action}`).join('\n');
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-      document.execCommand('copy');
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
-    } catch (err) {}
-    document.body.removeChild(textArea);
-  }, [logs]);
 
   const handleLogin = useCallback(() => { 
     if (passwordInput.toLowerCase().trim() === 'pass') { 
@@ -467,67 +340,91 @@ const App = () => {
     });
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
-  // Helper to format rank text into Title Case
+  const handleCreatePlayer = useCallback(() => {
+    if (!newPlayer.name) return;
+    socket.emit('adminCreatePlayer', { ...newPlayer, uid: Math.random().toString(36).slice(2) });
+    setNewPlayer({ name: '', chips: 100, password: '' });
+  }, [newPlayer]);
+
+  const handleSpawnArena = useCallback(() => {
+    if (!newTable.name) return;
+    socket.emit('adminCreateRoom', { ...newTable, id: 'room_' + Math.random().toString(36).slice(2, 9) });
+    setNewTable({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
+  }, [newTable]);
+
+  const handleNuclear = useCallback(() => {
+      if (!nuclearConfirm) {
+          setNuclearConfirm(true);
+          setTimeout(() => setNuclearConfirm(false), 3000);
+          return;
+      }
+      socket.emit('adminNuclearReset');
+      setNuclearConfirm(false);
+  }, [nuclearConfirm]);
+
   const formatRank = (rank) => {
     if (!rank) return "";
-    return rank.toLowerCase()
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+    let clean = rank.split(',')[0].split(' of ')[0];
+    const categories = [
+        "five of a kind", "straight flush", "four of a kind", "full house", 
+        "flush", "straight", "three of a kind", "two pair", "pair", "high card", "low"
+    ];
+    const lowerRank = clean.toLowerCase();
+    for (const cat of categories) {
+        if (lowerRank.includes(cat)) {
+            return cat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+    }
+    return clean.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
-  // Function to generate the requested showdown string
   const getShowdownText = (winner, allWinners) => {
     const name = String(winner.name);
     const amt = Number(winner.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
-    
-    // Check if it was an uncontested win (Mucked)
-    if (winner.rank === "!") {
-      return `${name} wins $${amt} (Mucked)`;
-    }
-
+    if (winner.rank === "!") return `${name} wins $${amt} (Mucked)`;
     const isHi = String(winner.rank).includes("HIGH:");
     const isLo = String(winner.rank).includes("LOW:");
-
-    // Detect Scoop (winning twice in a Hi-Low or 4-way segment)
     const occurrences = allWinners.filter(w => w.name === winner.name).length;
     const isHiLoGame = allWinners.some(w => String(w.rank).includes("HIGH:") || String(w.rank).includes("LOW:"));
-
-    if (occurrences > 1 && isHiLoGame) {
-      return `${name} SCOOPS $${amt}! (HI/LO)`;
-    }
-
+    if (occurrences > 1 && isHiLoGame) return `${name} SCOOPS $${amt}! (HI/LO)`;
     const cleanRank = formatRank(String(winner.rank).replace("HIGH: ", "").replace("LOW: ", ""));
-
     if (isHi) return `${name} wins $${amt} (HI) • ${cleanRank}`;
     if (isLo) return `${name} wins $${amt} (LO) • ${cleanRank}`;
-
     return `${name} wins $${amt} • ${cleanRank}`;
   };
 
   useEffect(() => {
-    socket.on('connect', () => setIsConnected(true));
-    socket.on('disconnect', () => setIsConnected(false));
-    
-    socket.on('initialDataResponse', (data) => {
-      if (data.rooms) setActiveTables(data.rooms);
-      if (data.profiles) setAllProfiles(data.profiles);
-    });
-
     const handleRoomUpdate = (d) => {
-        if (!d) {
-          setPlayers(INITIAL_PLAYERS); setPhase(PHASES.IDLE); setCommunity([]); setPotAmount(0);
-          setActiveIdx(-1); setHighestBet(0); setDealerIdx(-1); setWinning5Ids([]);
-          setShowdownWinners(null); setPotTransferring(false); return;
-        }
+        if (!d) return;
+
         setPlayers(() => { 
           const next = Array(TOTAL_SEATS).fill(null); 
           (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); 
           return next; 
         });
-        setPhase(d.phase); setCommunity(d.community || []); setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
-        setActiveIdx(d.activeIdx ?? -1); setHighestBet(d.highestBet || 0); setDealerIdx(d.dealerIdx ?? -1);
-        setTimeRemaining(d.timeRemaining !== undefined ? Math.max(0, d.timeRemaining) : 0);
+
+        // 3 SECOND DELAY FOR VARIATION NAME ANNOUNCEMENT
+        if (d.phase !== phaseRef.current && d.phase !== PHASES.IDLE && d.phase !== PHASES.SHOWDOWN) {
+            const vId = d.activeVariant?.id || 'HOLDEM';
+            const vName = VARIANTS[vId]?.name || "Poker";
+            
+            setTimeout(() => {
+                setAnnouncement({
+                    text: vName,
+                    color: VARIANT_COLORS[vId] || '#fff'
+                });
+                setTimeout(() => setAnnouncement(null), 1500);
+            }, 3000); 
+        }
+        phaseRef.current = d.phase;
+
+        setPhase(d.phase);
+        setCommunity(d.community || []);
+        setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
+        setActiveIdx(d.activeIdx ?? -1);
+        setHighestBet(d.highestBet || 0);
+        setDealerIdx(d.dealerIdx ?? -1);
+        setTimeRemaining(d.timeRemaining || 0);
         if (d.activeVariant) {
             const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
             setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId, rules: [] });
@@ -536,53 +433,50 @@ const App = () => {
             setPotTransferring(true);
             setCurrentShowdownIdx(0);
             const rawWinners = d.showdownWinners || [];
-            const sortedWinners = [...rawWinners].sort((a, b) => {
-               const aLow = String(a.rank).toUpperCase().includes('LOW');
-               const bLow = String(b.rank).toUpperCase().includes('LOW');
-               if (aLow && !bLow) return -1;
-               if (!aLow && bLow) return 1;
-               return 0;
-            });
-            setShowdownWinners(sortedWinners);
+            setShowdownWinners(rawWinners);
             setWinning5Ids(d.winning5Ids || []);
             const durationPerWinner = 4000;
-            const totalDuration = durationPerWinner * sortedWinners.length;
-            if (sortedWinners.length > 1) {
-                for (let i = 1; i < sortedWinners.length; i++) {
+            if (rawWinners.length > 1) {
+                for (let i = 1; i < rawWinners.length; i++) {
                     setTimeout(() => setCurrentShowdownIdx(i), i * durationPerWinner);
                 }
             }
-            setTimeout(() => setPotTransferring(false), totalDuration);
+            setTimeout(() => setPotTransferring(false), rawWinners.length * durationPerWinner);
         }
     };
+
+    socket.on('connect', () => setIsConnected(true));
     socket.on('roomUpdate', handleRoomUpdate);
-    socket.on('lobbyUpdate', (list) => setActiveTables(list || []));
+    socket.on('lobbyUpdate', setActiveTables);
     socket.on('profilesUpdate', (list) => { 
-        setAllProfiles(list || []); 
-        setUserProfile(prev => { 
-            if (!prev) return prev; 
-            const me = list?.find(p => p.uid === prev.uid || p.name === prev.name); 
-            return me ? { ...prev, chips: me.chips } : prev; 
-        }); 
+        setAllProfiles(list); 
+        setUserProfile(prev => {
+            if (!prev) return null;
+            const updated = list.find(p => p.uid === prev.uid);
+            return updated ? { ...prev, chips: updated.chips } : prev;
+        });
     });
-    socket.on('loginSuccess', (p) => { setUserProfile(p); setPendingVariantId(p.pendingVariant || 'HOLDEM'); setCurrentView(VIEWS.LOBBY); socket.emit('getInitialData'); });
-    socket.on('log', (d) => setLogs(prev => [...prev, { id: Math.random() + '-' + Date.now(), time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), ...d }].slice(-100)));
-    
-    socket.emit('getInitialData');
-    
+    socket.on('loginSuccess', (p) => { 
+        setUserProfile(p); 
+        setPendingVariantId(p.pendingVariant || 'HOLDEM'); 
+        setCurrentView(VIEWS.LOBBY); 
+    });
+
     return () => { 
-      socket.off('connect'); socket.off('disconnect');
-      socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); 
-      socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); 
+        socket.off('connect');
+        socket.off('roomUpdate'); 
+        socket.off('lobbyUpdate'); 
+        socket.off('profilesUpdate'); 
+        socket.off('loginSuccess');
     };
-  }, []);
+  }, []); 
 
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
-        <div className="w-full max-w-[400px] p-8 md:p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8">
-            <Lock size={32} className="text-[#fbbf24]" />
-            <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-center tracking-[0.5em] text-[#fbbf24] outline-none text-xl font-black uppercase"/>
-            <button onClick={handleLogin} className="w-full p-6 bg-[#fbbf24] text-black rounded-2xl font-black text-lg transition-transform uppercase">SIT AT TABLE</button>
+        <div className="w-full max-w-[400px] p-8 md:p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8 animate-in fade-in zoom-in duration-700">
+            <Lock size={32} className="text-[#fbbf24] animate-pulse" />
+            <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-center tracking-[0.5em] text-[#fbbf24] outline-none text-xl font-black uppercase focus:bg-white/10 transition-all"/>
+            <button onClick={handleLogin} className="w-full p-6 bg-[#fbbf24] text-black rounded-2xl font-black text-lg hover:scale-105 active:scale-95 transition-transform uppercase">SIT AT TABLE</button>
         </div>
     </div>
   );
@@ -669,25 +563,13 @@ const App = () => {
             <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={16}/></button>
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-10 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase font-black uppercase">
+        <main className="flex-1 p-4 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-10 overflow-y-auto bg-gradient-to-br from-transparent to-white/5 font-black uppercase">
             {activeTables.length === 0 ? (<div className="col-span-full flex flex-col items-center justify-center p-20 text-white/20 gap-4 uppercase font-black"><ShieldAlert size={48} /><span className="text-sm tracking-[0.4em]">NO ACTIVE ARENAS</span></div>) : (activeTables.map((t) => (
               <div key={t.id} className="p-4 md:p-8 bg-white/5 border border-white/5 rounded-2xl md:rounded-3xl flex flex-col gap-3 md:gap-6 shadow-2xl hover:border-[#fbbf24]/20 transition-all group relative overflow-hidden font-black">
                 <h3 className="text-lg md:text-2xl tracking-widest text-white group-hover:text-[#fbbf24] transition-colors uppercase font-black">{String(t.name)}</h3>
                 <div className="bg-black/60 p-3 md:p-6 rounded-2xl flex justify-between items-center border border-white/5 shadow-inner uppercase font-black">
                   <div className="flex flex-col font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">STAKES</span><span className="text-[#fbbf24] text-base md:text-xl font-black">${t.sb}/${t.bb}</span></div>
                   <div className="flex flex-col items-end font-black"><span className="text-[7px] md:text-[8px] text-white/40 tracking-widest">SEATS</span><span className="text-white/80 font-mono text-[10px] md:text-base font-black">{t.players?.filter(p=>p).length || 0}/10</span></div>
-                </div>
-                {/* Compact Seated Players List */}
-                <div className="bg-black/40 p-2 md:p-3 rounded-2xl border border-white/5 flex flex-col gap-1 md:gap-2 min-h-[50px] md:min-h-[60px]">
-                  <span className="text-[7px] md:text-[8px] text-white/30 tracking-widest uppercase font-black">Seated Players</span>
-                  <div className="flex flex-wrap gap-1">
-                    {t.players?.filter(p => p).length > 0 ? t.players.filter(p => p).map((p, idx) => (
-                      <div key={idx} className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">
-                        {p.isBot && <Bot size={7} className="text-indigo-400" />}
-                        <span className="text-[8px] md:text-[9px] text-white/80 uppercase font-black">{String(p.name)}</span>
-                      </div>
-                    )) : <span className="text-[8px] text-white/20 italic">Arena is empty</span>}
-                  </div>
                 </div>
                 <button onClick={()=>setSelectedTableForJoin(t)} className="relative z-20 w-full p-4 md:p-8 bg-emerald-600 rounded-xl md:rounded-2xl tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[9px] md:text-[10px] font-black uppercase">ENTER ARENA</button>
               </div>
@@ -698,163 +580,20 @@ const App = () => {
 
   return (
     <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter">
-      {intelExpanded && (
-        <div onClick={() => setIntelExpanded(false)} className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-md p-6 pt-[100px] flex flex-col gap-4 animate-in fade-in duration-300">
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[950px] mx-auto bg-slate-900/95 border border-white/10 rounded-3xl p-6 flex flex-col flex-1 overflow-hidden shadow-2xl mb-[env(safe-area-inset-bottom)]">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4 shrink-0">
-                <div className="flex items-center gap-2"><Eye className="text-[#fbbf24]" size={20} /><h3 className="text-xl text-[#fbbf24] font-black uppercase tracking-widest">Intelligence Access</h3></div>
-                <div className="flex items-center gap-3">
-                  <button onClick={handleCopyLogs} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest ${copySuccess ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-white/5 border-white/10 text-[#fbbf24] hover:bg-white/10'}`}>
-                    {copySuccess ? <Check size={14}/> : <Copy size={14}/>} {copySuccess ? 'Copied' : 'Copy Logs'}
-                  </button>
-                  <button onClick={() => setIntelExpanded(false)} className="text-white/40 hover:text-white"><X size={24} /></button>
-                </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto space-y-4 scrollbar-hide font-mono">
-                {groupedLogs.map((hand, hIdx) => {
-                  const isExpanded = expandedHands.has(hand.id) || (hIdx === 0 && hand.isOngoing);
-                  return (
-                    <div key={hand.id} className="flex flex-col border border-white/5 rounded-2xl bg-black/40 overflow-hidden shadow-lg group">
-                      <button 
-                        onClick={() => toggleHandExpansion(hand.id)}
-                        className={`flex flex-col items-start p-4 gap-2 transition-colors ${isExpanded ? 'bg-white/5' : 'hover:bg-white/10'}`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-4 overflow-hidden w-full">
-                            {isExpanded ? <ChevronDown size={14} className="text-white/40"/> : <ChevronRight size={14} className="text-white/40"/>}
-                            <span className="text-[12px] font-black uppercase text-[#fbbf24] tracking-[0.2em] border-b border-[#fbbf24]/30 pb-0.5 shrink-0">
-                              {hand.variantName} Hand
-                            </span>
-                            {!isExpanded && (
-                                <span className="text-[11px] text-white/60 truncate font-black tracking-tight leading-tight italic ml-2 border-l border-white/10 pl-4 uppercase">
-                                    {hand.winnerSummary}
-                                </span>
-                            )}
-                          </div>
-                          {hand.isOngoing && <span className="text-[9px] bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/30 animate-pulse uppercase ml-2">Active</span>}
-                        </div>
-                        
-                        {isExpanded && hand.summaries.length > 0 && (
-                            <div className="flex flex-col w-full pl-8 mt-1 gap-2 border-l-2 border-purple-500/40 bg-purple-950/5 py-2">
-                              {hand.summaries.map((s, si) => (
-                                <div key={si} className="flex flex-wrap items-baseline gap-2 text-left leading-tight">
-                                  <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest border border-purple-400/20 px-1 rounded">[SHOWDOWN]</span>
-                                  <span className="text-[14px] font-black text-white uppercase">{s.name}</span>
-                                  <span className="text-[13px] font-black text-emerald-400">{s.amount}</span>
-                                  <span className="text-[11px] font-black text-white/50 uppercase tracking-tighter italic">with {s.rank}</span>
-                                  <span className="text-[12px] font-black text-cyan-400 font-mono tracking-widest">{s.cards}</span>
-                                </div>
-                              ))}
-                            </div>
-                        )}
-                      </button>
-
-                      {isExpanded && (
-                        <div className="flex flex-col border-t border-white/5 bg-black/60 animate-in slide-in-from-top-2 duration-300">
-                          {hand.actions.map(l => {
-                              let tag = "";
-                              let colorClass = "bg-white/5 text-white/50 border-white/10";
-                              const act = l.action.toUpperCase();
-                              
-                              if (l.type === 'win' || act.includes('WON')) { 
-                                tag = "[SHOWDOWN]"; 
-                                colorClass = "bg-purple-500/20 text-purple-400 border-purple-500/30"; 
-                              }
-                              else if (l.type === 'variant' || act.includes('CHOSEN') || act.includes('CHOICE') || act.includes('DEALER CHOICE')) { 
-                                tag = "[DEALER'S CHOICE]"; 
-                                colorClass = "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"; 
-                              }
-                              else if (act.includes('RAISED')) {
-                                tag = "[RAISE]";
-                                colorClass = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
-                              }
-                              else if (act.includes('CALLED') || act.includes('POSTED')) {
-                                tag = "[CALL/POST]";
-                                colorClass = "bg-white/10 text-white/90 border-white/20";
-                              }
-                              else if (act.includes('BET')) {
-                                tag = "[BET]";
-                                colorClass = "bg-indigo-500/20 text-indigo-400 border-indigo-500/30";
-                              }
-                              else if (act.includes('CHECKED')) {
-                                tag = "[CHECK]";
-                                colorClass = "bg-slate-500/10 text-slate-300 border-slate-500/20";
-                              }
-                              else if (l.type === 'phase' || act.includes('DEALING') || act.includes('DEALT') || act.includes('START')) {
-                                if (act.includes('FLOP') || act.includes('TURN') || act.includes('RIVER')) { 
-                                  tag = "[DEALER]"; 
-                                  colorClass = "bg-cyan-500/20 text-cyan-400 border-cyan-400/30"; 
-                                } else {
-                                  tag = "[DEALER]"; 
-                                  colorClass = "bg-yellow-500/10 text-yellow-500/60 border-yellow-500/20"; 
-                                }
-                              }
-                              else if (act.includes('NUCLEAR') || act.includes('RESET')) { 
-                                tag = "[SYSTEM]"; 
-                                colorClass = "bg-red-500/20 text-red-400 border-red-500/30"; 
-                              }
-                              else if (act.includes('JOINED') || act.includes('LEFT') || act.includes('ENTERED')) { 
-                                tag = "[SYSTEM]"; 
-                                colorClass = "bg-slate-500/10 text-slate-400 border-slate-500/20"; 
-                              }
-                              else if (l.type === 'fold' || act.includes('FOLDED')) { 
-                                tag = "[FOLD]"; 
-                                colorClass = "bg-red-500/10 text-red-400 border-red-500/20"; 
-                              }
-                              else { tag = "[PLAY]"; }
-
-                              return (
-                                <div key={l.id} className="flex items-start gap-3 p-3 border-b border-white/5 hover:bg-white/5 transition-colors">
-                                  <span className="text-white/20 text-[10px] w-12 shrink-0 font-black pt-0.5">{String(l.time)}</span>
-                                  <div className="flex flex-wrap items-center gap-2 overflow-hidden">
-                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${colorClass}`}>
-                                      {tag}
-                                    </span>
-                                    <span className="text-white/80 text-[12px] font-black tracking-tight uppercase">
-                                      <span className="text-white/30">{l.name}:</span> {l.action}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                <div ref={logEndRef} />
-            </div>
+      {announcement && (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
+              <h1 
+                className="text-[12vw] md:text-[8vw] font-black uppercase italic tracking-tighter animate-announcement-pop drop-shadow-[0_10px_50px_rgba(0,0,0,0.9)] text-center px-10"
+                style={{ color: announcement.color, textShadow: `0 0 40px ${announcement.color}44` }}
+              >
+                  {announcement.text}
+              </h1>
           </div>
-        </div>
-      )}
-
-      {showRulesModal && (
-        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 md:p-12" onClick={() => setShowRulesModal(false)}>
-          <div className="w-full max-w-[600px] bg-slate-900 border-2 border-cyan-500/40 rounded-[2.5rem] p-8 md:p-12 shadow-[0_0_80px_rgba(34,211,238,0.2)] animate-in zoom-in duration-300 relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
-            <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
-              <h3 className="text-xl md:text-3xl text-cyan-400 font-black tracking-tighter uppercase flex items-center gap-3">
-                <BookOpen size={24} /> {activeVariant?.name} Manual
-              </h3>
-              <button onClick={() => setShowRulesModal(false)} className="text-white/40 hover:text-white transition-colors p-2 bg-white/5 rounded-full"><X size={24}/></button>
-            </div>
-            <div className="space-y-6">
-              {(activeVariant?.rules || []).map((rule, idx) => (
-                <div key={idx} className="flex gap-4 items-start group">
-                  <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] flex items-center justify-center font-black group-hover:scale-110 transition-transform">0{idx + 1}</span>
-                  <p className="text-sm md:text-lg text-white/80 font-black leading-snug uppercase tracking-tight">{rule}</p>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setShowRulesModal(false)} className="w-full mt-10 py-5 bg-cyan-600 hover:bg-cyan-500 text-black font-black uppercase text-sm md:text-base rounded-2xl transition-all shadow-lg active:scale-95">Acknowledge Rules</button>
-          </div>
-        </div>
       )}
 
       {showVisualControls && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-[2px] p-4 md:p-12">
-            <div className="w-full max-w-[1000px] h-[90vh] bg-slate-900/60 border-2 border-white/20 rounded-[3rem] p-10 md:p-14 flex flex-col gap-8 shadow-[0_0_100px_rgba(0,0,0,0.8)] overflow-y-auto scrollbar-hide relative">
+            <div className="w-full max-w-[1000px] h-[90vh] bg-slate-900/90 border-2 border-white/20 rounded-[3rem] p-10 md:p-14 flex flex-col gap-8 shadow-[0_0_100px_rgba(0,0,0,0.8)] overflow-y-auto scrollbar-hide relative">
                 <div className="flex items-center justify-between border-b-2 border-white/10 pb-6 sticky top-0 bg-transparent z-10">
                     <h3 className="text-lg md:text-2xl text-[#fbbf24] flex items-center gap-4 font-black uppercase tracking-tighter"><Settings2 size={44}/> Display Configuration</h3>
                     <button onClick={() => setShowVisualControls(false)} className="text-white/40 hover:text-white transition-colors p-2"><X size={44}/></button>
@@ -884,36 +623,6 @@ const App = () => {
                                 <label className="text-[10px] md:text-base text-white/60 uppercase font-black">Y POSITION ({visuals.heroCardY}px)</label>
                                 <input type="range" min="-200" max="200" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-purple-500 h-6 cursor-pointer" />
                             </div>
-                            <div className="flex flex-col gap-2 md:col-span-2">
-                                <label className="text-[10px] md:text-base text-white/60 uppercase font-black">CARD FAN SPREAD ({visuals.holeCardFan} deg)</label>
-                                <input type="range" min="0" max="60" step="1" value={visuals.holeCardFan} onChange={(e) => setVisuals({...visuals, holeCardFan: Number(e.target.value)})} className="accent-pink-500 h-6 cursor-pointer" />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex flex-col gap-6">
-                        <h4 className="text-sm md:text-xl tracking-[0.2em] text-amber-500 uppercase font-black border-l-4 border-amber-500 pl-4">Action Labels</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[10px] md:text-base text-white/60 uppercase font-black">TEXT SCALE ({visuals.betScale.toFixed(1)})</label>
-                                <input type="range" min="0.5" max="4.0" step="0.1" value={visuals.betScale} onChange={(e) => setVisuals({...visuals, betScale: Number(e.target.value)})} className="accent-amber-500 h-6 cursor-pointer" />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[10px] md:text-base text-white/60 uppercase font-black">Y OFFSET ({visuals.betY}px)</label>
-                                <input type="range" min="-300" max="300" step="1" value={visuals.betY} onChange={(e) => setVisuals({...visuals, betY: Number(e.target.value)})} className="accent-amber-500 h-6 cursor-pointer" />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex flex-col gap-6">
-                        <h4 className="text-sm md:text-xl tracking-[0.2em] text-cyan-400 uppercase font-black border-l-4 border-cyan-400 pl-4">The Board</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[10px] md:text-base text-white/60 uppercase font-black">SIZE SCALE ({visuals.commCardScale.toFixed(1)})</label>
-                                <input type="range" min="1.0" max="4.0" step="0.1" value={visuals.commCardScale} onChange={(e) => setVisuals({...visuals, commCardScale: Number(e.target.value)})} className="accent-cyan-500 h-6 cursor-pointer" />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[10px] md:text-base text-white/60 uppercase font-black">Y OFFSET ({visuals.commCardY}px)</label>
-                                <input type="range" min="-100" max="100" step="1" value={visuals.commCardY} onChange={(e) => setVisuals({...visuals, commCardY: Number(e.target.value)})} className="accent-cyan-500 h-6 cursor-pointer" />
-                            </div>
                         </div>
                     </div>
                     <button onClick={() => setShowVisualControls(false)} className="w-full py-6 bg-emerald-600 rounded-[2rem] text-lg md:text-xl font-black uppercase shadow-2xl hover:brightness-125 transition-all active:scale-95 mb-[env(safe-area-inset-bottom)]">Accept & Save Changes</button>
@@ -922,103 +631,120 @@ const App = () => {
         </div>
       )}
 
-      {isBrokeStatus && (
-          <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-6">
-            <div className="w-full max-w-[400px] p-8 bg-slate-900 border-2 border-red-500 rounded-3xl text-center shadow-[0_0_100px_rgba(239,68,68,0.4)] font-black">
-              <AlertTriangle size={64} className="text-red-500 animate-pulse mb-4 mx-auto" />
-              <h2 className="text-xl md:text-3xl font-black mb-2 uppercase">Busted!</h2>
-              <p className="text-white/40 mb-5 text-[8px] tracking-widest uppercase">Stack is $1 or less - Rebuy Required</p>
-              {(userProfile?.chips || 0) >= 5 ? (
-                <button 
-                  onClick={() => socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: Math.min(buyInAmount, userProfile.chips) })} 
-                  className="w-full p-5 bg-emerald-600 text-white rounded-2xl shadow-xl animate-bounce font-black uppercase text-xs"
-                >
-                  REBUY ${Math.min(buyInAmount, userProfile.chips).toLocaleString()}
-                </button>
-              ) : (
-                <div className="p-5 bg-white/5 rounded-2xl border border-white/10 text-white/40 text-[10px] font-black uppercase">INSUFFICIENT WALLET (Min $5)</div>
-              )}
-              <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="mt-4 text-white/20 hover:text-white text-[9px] uppercase underline">EXIT ARENA</button>
+      {showRulesModal && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 md:p-12" onClick={() => setShowRulesModal(false)}>
+          <div className="w-full max-w-[600px] bg-slate-900 border-2 border-cyan-500/40 rounded-[2.5rem] p-8 md:p-12 shadow-[0_0_80px_rgba(34,211,238,0.2)] animate-in zoom-in duration-300 relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
+            <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
+              <h3 className="text-xl md:text-3xl text-cyan-400 font-black tracking-tighter uppercase flex items-center gap-3">
+                <BookOpen size={24} /> {activeVariant?.name} Manual
+              </h3>
+              <button onClick={() => setShowRulesModal(false)} className="text-white/40 hover:text-white transition-colors p-2 bg-white/5 rounded-full"><X size={24}/></button>
             </div>
+            <div className="space-y-6">
+              {(activeVariant?.rules || []).map((rule, idx) => (
+                <div key={idx} className="flex gap-4 items-start group">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] flex items-center justify-center font-black group-hover:scale-110 transition-transform">0{idx + 1}</span>
+                  <p className="text-sm md:text-lg text-white/80 font-black leading-snug uppercase tracking-tight">{rule}</p>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowRulesModal(false)} className="w-full mt-10 py-5 bg-cyan-600 hover:bg-cyan-500 text-black font-black uppercase text-sm md:text-base rounded-2xl transition-all shadow-lg active:scale-95">Acknowledge Rules</button>
           </div>
+        </div>
       )}
 
       <header className="bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-2 md:px-8 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)]" style={{ height: `calc(${headerHeight}px + env(safe-area-inset-top))` }}>
-        <div className="flex items-center gap-1.5 overflow-hidden flex-1">
+        <div className="flex items-center gap-2 overflow-hidden flex-1">
             <button 
                 onClick={() => setShowRulesModal(true)}
-                className="bg-white/5 hover:bg-white/10 transition-colors px-2 py-1.5 rounded-lg md:rounded-xl border border-white/5 shadow-inner truncate font-black uppercase flex flex-col justify-center min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px] text-left"
+                className={`bg-white/5 hover:bg-white/10 transition-all px-3 py-2 rounded-xl border border-white/10 shadow-inner flex flex-col justify-center min-w-[90px] md:min-w-[150px] h-[50px] md:h-[65px] relative group overflow-hidden ${phase === PHASES.FLOP || phase === PHASES.TURN ? 'animate-intelligence-link' : ''}`}
             >
-              <span className="text-[#fbbf24] text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider flex items-center gap-1">
-                This Hand: <Info size={8} />
+              <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <span className="text-[#fbbf24] text-[8px] md:text-[11px] leading-none mb-1 uppercase tracking-widest flex items-center gap-1.5 font-black">
+                THIS HAND: <Sparkles size={10} className="animate-spin-slow" />
               </span>
-              <span className="text-white text-[10px] md:text-sm truncate leading-none">
+              <span className="text-white text-[11px] md:text-lg truncate leading-none font-black drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]">
                 {String(activeVariant?.name || "Hold'em")}
               </span>
             </button>
-            <div className="bg-white/5 border border-white/10 px-2 py-1.5 rounded-lg md:rounded-xl flex flex-col justify-center shadow-inner min-w-[70px] md:min-w-[110px] h-[44px] md:h-[56px]"><span className="text-cyan-400 text-[8px] md:text-[10px] leading-none mb-0.5 uppercase tracking-wider">On My Deal:</span><select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white outline-none text-[10px] md:text-sm cursor-pointer font-black uppercase appearance-none leading-none w-full">{Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>))}</select></div>
+
+            <div className="bg-white/5 border border-white/10 px-3 py-2 rounded-xl flex flex-col justify-center shadow-inner min-w-[90px] md:min-w-[150px] h-[50px] md:h-[65px] relative group hover:bg-white/10 transition-all">
+                <span className="text-cyan-400 text-[8px] md:text-[11px] leading-none mb-1 uppercase tracking-widest font-black">On My Deal:</span>
+                <div className="relative flex items-center">
+                    <select 
+                        value={pendingVariantId} 
+                        onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} 
+                        className="bg-transparent text-white outline-none text-[11px] md:text-lg cursor-pointer font-black uppercase appearance-none leading-none w-full pr-6 z-10"
+                    >
+                        {Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{isMobile ? k : v.name}</option>))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-0 text-cyan-400 pointer-events-none group-hover:translate-y-0.5 transition-transform" />
+                </div>
+                <div className="absolute bottom-1 right-1 w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse shadow-[0_0_8px_#22d3ee]" />
+            </div>
         </div>
-        <div className="flex items-center gap-1.5 md:gap-4">
-          <div className="flex gap-1 md:gap-2.5 items-center">
-              <button 
+
+        <div className="flex items-center gap-2">
+            <button 
                 onClick={addBot} 
-                className={`${isConnected ? 'text-indigo-400' : 'text-white/20'} p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg active:scale-95`}
+                className={`${isConnected ? 'text-indigo-400' : 'text-white/20'} p-3 md:p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all active:scale-95 shadow-xl`}
                 title={isConnected ? "Add Bot" : "Connecting..."}
-              >
-                {isConnected ? <Bot size={18}/> : <Activity size={18} className="animate-pulse" />}
-              </button>
-              <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 md:p-3 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors`}><Eye size={18}/></button>
-              <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><Settings size={18}/></button>
-              <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY); setCurrentRoomId(null);}} className="text-red-500 p-2 md:p-3 bg-white/5 border border-white/10 rounded-lg md:rounded-xl font-black h-[40px] w-[40px] md:h-[52px] md:w-[52px] flex items-center justify-center hover:bg-white/10 transition-colors"><LogOut size={18}/></button>
-          </div>
+            >
+                {isConnected ? <Bot size={20}/> : <Activity size={20} className="animate-pulse" />}
+            </button>
+            <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-3 md:p-4 border border-white/10 rounded-xl hover:bg-white/10 transition-all active:scale-95 shadow-xl`}><Eye size={20}/></button>
+            <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-3 md:p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all active:scale-95 shadow-xl"><Settings size={20}/></button>
+            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid });setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-3 md:p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all active:scale-95 shadow-xl"><LogOut size={20}/></button>
         </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-emerald-950/20 to-transparent overflow-hidden px-1 py-1 font-black uppercase">
-        {/* TOP LEFT OVERLAY: LOW STATS */}
-        {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (activeVariant?.id === 'HILOW' || activeVariant?.id === 'MUFLIS') && (
-          <div className="absolute top-2 left-2 md:top-6 md:left-6 z-[90] flex flex-col items-start bg-black/40 backdrop-blur-md p-2 md:p-4 rounded-2xl border border-white/10 shadow-2xl animate-in slide-in-from-left duration-500">
-            <span className="text-[6px] md:text-[10px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">Low Strength</span>
-            <span className="text-[10px] md:text-xl text-emerald-400 font-black uppercase leading-tight">
+        {/* TOP LEFT: FLOATING LOW STRENGTH TEXT (HILOW ONLY) */}
+        {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && activeVariant?.id === 'HILOW' && (
+          <div className="absolute top-4 left-4 md:top-10 md:left-10 z-[90] flex flex-col items-start pointer-events-none animate-in slide-in-from-left duration-700">
+            <span className="text-[10px] md:text-sm text-white/40 tracking-[0.4em] font-black uppercase mb-1 drop-shadow-lg">Low Strength</span>
+            <span className="text-[18px] md:text-4xl text-emerald-400 font-black uppercase leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,1)]">
               {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.lowStrength || "Pre-flop"))}
             </span>
-            <span className="text-[#fbbf24] text-[9px] md:text-lg font-mono font-black mt-1 tracking-tight">
+            <span className="text-[#fbbf24] text-[14px] md:text-2xl font-mono font-black mt-1 tracking-tighter drop-shadow-md">
               {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroLowWinProb)}% PROB.
             </span>
           </div>
         )}
 
-        {/* TOP RIGHT OVERLAY: HIGH/STRENGTH STATS */}
+        {/* TOP RIGHT: FLOATING STRENGTH TEXT */}
         {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
-          <div className="absolute top-2 right-2 md:top-6 md:right-6 z-[90] flex flex-col items-end bg-black/40 backdrop-blur-md p-2 md:p-4 rounded-2xl border border-white/10 shadow-2xl animate-in slide-in-from-right duration-500">
-            <span className="text-[6px] md:text-[10px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">
-              {activeVariant?.id === 'HILOW' ? 'High Strength' : 'Strength'}
+          <div className="absolute top-4 right-4 md:top-10 md:right-10 z-[90] flex flex-col items-end pointer-events-none animate-in slide-in-from-right duration-700">
+            <span className="text-[10px] md:text-sm text-white/40 tracking-[0.4em] font-black uppercase mb-1 drop-shadow-lg">
+              {activeVariant?.id === 'HILOW' ? 'High Strength' : 'Hand Strength'}
             </span>
-            <span className="text-[10px] md:text-xl text-purple-400 font-black uppercase leading-tight">
+            <span className="text-[18px] md:text-4xl text-purple-400 font-black uppercase leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,1)]">
               {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.strength || "Pre-flop"))}
             </span>
-            <span className="text-[#fbbf24] text-[9px] md:text-lg font-mono font-black mt-1 tracking-tight">
+            <span className="text-[#fbbf24] text-[14px] md:text-2xl font-mono font-black mt-1 tracking-tighter drop-shadow-md">
               {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroWinProb)}% PROB.
             </span>
           </div>
         )}
 
-        <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center font-black">
-            <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[3vw] md:border-[2vw] border-slate-900/60 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)] border-double font-black uppercase" />
-            <div className="absolute inset-0 pointer-events-none z-20 font-black uppercase">
-              {(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} showdownWinnersCount={showdownWinners?.length || 0} />); })}
+        <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center">
+            <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[3vw] md:border-[2vw] border-slate-900/60 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)] border-double" />
+            <div className="absolute inset-0 pointer-events-none z-20">
+              {(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} showdownWinnersCount={showdownWinners?.length || 0} dealerIdx={dealerIdx} players={players} />); })}
             </div>
+            
             <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full h-full justify-center">
-              {!potTransferring && ( <div className={`flex flex-col items-center transition-all duration-300 font-black uppercase ${potAnimating ? 'scale-110' : 'scale-100'}`}><div className={`text-[10vw] md:text-[5vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] ${potAnimating ? 'animate-pot-pulse' : ''}`}>${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div> )}
-              {['HOLDEM', 'OMAHA', 'PINEAPPLE', 'HILOW', 'MUFLIS', 'REDSBLACKS'].includes(activeVariant?.id) && (
-                <div className="flex gap-1.5 md:gap-4 mt-4 md:mt-12 font-black uppercase transition-transform" style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
+              {!potTransferring && ( <div className="flex flex-col items-center transition-all duration-300 font-black"><div className="text-[12vw] md:text-[6vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_4px_30px_rgba(0,0,0,0.8)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div> )}
+              {community.length > 0 && (
+                <div className="flex gap-2 md:gap-5 mt-6 md:mt-16 transition-transform" style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
                   {(community || []).map((c, j) => {
                     const isRedSuit = c.suit === '♥' || c.suit === '♦';
                     const suitColor = isRedSuit ? 'text-red-600' : 'text-black';
                     return (
-                      <div key={c.id || j} className={`w-[6vw] md:w-[3vw] h-[9vw] md:h-[5vw] rounded-[3px] border bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-300 ${winning5Ids?.includes(c.id) ? 'ring-2 ring-yellow-400 scale-110 z-30 shadow-[0_0_40px_rgba(251,191,36,0.6)]' : 'border-white/20 shadow-2xl'}`}>
-                        <span className={`text-[10px] md:text-[0.9vw] font-black leading-none ${suitColor}`}>{String(c.value)}</span>
-                        <span className={`text-[13px] md:text-[2.2vw] font-black leading-none ${suitColor}`}>{String(c.suit)}</span>
+                      <div key={c.id || j} className={`w-[6vw] md:w-[3.5vw] h-[9vw] md:h-[5.5vw] rounded-[4px] border-2 bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-2 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 z-30 shadow-[0_0_50px_rgba(251,191,36,0.8)]' : 'border-white/20 shadow-2xl'}`}>
+                        <span className={`text-[12px] md:text-[1vw] font-black leading-none ${suitColor}`}>{String(c.value)}</span>
+                        <span className={`text-[16px] md:text-[2.5vw] font-black leading-none ${suitColor}`}>{String(c.suit)}</span>
                       </div>
                     );
                   })}
@@ -1028,86 +754,52 @@ const App = () => {
         </div>
       </main>
 
-      <footer 
-        style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} 
-        className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]"
-      >
-        <div className="flex-1 flex flex-col justify-start pt-3 md:pt-6 pb-2 px-2 md:px-10 relative bg-white/5 shadow-inner font-black uppercase">
+      <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black/95 backdrop-blur-3xl border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] shrink-0 font-black uppercase overflow-visible pb-[env(safe-area-inset-bottom)]">
+        <div className="flex-1 flex flex-col justify-start pt-4 md:pt-10 px-2 md:px-10 relative bg-white/5">
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
-            <div className="flex flex-col items-center justify-start h-full relative font-black uppercase">
-                <div className="w-full h-full flex flex-col items-center gap-2 md:gap-4 animate-in fade-in zoom-in duration-700 relative overflow-visible">
-                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                        {[...Array(12)].map((_, i) => (
-                            <div key={i} className={`sparkle-particle sparkle-${i} absolute w-1 h-1 bg-yellow-400 rounded-full opacity-0`} />
-                        ))}
-                    </div>
-                    <div className="flex items-center gap-2 text-yellow-400 animate-pulse-glow font-black tracking-[0.2em] text-[10px] md:text-2xl uppercase text-center px-4 drop-shadow-[0_0_15px_rgba(251,191,36,0.6)]">
-                      <Trophy size={14} className="md:size-6" /> 
-                      {getShowdownText(showdownWinners[currentShowdownIdx], showdownWinners)}
-                    </div>
-                    <div className="flex flex-nowrap overflow-x-auto w-full gap-3 md:gap-8 px-2 md:px-16 justify-center no-scrollbar pb-1">
-                        {showdownWinners[currentShowdownIdx] && (
-                            <div key={currentShowdownIdx} className="flex items-center gap-3 md:gap-8 bg-black/70 p-2 md:p-6 rounded-[1.5rem] md:rounded-[3.5rem] border-2 border-yellow-500/40 shadow-2xl min-w-[200px] md:min-w-[450px] animate-showdown-card-pop shrink-0">
-                                <div className="flex flex-col items-center shrink-0">
-                                    <div className="text-white font-black text-[12px] md:text-3xl drop-shadow-lg uppercase truncate max-w-[80px] md:max-w-none mb-0.5">{String(showdownWinners[currentShowdownIdx].name)}</div>
-                                    <div className="bg-yellow-500 text-black px-2 py-0.5 rounded-full font-mono text-[10px] md:text-2xl font-black shadow-inner">+${Number(showdownWinners[currentShowdownIdx].amount || 0).toLocaleString()}</div>
-                                    <div className="text-yellow-400/80 text-[6px] md:text-[10px] tracking-widest uppercase mt-1.5 font-black italic">{showdownWinners[currentShowdownIdx].rank === "!" ? "(Everyone Folded)" : formatRank(String(showdownWinners[currentShowdownIdx].rank).replace("HIGH: ", "").replace("LOW: ", ""))}</div>
+            <div className="flex flex-col items-center justify-center h-full relative animate-in fade-in zoom-in duration-500">
+                <div className="flex items-center gap-4 text-yellow-400 animate-pulse font-black tracking-[0.4em] text-lg md:text-4xl uppercase text-center drop-shadow-[0_0_30px_rgba(251,191,36,0.7)] mb-4 md:mb-10">
+                    <Trophy size={40} className="md:size-12 text-yellow-400" />
+                    {getShowdownText(showdownWinners[currentShowdownIdx], showdownWinners)}
+                </div>
+                <div className="flex gap-4 md:gap-10 items-center justify-center">
+                    <div className="flex flex-col items-center scale-110 md:scale-125">
+                        <div className="text-white font-black text-2xl md:text-5xl mb-4 tracking-tighter drop-shadow-lg">{showdownWinners[currentShowdownIdx].name}</div>
+                        <div className="flex gap-3">
+                            {(showdownWinners[currentShowdownIdx].hand || []).map((c, ci) => (
+                                <div key={ci} className="w-16 md:w-28 h-24 md:h-40 bg-white rounded-xl flex flex-col items-center justify-center text-black shadow-[0_0_40px_rgba(0,0,0,0.5)] border-4 border-yellow-400/50 animate-showdown-card-pop">
+                                    <span className={`text-xl md:text-4xl font-black ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
+                                    <span className={`text-3xl md:text-7xl ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
                                 </div>
-                                {showdownWinners[currentShowdownIdx].rank !== "!" && (
-                                    <div className="flex gap-1 md:gap-2 items-center justify-center">
-                                        {(showdownWinners[currentShowdownIdx].hand || []).map((c, ci) => {
-                                            const isRedSuit = c.suit === '♥' || c.suit === '♦';
-                                            const suitColor = isRedSuit ? 'text-red-600' : 'text-black';
-                                            return (
-                                              <div key={ci} className="w-6 md:w-16 h-9 md:h-24 bg-white rounded-sm md:rounded-xl flex flex-col items-center justify-center text-black shadow-lg ring-1 ring-black/5 relative overflow-hidden" 
-                                                  style={{ animation: `card-flip-hero 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`, animationDelay: `${0.4 + ci * 0.2}s`, opacity: 0 }}>
-                                                  <span className={`text-[8px] md:text-[20px] font-black absolute top-0.5 left-1 leading-none ${suitColor}`}>{String(c.value)}</span>
-                                                  <span className={`text-[12px] md:text-[36px] ${suitColor}`}>{String(c.suit)}</span>
-                                              </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
           ) : (
-            <div className={`flex flex-col gap-2 md:gap-4 items-center w-full font-black uppercase transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-40 grayscale pointer-events-none' : 'opacity-100'}`}>
+            <div className={`flex flex-col gap-3 md:gap-6 items-center w-full transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-40 grayscale pointer-events-none' : 'opacity-100'}`}>
                 {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE ? (<>
-                    {/* ENLARGED BALANCE DISPLAY IN HUD */}
-                    <div className="flex flex-col items-center mb-1">
-                      <span className="text-[7px] md:text-[10px] text-white/40 tracking-[0.4em] mb-0.5">YOUR TABLE STACK</span>
-                      <div className="flex items-center gap-2 bg-black/40 px-6 py-1.5 rounded-full border border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                        <Coins size={16} className="text-emerald-400" />
-                        <span className="text-xl md:text-3xl font-mono font-black text-emerald-400 tracking-tighter">
-                          ${Number(heroPlayerObj?.chips || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                        </span>
-                      </div>
+                    <div className="flex gap-2 w-full max-w-[700px] font-black uppercase">
+                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-[16px] hover:bg-white/20 transition-all font-black">1/2 POT</button>
+                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-8 md:h-12 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-[16px] hover:bg-white/20 transition-all font-black">POT</button>
+                        <button disabled={activeIdx !== heroIdx} onClick={handleAllIn} className="flex-1 h-8 md:h-12 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] md:text-[16px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black">ALL-IN</button>
                     </div>
-
-                    <div className="flex gap-1 w-full max-w-[600px] font-black uppercase mt-2">
-                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button>
-                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button>
-                        <button disabled={activeIdx !== heroIdx} onClick={handleAllIn} className="flex-1 h-7 md:h-10 bg-red-900/30 border border-red-500/50 rounded-md text-[8px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center">ALL-IN</button>
-                    </div>
-                    <div className="flex flex-row gap-1 w-full items-center justify-center font-black">
-                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('FOLD')} className="flex-1 h-10 md:h-16 bg-red-950/60 border border-red-500/50 rounded-lg tracking-[0.1em] hover:brightness-125 transition-all font-black text-[10px] md:text-sm shadow-xl uppercase">FOLD</button>
-                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('CALL')} className="flex-1 h-10 md:h-16 bg-indigo-900/60 border border-indigo-400/50 rounded-xl text-[10px] md:text-xl tracking-[0.1em] hover:brightness-125 font-black shadow-xl uppercase px-1 truncate">
+                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-center justify-center font-black">
+                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('FOLD')} className="flex-1 h-12 md:h-20 bg-red-950/60 border-2 border-red-500/50 rounded-2xl tracking-[0.2em] hover:brightness-125 transition-all font-black text-sm md:text-xl shadow-2xl">FOLD</button>
+                        <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('CALL')} className="flex-1 h-12 md:h-20 bg-indigo-900/60 border-2 border-indigo-400/50 rounded-2xl text-sm md:text-3xl tracking-widest hover:brightness-125 font-black shadow-2xl px-1 truncate">
                             {highestBet > (heroPlayerObj?.currentBet || 0) ? (highestBet - (heroPlayerObj?.currentBet || 0) >= (heroPlayerObj?.chips || 0) ? `ALL-IN` : `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}`) : 'CHECK'}
                         </button>
-                        <div className="flex-[2] flex gap-1 items-center bg-black/60 border border-white/10 p-0.5 md:p-1.5 rounded-lg shadow-inner font-black uppercase overflow-hidden">
-                            <div className="flex items-center bg-black/40 px-1 md:px-5 rounded-md border border-white/5 h-9 md:h-14 font-black uppercase flex-1">
-                                <span className="text-[#fbbf24] text-[10px] md:text-xl font-mono mr-0.5">$</span>
-                                <input disabled={activeIdx !== heroIdx} type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center font-mono text-xs md:text-2xl text-[#fbbf24] outline-none font-black" />
+                        <div className="flex-[2] flex gap-2 items-center bg-black/60 border border-white/10 p-1 md:p-3 rounded-2xl shadow-inner font-black overflow-hidden">
+                            <div className="flex items-center bg-black/40 px-2 md:px-6 rounded-xl border border-white/5 h-10 md:h-16 flex-1">
+                                <span className="text-[#fbbf24] text-xs md:text-3xl font-mono mr-1">$</span>
+                                <input disabled={activeIdx !== heroIdx} type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center font-mono text-sm md:text-3xl text-[#fbbf24] outline-none font-black" />
                             </div>
-                            <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-9 md:h-14 bg-emerald-600/60 border border-400/50 rounded-md flex items-center justify-center hover:brightness-125 font-black uppercase text-[9px] md:text-xl shadow-xl"><Zap size={10} className="mr-0.5 text-emerald-400"/> RAISE</button>
+                            <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-10 md:h-16 bg-emerald-600/60 border-2 border-emerald-400/50 rounded-xl flex items-center justify-center hover:brightness-125 font-black text-xs md:text-3xl shadow-2xl"><Zap size={24} className="mr-2 text-emerald-400"/> RAISE</button>
                         </div>
                     </div>
                 </>) : (
-                    <div className="flex flex-col items-center gap-1 py-10">
-                        <span className="text-white/20 tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase">Arena Idle / Observing</span>
+                    <div className="flex flex-col items-center gap-2 py-12">
+                        <span className="text-white/20 tracking-[0.5em] text-xs md:text-2xl font-black italic uppercase animate-pulse">Arena Idle / Observation Mode</span>
                     </div>
                 )}
             </div>
@@ -1115,61 +807,39 @@ const App = () => {
         </div>
       </footer>
       <style>{`
+          @keyframes announcement-pop {
+            0% { transform: scale(0.5); opacity: 0; filter: blur(10px); }
+            30% { transform: scale(1.1); opacity: 1; filter: blur(0px); }
+            70% { transform: scale(1); opacity: 1; filter: blur(0px); }
+            100% { transform: scale(1.5); opacity: 0; filter: blur(20px); }
+          }
+          .animate-announcement-pop { animation: announcement-pop 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          @keyframes intelligence-link {
+            0% { box-shadow: 0 0 0px #fbbf24; border-color: rgba(251,191,36,0.3); }
+            50% { box-shadow: 0 0 25px #fbbf24; border-color: rgba(251,191,36,1); background-color: rgba(251,191,36,0.1); }
+            100% { box-shadow: 0 0 0px #fbbf24; border-color: rgba(251,191,36,0.3); }
+          }
+          .animate-intelligence-link { animation: intelligence-link 1.5s infinite ease-in-out; }
+          .animate-spin-slow { animation: spin 8s linear infinite; }
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          @keyframes status-flash {
+            0% { opacity: 0.4; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 15px #ef4444; }
+            100% { opacity: 0.4; transform: scale(0.9); }
+          }
+          .animate-status-flash { animation: status-flash 2s infinite ease-in-out; }
           @keyframes panic-pulse {
-            0% { transform: scale(1) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 0px #ef4444); }
-            50% { transform: scale(1.1) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 40px #ef4444); }
-            100% { transform: scale(1) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 0px #ef4444); }
+            0% { transform: scale(1) translateX(-50%) translateY(-50%); }
+            50% { transform: scale(1.08) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 40px #ef4444); }
+            100% { transform: scale(1) translateX(-50%) translateY(-50%); }
           }
-          .animate-panic-pulse { 
-            animation: panic-pulse 0.3s infinite cubic-bezier(0.175, 0.885, 0.32, 1.275); 
-            z-index: 100 !important;
-          }
-          @keyframes fling-to-pot { 
-            0% { transform: translate(calc(-50% + 0px), 0px) scale(2.0); filter: blur(0px) brightness(2); } 
-            15% { transform: translate(calc(-50% + 20px), -10vh) scale(1.4); filter: blur(1px) brightness(1.5); }
-            100% { transform: translate(calc(-50% + 10px), -45vh) scale(0) rotate(720deg); filter: blur(15px) grayscale(1); opacity: 0; } 
-          }
-          @keyframes pot-pulse { 
-            0% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 
-            50% { transform: scale(1.15); filter: drop-shadow(0 0 40px #fbbf24) brightness(1.3); } 
-            100% { transform: scale(1); filter: drop-shadow(0 0 0px #fbbf24); } 
-          }
-          .animate-pot-pulse { animation: pot-pulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-          .animate-pulse-glow { animation: pulse-glow 1.5s infinite ease-in-out; }
-          @keyframes pulse-glow { 0% { box-shadow: 0 0 5px rgba(251,191,36,0.2); } 50% { box-shadow: 0 0 35px rgba(251,191,36,0.7); } 100% { box-shadow: 0 0 5px rgba(251,191,36,0.2); } }
-          .no-scrollbar::-webkit-scrollbar { display: none; }
-          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+          .animate-panic-pulse { animation: panic-pulse 0.35s infinite cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 100 !important; }
           @keyframes showdown-pop { 
-            0% { transform: scale(0.9) translateY(40px); opacity: 0; filter: brightness(0); } 
+            0% { transform: scale(0.5) translateY(100px); opacity: 0; filter: brightness(3); } 
             100% { transform: scale(1) translateY(0); opacity: 1; filter: brightness(1); } 
           }
-          .animate-showdown-card-pop { animation: showdown-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-          @keyframes card-flip-hero { 
-            0% { transform: rotateY(180deg) scale(0.2); opacity: 0; filter: blur(10px); } 
-            100% { transform: rotateY(0deg) scale(1); opacity: 1; filter: blur(0px); } 
-          }
-          @keyframes sparkle {
-            0% { transform: translate(0,0) scale(0); opacity: 0; }
-            50% { opacity: 1; }
-            100% { transform: translate(var(--x), var(--y)) scale(1.5); opacity: 0; }
-          }
-          .sparkle-particle { animation: sparkle 1.5s ease-out infinite; }
-          .sparkle-0 { --x: 50px; --y: -50px; left: 50%; top: 20%; animation-delay: 0.1s; }
-          .sparkle-1 { --x: -60px; --y: -40px; left: 45%; top: 30%; animation-delay: 0.3s; }
-          .sparkle-2 { --x: 70px; --y: -30px; left: 55%; top: 25%; animation-delay: 0.5s; }
-          .sparkle-3 { --x: -40px; --y: -70px; left: 50%; top: 35%; animation-delay: 0.7s; }
-          .sparkle-4 { --x: 30px; --y: -80px; left: 48%; top: 15%; animation-delay: 0.9s; }
-          .sparkle-5 { --x: -80px; --y: -20px; left: 52%; top: 40%; animation-delay: 1.1s; }
-          .sparkle-6 { --x: 10px; --y: -90px; left: 40%; top: 10%; animation-delay: 0.2s; }
-          .sparkle-7 { --x: -20px; --y: -55px; left: 60%; top: 18%; animation-delay: 0.4s; }
-          @keyframes bet-splash { 
-            0% { transform: translate(-50%, -50%) scale(0) rotate(-180deg); opacity: 0; filter: brightness(3); } 
-            50% { transform: translate(-50%, -50%) scale(1.4) rotate(10deg); opacity: 1; filter: brightness(1.5); }
-            75% { transform: translate(-50%, -50%) scale(0.9) rotate(-5deg); }
-            100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; } 
-          }
-          .animate-bet-splash { animation: bet-splash 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-          html, body { overscroll-behavior-y: contain; height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; }
+          .animate-showdown-card-pop { animation: showdown-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          html, body { overscroll-behavior-y: contain; height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; background: #06080c; }
       `}</style>
     </div>
   );
