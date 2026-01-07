@@ -8,9 +8,9 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.8.0-PRO";
+const VERSION = "v1.0.1";
 const APP_NAME = "Dealers Choice";
-const TOTAL_SEATS = 10; // Fixed: Constant defined for room initialization
+const TOTAL_SEATS = 10; 
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 const SUITS = ['♥', '♦', '♣', '♠'];
@@ -243,7 +243,18 @@ const processShowdown = (roomId) => {
     });
 
     setTimeout(() => {
-        room.players.forEach(p => { if (p) { p.waitingForNextHand = false; p.lastAction = null; } });
+        // Logic Upgrade: Automatic Bot Rebuy
+        room.players.forEach(p => { 
+          if (p) { 
+            p.waitingForNextHand = false; 
+            p.lastAction = null; 
+            if (p.isBot && p.chips < Number(room.bb)) {
+               p.chips = Number(room.maxBuy);
+               io.to(roomId).emit('log', { name: "SYSTEM", action: `${p.name.toUpperCase()} RE-BOUGHT FOR $${room.maxBuy}`, type: 'phase' });
+            }
+          } 
+        });
+
         const seated = room.players.map((p, i) => (p && p.chips > Number(room.bb)) ? i : null).filter(x => x !== null);
         if (seated.length >= 2) {
             const curDealerIdx = seated.indexOf(room.dealerIdx);
@@ -394,6 +405,13 @@ const runIgnition = (roomId) => {
   room.gameInProgress = true;
   if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
   const dealerSeat = room.players[room.dealerIdx];
+
+  // Logic Upgrade: Bots pick a random variation instead of just holding onto their last setting
+  if (dealerSeat.isBot) {
+    const vIds = Object.keys(variantNames);
+    dealerSeat.pendingVariant = vIds[Math.floor(Math.random() * vIds.length)];
+  }
+
   const variantId = dealerSeat.pendingVariant || 'HOLDEM';
   room.activeVariant = { id: variantId, name: variantNames[variantId], holeCards: holeCardsMap[variantId] };
   room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
@@ -462,7 +480,8 @@ io.on('connection', (socket) => {
   let seatedUid = null;
   socket.on('getInitialData', () => socket.emit('initialDataResponse', { profiles, rooms: Object.values(rooms).map(serializeRoom) }));
   socket.on('playerLogin', ({ password }) => {
-    const profile = profiles.find(p => p.password === password);
+    // LOGIN PASSWORD NOW CASE-INSENSITIVE
+    const profile = profiles.find(p => p.password.toLowerCase() === password.toLowerCase());
     if (profile) {
       seatedUid = profile.uid;
       let activeRoomId = null;
@@ -475,6 +494,23 @@ io.on('connection', (socket) => {
       socket.emit('loginSuccess', { profile, activeRoomId });
     }
   });
+
+  socket.on('playerRebuy', ({ roomId, uid, amount }) => {
+    const room = rooms[roomId];
+    const player = room?.players.find(p => p && p.uid === uid);
+    const profile = profiles.find(p => p.uid === uid);
+    if (room && player && profile && profile.chips >= amount) {
+        profile.chips -= amount;
+        player.chips += amount;
+        io.to(roomId).emit('log', { name: String(player.name), action: `RE-BOUGHT FOR $${amount}`, type: 'phase' });
+        io.to(roomId).emit('roomUpdate', serializeRoom(room));
+        io.emit('profilesUpdate', profiles);
+        if (room.phase === PHASES.IDLE && room.players.filter(Boolean).length >= 2 && !room.ignitionTimer) {
+            room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000);
+        }
+    }
+  });
+
   socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
     const room = rooms[roomId]; if (!room) return callback({ status: 'error' });
     const existingIdx = room.players.findIndex(p => p && p.uid === profile.uid);
@@ -511,9 +547,11 @@ io.on('connection', (socket) => {
         room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000);
     }
   });
+
   socket.on('playerAction', ({ roomId, type, amount }) => performAction(roomId, type, amount));
   socket.on('leaveRoom', ({ uid }) => { removePlayerGlobally(uid, true); seatedUid = null; io.emit('profilesUpdate', profiles); });
   socket.on('disconnect', () => { if (seatedUid) { removePlayerGlobally(seatedUid, false); io.emit('profilesUpdate', profiles); } });
+  
   socket.on('adminAddBot', ({ roomId }) => {
     const room = rooms[roomId]; if (!room) return;
     const emptyIdx = room.players.findIndex(p => p === null); if (emptyIdx === -1) return;
@@ -527,6 +565,7 @@ io.on('connection', (socket) => {
         room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000);
     }
   });
+
   socket.on('updatePlayerSettings', ({ uid, pendingVariant }) => {
     const p = profiles.find(x => x.uid === uid); if (p) p.pendingVariant = pendingVariant;
     Object.values(rooms).forEach(room => {
@@ -537,18 +576,30 @@ io.on('connection', (socket) => {
         }
     });
   });
+
   socket.on('adminNuclearReset', () => { rooms = {}; profiles = profiles.filter(p => p.role === 'admin'); io.emit('lobbyUpdate', []); io.emit('profilesUpdate', profiles); io.emit('roomUpdate', null); });
   socket.on('adminCreatePlayer', (p) => { profiles.push({ ...p, chips: Number(p.chips) }); io.emit('profilesUpdate', profiles); });
-  socket.on('adminEditChips', ({ uid, chips }) => {
+  
+  // ADMIN UPDATE PROFILE (Chips and Passwords)
+  socket.on('adminUpdatePlayer', (data) => {
+    const { uid, chips, password } = data;
     const p = profiles.find(x => x.uid === uid);
-    if (p) { p.chips = Number(chips);
+    if (p) {
+        if (chips !== undefined) p.chips = Number(chips);
+        if (password !== undefined) p.password = password;
+        
         Object.values(rooms).forEach(room => {
             const player = room.players.find(pl => pl && pl.uid === uid);
-            if (player) { player.chips = Number(chips); io.to(room.id).emit('roomUpdate', serializeRoom(room)); }
+            if (player) { 
+                if (chips !== undefined) player.chips = Number(chips);
+                if (password !== undefined) player.password = password;
+                io.to(room.id).emit('roomUpdate', serializeRoom(room)); 
+            }
         });
         io.emit('profilesUpdate', profiles);
     }
   });
+
   socket.on('adminDeleteRoom', (roomId) => { if (rooms[roomId]) { delete rooms[roomId]; io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom)); } });
   socket.on('adminCreateRoom', (data) => { 
     const defaultData = { sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 };
