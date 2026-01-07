@@ -10,6 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
+// VERSION: v1.0.18
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -19,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.17";
+const VERSION = "v1.0.18";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -308,7 +309,7 @@ const App = () => {
     return Number(potAmount) + currentBetsSum;
   }, [potAmount, players]);
 
-  // --- ACTIONS (Declared before early returns to fix ReferenceError) ---
+  // --- ACTIONS ---
   const handleAction = useCallback((type, amt = 0) => {
     const finalAmount = amt !== 0 ? amt : raiseInput;
     if (currentRoomId) socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(finalAmount) : 0 });
@@ -549,7 +550,11 @@ const App = () => {
 
   useEffect(() => {
     if (activeIdx === heroIdx && heroPlayerObj) { 
-        setRaiseInput(highestBet + bigBlind); 
+        // Sync raise slider to minimum bet when turn begins
+        const minAllowed = highestBet + bigBlind;
+        const maxAllowed = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
+        setRaiseInput(Math.min(minAllowed, maxAllowed)); 
+        
         if (preAction) {
             if (preAction === 'FOLD') handleAction('FOLD');
             else if (preAction === 'CHECK') handleAction('CALL'); 
@@ -845,7 +850,7 @@ const App = () => {
                 <div className="flex-1 w-full relative flex items-center justify-center py-4">
                   <input 
                     type="range" 
-                    min={highestBet + bigBlind} 
+                    min={Math.min(highestBet + bigBlind, Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} 
                     max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} 
                     step={0.25} 
                     value={raiseInput} 
@@ -863,8 +868,9 @@ const App = () => {
                       value={raiseInput}
                       onChange={(e) => {
                         const val = Number(e.target.value);
+                        const min = highestBet + bigBlind;
                         const max = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
-                        setRaiseInput(Math.min(val, max));
+                        setRaiseInput(Math.max(min, Math.min(val, max)));
                       }}
                       className="bg-transparent text-emerald-400 font-mono text-xl md:text-3xl font-black text-center outline-none w-full"
                     />
