@@ -54,7 +54,6 @@ const VARIANTS = {
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
-// Mathematically perfect 10-way elliptical distribution
 const DISPLAY_POSITIONS = [
   { x: 50, y: 92 }, // Seat 0 (Bottom / Hero)
   { x: 25, y: 84 }, // Seat 1
@@ -67,8 +66,6 @@ const DISPLAY_POSITIONS = [
   { x: 90, y: 62 }, // Seat 8
   { x: 75, y: 84 }  // Seat 9
 ];
-
-// --- COMPONENTS ---
 
 const DashTimer = ({ timeRemaining }) => {
   const segments = Math.ceil(timeRemaining / 3);
@@ -138,7 +135,7 @@ const Seat = ({
                         const isRedSuit = c.suit === '♥' || c.suit === '♦';
                         return (
                           <div key={c.id || ci} 
-                              className={`w-[7.5vw] md:w-[4vw] h-[10.5vw] md:h-[5.5vw] rounded-lg flex flex-col items-center justify-center border absolute transition-all duration-300 shadow-2xl ${phase === PHASES.SHOWDOWN || isHero ? 'bg-white' : 'bg-slate-900 border-white/20'}`} 
+                              className={`w-[7.5vw] md:w-[4vw] h-[10.5vw] md:h-[5.5vw] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${phase === PHASES.SHOWDOWN || isHero ? 'bg-white' : 'bg-slate-900 border-white/20'}`} 
                               style={{ 
                                 transform: `translateX(${offset * 2}vw) rotate(${offset * visuals.holeCardFan}deg) scale(${isHero ? 1.6 : 1.0})`, 
                                 transformOrigin: 'bottom center', 
@@ -146,8 +143,8 @@ const Seat = ({
                               }}>
                               {(phase === PHASES.SHOWDOWN || isHero) && ( 
                                 <>
-                                  <span className={`text-[12px] md:text-xl font-black leading-none ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
-                                  <span className={`text-[14px] md:text-3xl leading-none ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
+                                  <span className={`text-[10px] md:text-sm font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
+                                  <span className={`text-[12px] md:text-lg leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
                                 </> 
                               )}
                               {phase === PHASES.SHOWDOWN && player.isWinner && (winning5Ids || []).includes(c.id) && (
@@ -233,7 +230,7 @@ const App = () => {
   const [visuals, setVisuals] = useState({
     heroCardScale: 2.0, heroCardY: 20, oppCardScale: 1.0, oppCardY: -10,
     commCardScale: 1.5, commCardY: 0, betScale: 1.5, betY: 0,
-    badgeY: 0, footerHeight: 220, tableZoom: isMobile ? 0.70 : 0.90, holeCardFan: 12
+    badgeY: 0, footerHeight: 220, tableZoom: 0.9, holeCardFan: 35
   });
 
   const heroIdx = useMemo(() => {
@@ -422,7 +419,30 @@ const App = () => {
     socket.on('initialDataResponse', ({ profiles: pList, rooms: rList }) => {
         setAllProfiles(pList); setActiveTables(rList);
     });
-    socket.on('loginSuccess', (p) => { setUserProfile(p); setPendingVariantId(p.pendingVariant || 'HOLDEM'); setCurrentView(VIEWS.LOBBY); });
+    socket.on('loginSuccess', (payload) => { 
+        const profile = payload.profile || payload;
+        setUserProfile(profile); 
+        setPendingVariantId(profile.pendingVariant || 'HOLDEM'); 
+        
+        socket.emit('getInitialData'); 
+
+        if (payload.activeRoomId) {
+            setCurrentRoomId(payload.activeRoomId);
+            socket.emit('joinRoom', { 
+                roomId: payload.activeRoomId, 
+                profile: profile, 
+                buyIn: 0 
+            }, (res) => {
+                if (res?.status === 'ok') {
+                    setCurrentView(VIEWS.GAME);
+                } else {
+                    setCurrentView(VIEWS.LOBBY);
+                }
+            });
+        } else {
+            setCurrentView(VIEWS.LOBBY); 
+        }
+    });
 
     return () => { 
         socket.off('connect'); socket.off('roomUpdate'); socket.off('lobbyUpdate'); 
@@ -430,7 +450,6 @@ const App = () => {
     };
   }, []); 
 
-  // Reset raise input to default BB when it becomes Hero's turn
   useEffect(() => {
     if (activeIdx === heroIdx && heroPlayerObj) {
       setRaiseInput(highestBet + bigBlind);
@@ -668,9 +687,9 @@ const App = () => {
                   {(community || []).map((c, j) => {
                     const isRedSuit = c.suit === '♥' || c.suit === '♦';
                     return (
-                      <div key={c.id || j} className={`w-[8vw] md:w-[4vw] h-[11vw] md:h-[6vw] rounded-xl border-2 bg-white flex flex-col items-center justify-center text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10'}`}>
-                        <span className={`text-[14px] md:text-xl font-black leading-none ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
-                        <span className={`text-[18px] md:text-3xl font-black leading-none ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
+                      <div key={c.id || j} className={`w-[8vw] md:w-[4vw] h-[11vw] md:h-[6vw] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10'}`}>
+                        <span className={`text-[12px] md:text-sm font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
+                        <span className={`text-[14px] md:text-lg font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
                       </div>
                     );
                   })}
@@ -678,7 +697,7 @@ const App = () => {
               )}
             </div>
 
-            {/* Vertical Raise Slider (Right side of table arena) */}
+            {/* Vertical Raise Slider */}
             {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
               <div className="absolute right-0 top-[20%] bottom-[20%] w-16 md:w-24 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                 <div className="flex-1 w-full relative flex items-center justify-center py-8">
@@ -730,9 +749,9 @@ const App = () => {
                         
                         <div className="flex gap-1.5">
                             {(winner.hand || []).map((c, ci) => (
-                                <div key={ci} className={`w-10 md:w-16 h-12 md:h-20 bg-white rounded-t-lg flex flex-col items-center justify-start pt-2 text-black shadow-xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
-                                    <span className={`text-[11px] md:text-lg font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
-                                    <span className={`text-[14px] md:text-2xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
+                                <div key={ci} className={`w-10 md:w-16 h-12 md:h-20 bg-white rounded-t-lg flex flex-col items-start justify-start p-1.5 text-black shadow-xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
+                                    <span className={`text-[9px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
+                                    <span className={`text-[12px] md:text-lg leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
                                     <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
                                 </div>
                             ))}
@@ -748,12 +767,11 @@ const App = () => {
                         <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] hover:bg-white/10 font-black">POT</button>
                         <button onClick={handleAllIn} className="flex-1 h-10 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black">ALL-IN</button>
                     </div>
-                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-center justify-center font-black">
-                        <button onClick={()=>handleAction('FOLD')} className="flex-1 h-16 bg-red-950/60 border border-red-500/50 rounded-xl text-lg font-black tracking-widest uppercase font-black">FOLD</button>
-                        <button onClick={()=>handleAction('CALL')} className="flex-1 h-16 bg-white/10 border border-white/20 rounded-xl text-xl font-black truncate px-2">{highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK'}</button>
-                        <div className="flex-[1.5] flex gap-2 items-center bg-black/40 border border-white/10 p-2 rounded-xl">
-                            {/* Text entry box removed per request */}
-                            <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-12 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase"><Zap size={20} className="mr-1"/> RAISE</button>
+                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-16">
+                        <button onClick={()=>handleAction('FOLD')} className="flex-1 bg-red-950/60 border border-red-500/50 rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center">FOLD</button>
+                        <button onClick={()=>handleAction('CALL')} className="flex-1 bg-white/10 border border-white/20 rounded-xl text-xl font-black truncate px-2 flex items-center justify-center">{highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK'}</button>
+                        <div className="flex-[1.5] flex bg-black/40 border border-white/10 rounded-xl overflow-hidden">
+                            <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase"><Zap size={20} className="mr-1"/> RAISE</button>
                         </div>
                     </div>
                 </>) : (
