@@ -200,7 +200,7 @@ const Seat = ({
                     {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
                 </div>
 
-                {isDealer && <div className="absolute top-2 right-2 w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full shadow-[0_0_15px_#ef4444] animate-pulse z-20" />}
+                {isDealer && <div className="absolute bottom-[6px] left-1/2 -translate-x-1/2 w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full shadow-[0_0_15px_#ef4444] animate-pulse z-20" />}
             </div>
         </div>
     );
@@ -253,7 +253,7 @@ const App = () => {
   const [visuals, setVisuals] = useState({
     heroCardScale: 2.0, heroCardY: 20, oppCardScale: 1.0, oppCardY: -10,
     commCardScale: 1.5, commCardY: 0, betScale: 1.5, betY: 0,
-    badgeY: 0, footerHeight: 220, tableZoom: 0.9, holeCardFan: 35
+    badgeY: 0, footerHeight: 250, tableZoom: 0.9, holeCardFan: 35
   });
 
   const heroIdx = useMemo(() => {
@@ -608,7 +608,7 @@ const App = () => {
               <h1 className="text-[10vw] font-black uppercase italic animate-announcement-pop drop-shadow-[0_0_50px_rgba(0,0,0,1)] text-center px-10" style={{ color: announcement.color }}>{announcement.text}</h1>
           </div>
       )}
-      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-16 md:h-20">
+      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-15 md:h-19">
         <div className="flex-1 flex items-center">
             <div className="bg-slate-900 border border-white/10 px-3 py-1.5 rounded-lg flex flex-col min-w-[120px]">
               <span className="text-cyan-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">Current Hand:</span>
@@ -675,13 +675,13 @@ const App = () => {
                <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
                 <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
                 <span className="text-[12px] md:text-[25px] text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
-                <span className="text-[#fbbf24] text-[7px] md:text-[17px] font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
+                <span className="text-[#fbbf24] text-[9px] md:text-[17px] font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
               </div>
             )}
             <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
               <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
               <span className="text-[12px] md:text-[25px] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-              <span className="text-[#fbbf24] text-[7px] md:text-[17px] font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
+              <span className="text-[#fbbf24] text-[9px] md:text-[17px] font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
             </div>
           </>
         )}
@@ -741,7 +741,7 @@ const App = () => {
       </main>
 
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="flex-1 flex flex-col justify-center px-4 relative pt-2 pb-2 md:pb-4"> 
+        <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-6"> 
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
                 const winner = showdownWinners[currentShowdownIdx];
@@ -758,7 +758,7 @@ const App = () => {
                 const displayRank = formatRank(String(winner.rank).replace("LOW: ", "").replace("HIGH: ", ""));
                 
                 return (
-                    <div key={winner.name + currentShowdownIdx} className="flex flex-col items-center justify-center w-full h-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500 -translate-y-[70px] md:-translate-y-[60px]">
+                    <div key={winner.name + currentShowdownIdx} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className={`flex items-center gap-3 ${bgColor} px-5 py-1 rounded-full border ${borderColor} max-w-full overflow-hidden shadow-2xl`}>
                             <Trophy size={14} className={themeColor + " animate-bounce shrink-0"} />
                             <div className="text-sm md:text-xl font-black tracking-tighter flex items-center gap-2 leading-none whitespace-nowrap">
@@ -784,7 +784,7 @@ const App = () => {
                 );
             })()
           ) : (
-            <div className={`flex flex-col gap-3 items-center w-full transition-all duration-500 -translate-y-[70px] md:-translate-y-[60px] ${activeIdx !== heroIdx ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
+            <div className={`flex flex-col gap-4 items-center w-full transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
                 {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
                         <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] hover:bg-white/10 font-black">1/2 POT</button>
