@@ -14,8 +14,8 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-// VERSION: v1.0.13 (Internal Server)
-const VERSION = "v1.0.13";
+// VERSION: v1.0.15 (Internal Server)
+const VERSION = "v1.0.15";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -43,7 +43,6 @@ let disconnectTimeouts = {};
 const serializeRoom = (room) => {
     if (!room) return null;
     const { timer, deck, ignitionTimer, ...rest } = room;
-    // Inject minRaiseAmount for the client slider logic
     return { ...rest, minRaiseAmount: room.highestBet + room.lastRaiseIncrement };
 };
 
@@ -63,11 +62,9 @@ const rankHand = (cards, isAceLow = false, isLowHand = false) => {
   const sorted = [...cards].sort((a, b) => getVal(b.value) - getVal(a.value));
   const ranks = sorted.map(c => getVal(c.value));
   
-  // Hi-Low Qualifier Check: Must have 5 cards <= 8 and no pairs to qualify
   if (isLowHand) {
       const lowRanks = [...new Set(ranks)].filter(r => r <= 8);
       if (lowRanks.length < 5) return { power: Infinity, name: "No Qualifier", cards: [] };
-      // For Low, lower power is better.
   }
 
   const counts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
@@ -122,7 +119,6 @@ const getBestHand = (hole, comm, variantId) => {
             const resH = rankHand([...h, ...b], false, false);
             if (resH.power > bestHigh.power) bestHigh = resH;
             const resL = rankHand([...h, ...b], true, true);
-            // Must qualify (Infinity power means didn't qualify)
             if (resL.power !== Infinity) {
                 if (!bestLow || resL.power < bestLow.power) { bestLow = { ...resL, name: resL.name.replace('High Card', 'Low') }; }
             }
@@ -178,7 +174,6 @@ const updateRoomStrengths = (roomId) => {
                     const rawLowProb = 100 - ((p.lowStrengthPower / (Math.pow(15, 6) * 13)) * 100);
                     p.lowWinProbability = Math.min(100, Math.max(5, rawLowProb * 1.5));
                 } else { 
-                    p.lowStrength = evaluation.low ? evaluation.low.name : null;
                     p.lowWinProbability = 0; 
                 }
             }
@@ -312,10 +307,9 @@ const performAction = (roomId, type, amount) => {
         const diff = room.highestBet - player.currentBet;
         const actualCall = Math.min(diff, player.chips);
         player.chips -= actualCall; player.currentBet += actualCall; player.totalContribution += actualCall;
-        player.lastAction = "CALL"; // Simplification for HUD sync
+        player.lastAction = actualCall > 0 ? "CALL" : "CHECK"; 
         io.to(roomId).emit('log', { name: player.name, action: actualCall > 0 ? `CALLED $${actualCall.toFixed(2)}` : `CHECKED`, type: 'bet' });
     } else if (type === 'RAISE') {
-        // IMPROVEMENT: Enforce Minimum Raise Rule
         const minLegalRaise = room.highestBet + room.lastRaiseIncrement;
         const playerMax = player.chips + player.currentBet;
         const raiseVal = Math.max(amount, minLegalRaise);
@@ -327,7 +321,6 @@ const performAction = (roomId, type, amount) => {
         player.chips -= diff; player.currentBet = cappedRaise; player.totalContribution += diff;
         room.highestBet = cappedRaise; player.lastAction = "RAISE";
         
-        // IMPROVEMENT: Re-open pot logic (Full increments only)
         if (increment >= room.lastRaiseIncrement) {
             room.lastRaiseIncrement = increment;
             room.players.forEach(p => { if (p && p.uid !== player.uid) p.actedThisStreet = false; });
@@ -367,7 +360,7 @@ const moveToNextPlayer = (roomId) => {
 const collectBets = (room) => {
     room.players.forEach(p => { if (p) { room.potData[0].amount += p.currentBet; p.currentBet = 0; p.actedThisStreet = false; } });
     room.highestBet = 0;
-    room.lastRaiseIncrement = Number(room.bb); // Reset increment for new street
+    room.lastRaiseIncrement = Number(room.bb);
 };
 
 const nextPhase = (roomId) => {
