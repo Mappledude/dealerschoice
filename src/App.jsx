@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v2.1.6-PRO";
+const VERSION = "v2.1.7-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -26,11 +26,13 @@ const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN',
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
+// LANDSCAPE positions (Desktop) - Pushed to the extreme edges
 const LANDSCAPE_POSITIONS = [
   { x: 50, y: 98 }, { x: 10, y: 85 }, { x: 2,  y: 50 }, { x: 10, y: 15 }, { x: 30, y: 2  },
   { x: 50, y: 0  }, { x: 70, y: 2  }, { x: 90, y: 15 }, { x: 98, y: 50 }, { x: 90, y: 85 }
 ];
 
+// PORTRAIT positions (Mobile) - Optimized for vertical stadium and edge-pushed
 const PORTRAIT_POSITIONS = [
   { x: 50, y: 98 }, { x: 15, y: 90 }, { x: 2,  y: 65 }, { x: 2,  y: 35 }, { x: 15, y: 10 },
   { x: 50, y: 2  }, { x: 85, y: 10 }, { x: 98, y: 35 }, { x: 98, y: 65 }, { x: 85, y: 90 }
@@ -68,21 +70,16 @@ const getPlayerIntelColor = (name) => {
 
 const formatHandStrength = (str, currentPhase) => {
   if (!str || str === 'Analysing...' || str === '---') return str;
-  if (currentPhase === PHASES.PRE_FLOP) return 'Pre-flop';
+  // Strictly enforce "Pre-flop" for pre-flop phase or uncontested pre-flop states
+  if (currentPhase === PHASES.PRE_FLOP || str.toUpperCase() === "UNCONTESTED") return 'Pre-flop';
   
-  // Strip specific cards (e.g., "Two Pair, Aces and Kings" -> "Two Pair")
-  let s = str.split(',')[0].toUpperCase();
-  // Strip "of" (e.g., "Pair of Aces" -> "Pair")
-  s = s.split(' OF ')[0];
-  
+  let s = str.toUpperCase();
   s = s.replace("THREE OF A KIND", "3 of a KIND");
   s = s.replace("FOUR OF A KIND", "4 of a KIND");
   s = s.replace("FIVE OF A KIND", "5 of a KIND");
   s = s.replace("TWO PAIR", "2 PAIR");
   s = s.replace("STRAIGHT FLUSH", "STR FLUSH");
   s = s.replace("HIGH CARD", "HIGH");
-  
-  if (s === "UNCONTESTED") return "Pre-flop";
   
   return s;
 };
@@ -238,45 +235,51 @@ const App = () => {
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 });
 
-  // USER CALIBRATION DEFAULTS
   const [visuals, setVisuals] = useState({
-    heroCardScale: 4.5, heroCardY: 0, oppCardScale: 1.0, oppCardY: -31,
-    commCardScale: 4.0, commCardY: 5, betScale: 4.0, betY: 215,
-    badgeY: 85, footerHeight: 260, tableZoom: 0.6, holeCardFan: 32
+    heroCardScale: 4.0, heroCardY: 22, oppCardScale: 1.0, oppCardY: -31,
+    commCardScale: 1.8, commCardY: -7, betScale: 2.0, betY: 47,
+    badgeY: 85, footerHeight: 270, tableZoom: 0.85, holeCardFan: 25
   });
 
   const logEndRef = useRef(null);
 
-  // FLOP BANNER LOGIC
-  useEffect(() => {
-    let startTimer;
-    let endTimer;
-
-    if (phase === PHASES.FLOP) {
-      startTimer = setTimeout(() => {
-        setShowBanner(true);
-        endTimer = setTimeout(() => setShowBanner(false), 1500);
-      }, 2000);
-    } else {
-      setShowBanner(false);
-    }
-
-    return () => {
-      clearTimeout(startTimer);
-      clearTimeout(endTimer);
-    };
-  }, [phase]);
-
-  // Orientation Sync
+  // Resize listener strictly implementing requested defaults for mobile/portrait
   useEffect(() => {
     const handleResize = () => {
       const portrait = window.innerHeight > window.innerWidth;
       setIsPortrait(portrait);
-      // We keep the calibrated zoom/scale but let zoom scale slightly for portrait comfort
-      setVisuals(prev => ({
-        ...prev,
-        tableZoom: portrait ? 0.75 : 0.6 
-      }));
+      if (portrait) {
+        setVisuals({
+          tableZoom: 0.6,
+          footerHeight: 260,
+          heroCardScale: 4.5,
+          heroCardY: 0,
+          holeCardFan: 32,
+          betScale: 4.0,
+          betY: 215,
+          commCardScale: 4.0,
+          commCardY: 5,
+          oppCardScale: 1.0, 
+          oppCardY: -31,
+          badgeY: 85
+        });
+      } else {
+        // Landscape defaults
+        setVisuals({
+          tableZoom: 0.85,
+          footerHeight: 270,
+          heroCardScale: 4.0,
+          heroCardY: 22,
+          holeCardFan: 25,
+          betScale: 2.0,
+          betY: 47,
+          commCardScale: 1.8,
+          commCardY: -7,
+          oppCardScale: 1.0,
+          oppCardY: -31,
+          badgeY: 85
+        });
+      }
     };
     window.addEventListener('resize', handleResize);
     handleResize();
@@ -727,7 +730,6 @@ const App = () => {
         )}
 
         <div style={{ transform: `scale(${visuals.tableZoom})` }} className={`relative w-full max-w-[1400px] flex items-center justify-center transition-all duration-500 ${isPortrait ? 'aspect-[10/16]' : 'aspect-[18/9]'}`}>
-            {/* STADIUM TABLE SHAPE */}
             <div className={`absolute inset-0 bg-[#0f3d2e]/40 border-[1.5vw] border-slate-900 shadow-[inset_0_0_10vw_rgba(0,0,0,0.8)] ${isPortrait ? 'rounded-[15vw]' : 'rounded-[4vw]'}`} />
             
             <div className="absolute inset-0 z-20 pointer-events-none font-black">
@@ -773,6 +775,7 @@ const App = () => {
                 )}
               </div>
 
+              {/* Tighter gap logic for board cards */}
               <div className={`flex gap-1 ${isPortrait ? 'mt-8 scale-125' : 'mt-6'}`} style={{ transform: `scale(${visuals.commCardScale}) translateY(${visuals.commCardY}px)` }}>
                 {community.map((c, j) => {
                   const isRed = c.suit === '♥' || c.suit === '♦';
@@ -831,7 +834,7 @@ const App = () => {
              )}
 
              {phase !== PHASES.IDLE && (
-               <div className="flex flex-col gap-1 md:gap-2 w-full mt-1.5">
+               <div className="flex flex-col gap-1 md:gap-2 w-full mt-[-6px]">
                   <div className="flex flex-col gap-1 md:gap-2 w-full">
                     {/* Top Row: Multipliers or All-In (Only active during turn) */}
                     <div className={`flex gap-1 w-full font-black uppercase transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-20 pointer-events-none' : ''}`}>
@@ -842,7 +845,6 @@ const App = () => {
 
                     {/* Bottom Row: Main actions & Pre-action Queue */}
                     <div className="flex gap-1.5 md:gap-2 w-full">
-                      {/* FOLD / PRE-FOLD */}
                       <button 
                         onClick={() => activeIdx === heroIdx ? handleAction('FOLD') : setQueuedAction(queuedAction === 'FOLD' ? null : 'FOLD')} 
                         className={`flex-1 border-2 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black transition-all shadow-xl uppercase tracking-widest
@@ -851,7 +853,6 @@ const App = () => {
                         FOLD {queuedAction === 'FOLD' && '✓'}
                       </button>
 
-                      {/* CALL / PRE-CALL */}
                       <button 
                         onClick={() => activeIdx === heroIdx ? handleAction('CALL') : setQueuedAction(queuedAction === 'CALL' ? null : 'CALL')} 
                         className={`flex-1 border-2 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black transition-all shadow-xl uppercase tracking-widest px-1 truncate
@@ -861,7 +862,6 @@ const App = () => {
                         {queuedAction === 'CALL' && ' ✓'}
                       </button>
 
-                      {/* RAISE (Only active during turn) */}
                       <div className={`flex-[2] flex bg-black/60 border-2 border-white/20 rounded-xl overflow-hidden shadow-inner font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 pointer-events-none' : ''}`}>
                         <div className="flex items-center px-1.5 md:px-4 text-emerald-400 text-sm md:text-2xl font-mono">$</div>
                         <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj?.chips || 0) + Number(heroPlayerObj?.currentBet || 0), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center text-sm md:text-3xl outline-none font-mono text-white p-1 md:p-2" />
