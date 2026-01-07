@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v2.0.9-PRO";
+const VERSION = "v2.1.2-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -204,6 +204,7 @@ const App = () => {
   const [pendingVariantId, setPendingVariantId] = useState('HOLDEM');
   const [nuclearConfirm, setNuclearConfirm] = useState(false);
   const [showBanner, setShowBanner] = useState(false); 
+  const [queuedAction, setQueuedAction] = useState(null);
 
   const [pots, setPots] = useState([]); 
 
@@ -290,6 +291,10 @@ const App = () => {
     }
   };
 
+  const handleAction = useCallback((type, amt = 0) => {
+    socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(amt || raiseInput) : 0 });
+  }, [currentRoomId, raiseInput]);
+
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
     socket.on('initialDataResponse', (data) => {
@@ -303,7 +308,10 @@ const App = () => {
           (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); 
           return next; 
         });
-        setPhase(d.phase);
+        setPhase(prev => {
+          if (prev !== d.phase) setQueuedAction(null);
+          return d.phase;
+        });
         setCommunity(d.community || []);
         setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
         setActiveIdx(d.activeIdx ?? -1);
@@ -331,7 +339,6 @@ const App = () => {
       setCurrentView(VIEWS.LOBBY); 
       socket.emit('getInitialData'); 
     });
-    // Forced Logout Listener
     socket.on('forcedLogout', (data) => {
       setUserProfile(null);
       setCurrentView(VIEWS.LOGIN);
@@ -350,6 +357,16 @@ const App = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (activeIdx === heroIdx && queuedAction && phase !== PHASES.IDLE && heroIdx !== -1) {
+      const timer = setTimeout(() => {
+        handleAction(queuedAction);
+        setQueuedAction(null);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [activeIdx, heroIdx, queuedAction, phase, handleAction]);
+
   const handleLogin = useCallback(() => {
     const normalizedPassword = passwordInput.trim().toLowerCase();
     if (normalizedPassword === 'pass') {
@@ -360,10 +377,6 @@ const App = () => {
         socket.emit('playerLogin', { password: normalizedPassword });
     }
   }, [passwordInput]);
-
-  const handleAction = useCallback((type, amt = 0) => {
-    socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(amt || raiseInput) : 0 });
-  }, [currentRoomId, raiseInput]);
 
   const handleAllIn = useCallback(() => {
     if (!heroPlayerObj) return;
@@ -679,7 +692,9 @@ const App = () => {
         )}
 
         <div style={{ transform: `scale(${visuals.tableZoom})` }} className="relative w-full max-w-[1400px] aspect-[18/9] flex items-center justify-center transition-transform duration-500">
-            <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[2vw] border-slate-900 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)]" />
+            {/* STADIUM TABLE SHAPE */}
+            <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[4vw] border-[1.5vw] border-slate-900 shadow-[inset_0_0_10vw_rgba(0,0,0,0.8)]" />
+            
             <div className="absolute inset-0 z-20 pointer-events-none font-black">
               {players.map((p, i) => { 
                 if (!p) return null; 
@@ -691,22 +706,30 @@ const App = () => {
             <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none">
               <div className="flex flex-col-reverse items-center gap-2">
                 {pots.length > 0 ? (
-                  pots.map((pot, pidx) => (
-                    <div key={pidx} className={`flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-500`} style={{ opacity: (phase === PHASES.SHOWDOWN && currentWinner?.potIdx !== pidx) ? 0.3 : 1 }}>
-                      <div className="flex items-center gap-2">
-                        <div className="flex -space-x-1.5">
-                          {pot.eligibleUids.map(uid => {
-                             const p = players.find(pl => pl && pl.uid === uid);
-                             return p ? <div key={uid} className="w-4 h-4 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-[6px] font-black text-white/60">{p.name[0]}</div> : null;
-                          })}
-                        </div>
-                        <div className={`text-[2vw] md:text-[3.5vw] font-black ${pot.isMain ? 'text-yellow-400' : 'text-cyan-400'} font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]`}>
-                          ${pot.amount.toFixed(2)}
-                        </div>
+                  pots.length === 1 ? (
+                    <div className="flex flex-col items-center animate-in fade-in duration-500">
+                      <div className="text-[6vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+                        ${pots[0].amount.toFixed(2)}
                       </div>
-                      <span className="text-[8px] md:text-[10px] text-white/40 uppercase tracking-[0.2em]">{pot.isMain ? 'Main Pot' : `Side Pot #${pidx + 1}`}</span>
                     </div>
-                  ))
+                  ) : (
+                    pots.map((pot, pidx) => (
+                      <div key={pidx} className={`flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-500`} style={{ opacity: (phase === PHASES.SHOWDOWN && currentWinner?.potIdx !== pidx) ? 0.3 : 1 }}>
+                        <div className="flex items-center gap-2">
+                          <div className="flex -space-x-1.5">
+                            {pot.eligibleUids.map(uid => {
+                               const p = players.find(pl => pl && pl.uid === uid);
+                               return p ? <div key={uid} className="w-4 h-4 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-[6px] font-black text-white/60">{p.name[0]}</div> : null;
+                            })}
+                          </div>
+                          <div className={`text-[2vw] md:text-[3.5vw] font-black ${pot.isMain ? 'text-yellow-400' : 'text-cyan-400'} font-mono tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]`}>
+                            ${pot.amount.toFixed(2)}
+                          </div>
+                        </div>
+                        <span className="text-[8px] md:text-[10px] text-white/40 uppercase tracking-[0.2em]">{pot.isMain ? 'Main Pot' : `Side Pot #${pidx + 1}`}</span>
+                      </div>
+                    ))
+                  )
                 ) : (
                   <div className="text-[6vw] font-black text-yellow-400 font-mono tracking-tighter drop-shadow-[0_0_30px_rgba(0,0,0,0.8)] animate-pulse">
                     $0.00
@@ -730,7 +753,7 @@ const App = () => {
         </div>
       </main>
 
-      <footer style={{ height: visuals.footerHeight }} className="bg-black/95 border-t border-white/10 z-[100] pt-2 px-2 pb-2 md:p-8 shrink-0 shadow-[0_-15px_50px_rgba(0,0,0,0.7)] flex flex-col items-center justify-start">
+      <footer style={{ height: visuals.footerHeight }} className="bg-black/95 border-t border-white/10 z-[100] pt-2 px-2 pb-2 md:p-8 shrink-0 shadow-[0_-15px_50px_rgba(0,0,0,0.7)] flex flex-col items-center justify-start overflow-hidden">
         {phase === PHASES.SHOWDOWN && currentWinner ? (
           <div key={currentShowdownIdx} className="h-full flex flex-col items-center justify-center animate-in zoom-in duration-700">
             <div className="flex items-center gap-2 md:gap-4 text-yellow-400 text-[2.6vw] sm:text-lg md:text-4xl mb-2 md:mb-4 rank-shimmer font-black italic tracking-tighter uppercase text-center whitespace-nowrap">
@@ -750,10 +773,9 @@ const App = () => {
             </div>
           </div>
         ) : (
-          <div className={`flex flex-col items-center w-full max-w-4xl mx-auto transition-all duration-500 ${activeIdx !== heroIdx && phase !== PHASES.IDLE ? 'opacity-30 grayscale pointer-events-none scale-95' : ''}`}>
-             
+          <div className="flex flex-col items-center w-full max-w-4xl mx-auto transition-all duration-500">
              {heroPlayerObj && phase !== PHASES.IDLE && (
-               <div className="flex justify-between w-full px-2 mt-1">
+               <div className="flex justify-between w-full px-2 mt-0">
                   <div className="flex flex-col items-start min-w-[120px] md:min-w-[140px]">
                     {activeVariant?.id === 'HILOW' && (
                       <>
@@ -774,21 +796,41 @@ const App = () => {
 
              {phase !== PHASES.IDLE && (
                <div className="flex flex-col gap-1 md:gap-2 w-full mt-1.5">
-                  <div className="flex gap-1 w-full font-black uppercase">
-                    <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">1/2 POT</button>
-                    <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">POT</button>
-                    <button onClick={handleAllIn} className="flex-1 h-7 md:h-10 bg-red-900/40 border border-red-500/50 rounded-lg text-[8px] md:text-xs text-red-500 hover:bg-red-600 hover:text-white transition-all font-black">ALL-IN</button>
-                  </div>
+                  {/* PRE-ACTION QUEUING UI */}
+                  {activeIdx !== heroIdx && phase !== PHASES.IDLE && heroIdx !== -1 && (
+                    <div className="flex gap-1 w-full animate-in slide-in-from-bottom-2 duration-300">
+                      <button onClick={() => setQueuedAction(queuedAction === 'FOLD' ? null : 'FOLD')} className={`flex-1 h-10 rounded-xl text-[10px] font-black border-2 transition-all ${queuedAction === 'FOLD' ? 'bg-red-600 border-white text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-red-950/20 border-red-500/30 text-red-500'}`}>
+                        FOLD {queuedAction === 'FOLD' && '✓'}
+                      </button>
+                      <button onClick={() => setQueuedAction(queuedAction === 'CALL' ? null : 'CALL')} className={`flex-1 h-10 rounded-xl text-[10px] font-black border-2 transition-all ${queuedAction === 'CALL' ? 'bg-indigo-600 border-white text-white shadow-[0_0_15px_rgba(129,140,248,0.5)]' : 'bg-indigo-950/20 border-indigo-400/30 text-indigo-400'}`}>
+                        CHECK/CALL {queuedAction === 'CALL' && '✓'}
+                      </button>
+                      {(highestBet <= (heroPlayerObj?.currentBet || 0)) && (
+                        <button onClick={() => setQueuedAction(queuedAction === 'CHECK_ONLY' ? null : 'CHECK_ONLY')} className={`flex-1 h-10 rounded-xl text-[10px] font-black border-2 transition-all ${queuedAction === 'CHECK_ONLY' ? 'bg-emerald-600 border-white text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-emerald-950/20 border-emerald-400/30 text-emerald-400'}`}>
+                          CHECK ONLY {queuedAction === 'CHECK_ONLY' && '✓'}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
-                  <div className="flex gap-1.5 md:gap-2 w-full">
-                    <button onClick={() => handleAction('FOLD')} className="flex-1 bg-red-950/80 border-2 border-red-500/50 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black hover:bg-red-600 hover:text-white transition-all shadow-xl uppercase tracking-widest">FOLD</button>
-                    <button onClick={() => handleAction('CALL')} className="flex-1 bg-indigo-900/80 border-2 border-indigo-400/50 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl uppercase tracking-widest px-1 truncate">
-                      {highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toFixed(2)}` : 'CHECK'}
-                    </button>
-                    <div className="flex-[2] flex bg-black/60 border-2 border-white/20 rounded-xl overflow-hidden shadow-inner font-black">
-                      <div className="flex items-center px-1.5 md:px-4 text-emerald-400 text-sm md:text-2xl font-mono">$</div>
-                      <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj?.chips || 0) + Number(heroPlayerObj?.currentBet || 0), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center text-sm md:text-3xl outline-none font-mono text-white p-1 md:p-2" />
-                      <button onClick={() => handleAction('RAISE')} className="bg-emerald-600 px-3 md:px-8 text-[9px] md:text-xl font-black hover:bg-emerald-400 hover:text-black transition-all uppercase tracking-tighter shadow-lg flex items-center gap-1 md:gap-2 shrink-0"><Zap size={14}/> RAISE</button>
+                  {/* ACTIVE ACTION UI */}
+                  <div className={`flex flex-col gap-1 md:gap-2 w-full transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-30 grayscale pointer-events-none scale-95 origin-bottom' : ''}`}>
+                    <div className="flex gap-1 w-full font-black uppercase">
+                      <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">1/2 POT</button>
+                      <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">POT</button>
+                      <button onClick={handleAllIn} className="flex-1 h-7 md:h-10 bg-red-900/40 border border-red-500/50 rounded-lg text-[8px] md:text-xs text-red-500 hover:bg-red-600 hover:text-white transition-all font-black">ALL-IN</button>
+                    </div>
+
+                    <div className="flex gap-1.5 md:gap-2 w-full">
+                      <button onClick={() => handleAction('FOLD')} className="flex-1 bg-red-950/80 border-2 border-red-500/50 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black hover:bg-red-600 hover:text-white transition-all shadow-xl uppercase tracking-widest">FOLD</button>
+                      <button onClick={() => handleAction('CALL')} className="flex-1 bg-indigo-900/80 border-2 border-indigo-400/50 py-2.5 md:py-4 rounded-xl text-[10px] md:text-lg font-black hover:bg-indigo-500 hover:text-white transition-all shadow-xl uppercase tracking-widest px-1 truncate">
+                        {highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toFixed(2)}` : 'CHECK'}
+                      </button>
+                      <div className="flex-[2] flex bg-black/60 border-2 border-white/20 rounded-xl overflow-hidden shadow-inner font-black">
+                        <div className="flex items-center px-1.5 md:px-4 text-emerald-400 text-sm md:text-2xl font-mono">$</div>
+                        <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.min(Number(heroPlayerObj?.chips || 0) + Number(heroPlayerObj?.currentBet || 0), Math.max(0, Number(e.target.value))))} className="w-full bg-transparent text-center text-sm md:text-3xl outline-none font-mono text-white p-1 md:p-2" />
+                        <button onClick={() => handleAction('RAISE')} className="bg-emerald-600 px-3 md:px-8 text-[9px] md:text-xl font-black hover:bg-emerald-400 hover:text-black transition-all uppercase tracking-tighter shadow-lg flex items-center gap-1 md:gap-2 shrink-0"><Zap size={14}/> RAISE</button>
+                      </div>
                     </div>
                   </div>
                </div>
@@ -872,6 +914,7 @@ const App = () => {
           background-size: 200% auto;
           animation: red-black-shift 1s linear infinite;
         }
+        .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #fbbf24 transparent; }
         .custom-scrollbar::-webkit-scrollbar { width: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #fbbf24; border-radius: 4px; }
