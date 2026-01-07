@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v2.0.8-PRO";
+const VERSION = "v2.0.5-PRO";
 const APP_NAME = "Dealers Choice";
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -25,11 +25,11 @@ const variantNames = {
   MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks"
 };
 
-// Curated list of human names for bots
+// Human names for bots
 const BOT_NAMES = [
   "Doyle", "Stu", "Phil", "Johnny", "Vanessa", "Chris", "Annie", "Erik", "Daniel", 
   "Gus", "Tom", "Scotty", "Huck", "Jennifer", "Barry", "Justin", "Liv", "Maria", 
-  "Antonio", "Vic", "Fedor", "Bryn", "Negreanu", "Ivey", "Hellmuth", "Fidua", "Galfond"
+  "Antonio", "Vic", "Fedor", "Bryn", "Negreanu", "Ivey", "Hellmuth"
 ];
 
 let profiles = []; 
@@ -94,10 +94,11 @@ const rankHand = (cards, isAceLow = false, isLowHand = false) => {
 };
 
 const getBestHand = (hole, comm, variantId) => {
+  // CRASH PREVENTION: Ensure default high hand has a cards array
   const defaultHigh = { power: 0, name: "Uncontested", cards: hole || [] };
   if (!hole || hole.length === 0) return { high: defaultHigh, low: null };
   
-  // If pre-flop or early win, return hole cards as the rank
+  // CRASH PREVENTION: If pre-flop or early win, return hole cards as the rank
   if (!comm || comm.length < 3) return { high: defaultHigh, low: null };
   
   let bestHigh = { power: -1, name: "Pre-flop", cards: hole };
@@ -158,6 +159,9 @@ const getBestHand = (hole, comm, variantId) => {
           if (bestHigh.power === -1 || res.power < bestHigh.power) bestHigh = res;
       });
   }
+
+  // Final fallback check to ensure winners always have a cards array
+  if (!bestHigh.cards) bestHigh.cards = [];
   return { high: bestHigh, low: bestLow };
 };
 
@@ -269,7 +273,7 @@ const processShowdown = (roomId) => {
     });
 
     room.showdownWinners = allShowdownWinners;
-    // CRASH FIX: Safe flatMap with default empty array and id check
+    // CRASH FIX: Added defensive mapping and filter for c.id
     room.winning5Ids = [...new Set(allShowdownWinners.flatMap(w => (w.hand || []).map(c => c ? c.id : null).filter(id => id)))];
     room.phase = PHASES.SHOWDOWN;
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
