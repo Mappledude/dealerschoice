@@ -18,7 +18,7 @@ const VM = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10
 const V_LABEL = { 1: 'Ace(Low)', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'Jack', 12: 'Queen', 13: 'King', 14: 'Ace' };
 
 const TURN_TIME_LIMIT = 24; 
-const SECURE_SEAT_TIME = 3 * 60 * 1000; // 3 Minutes
+const SECURE_SEAT_TIME = 3 * 60 * 1000; 
 
 const holeCardsMap = { HOLDEM: 2, OMAHA: 4, PINEAPPLE: 3, MUFLIS: 2, HILOW: 4, REDSBLACKS: 4 };
 const variantNames = {
@@ -30,15 +30,13 @@ const BOT_NAMES = ["Marshall", "Eleanor", "Cassidy", "Silas", "Julian", "Beatrix
 
 let profiles = []; 
 let rooms = {};
-let disconnectTimeouts = {}; // Track security timers
+let disconnectTimeouts = {}; 
 
 const serializeRoom = (room) => {
     if (!room) return null;
     const { timer, deck, ignitionTimer, ...rest } = room;
     return rest;
 };
-
-// ... (combinations, rankHand, getBestHand, updateRoomStrengths, processShowdown, performAction, moveToNextPlayer, collectBets, nextPhase, triggerBotTurn, startTurnTimer, runIgnition remain logically consistent)
 
 const combinations = (array, k) => {
   let result = [];
@@ -429,7 +427,6 @@ const removePlayerGlobally = (uid, force = false) => {
         if (idx !== -1) {
             const player = room.players[idx];
             if (force || player.isBot) {
-                // Final hard removal
                 const prof = profiles.find(x => x.uid === uid);
                 if (prof) prof.chips += (Number(player.chips) + Number(player.currentBet || 0));
                 if (room.activeIdx === idx) { moveToNextPlayer(room.id); }
@@ -446,7 +443,6 @@ const removePlayerGlobally = (uid, force = false) => {
                 }
                 io.to(room.id).emit('roomUpdate', serializeRoom(room));
             } else {
-                // Soft secure: mark disconnected
                 player.isDisconnected = true;
                 io.to(room.id).emit('log', { name: "SYSTEM", action: `${player.name.toUpperCase()} DISCONNECTED. SEAT SECURED FOR 3 MINS.`, type: 'phase' });
                 io.to(room.id).emit('roomUpdate', serializeRoom(room));
@@ -465,15 +461,26 @@ const removePlayerGlobally = (uid, force = false) => {
 io.on('connection', (socket) => {
   let seatedUid = null;
   socket.on('getInitialData', () => socket.emit('initialDataResponse', { profiles, rooms: Object.values(rooms).map(serializeRoom) }));
+  
   socket.on('playerLogin', ({ password }) => {
     const profile = profiles.find(p => p.password === password);
-    if (profile) { seatedUid = profile.uid; socket.emit('loginSuccess', profile); }
+    if (profile) {
+      seatedUid = profile.uid;
+      let activeRoomId = null;
+      for (const room of Object.values(rooms)) {
+        if (room.players.some(p => p && p.uid === profile.uid)) {
+          activeRoomId = room.id;
+          break;
+        }
+      }
+      socket.emit('loginSuccess', { profile, activeRoomId });
+      socket.emit('initialDataResponse', { profiles, rooms: Object.values(rooms).map(serializeRoom) });
+    }
   });
   
   socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
     const room = rooms[roomId]; if (!room) return callback({ status: 'error' });
     
-    // Check if player is already seated (Secured seat recovery)
     const existingIdx = room.players.findIndex(p => p && p.uid === profile.uid);
     if (existingIdx !== -1) {
         const timeoutKey = `${profile.uid}_${roomId}`;
@@ -484,7 +491,7 @@ io.on('connection', (socket) => {
         room.players[existingIdx].isDisconnected = false;
         seatedUid = profile.uid;
         socket.join(roomId);
-        io.to(roomId).emit('log', { name: String(profile.name), action: 'RE-JOINED THE ARENA (SEAT SECURED)', type: 'phase' });
+        io.to(roomId).emit('log', { name: String(profile.name), action: 'RE-JOINED THE ARENA (SESSION RECOVERED)', type: 'phase' });
         callback({ status: 'ok' });
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
         return;
@@ -555,7 +562,7 @@ io.on('connection', (socket) => {
   socket.on('adminDeleteRoom', (roomId) => { if (rooms[roomId]) { delete rooms[roomId]; io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom)); } });
   socket.on('adminCreateRoom', (data) => { 
     const defaultData = { sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 };
-    rooms[data.id] = { ...defaultData, ...data, players: Array(10).fill(null), phase: PHASES.IDLE, community: [], potData: [{amount:0}], dealerIdx: 0, timeRemaining: 20, gameInProgress: false }; 
+    rooms[data.id] = { ...defaultData, ...data, players: Array(TOTAL_SEATS).fill(null), phase: PHASES.IDLE, community: [], potData: [{amount:0}], dealerIdx: 0, timeRemaining: 20, gameInProgress: false }; 
     io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom)); 
   });
 });
