@@ -10,17 +10,17 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.22
+// VERSION: v1.0.24
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
 const socket = io(SOCKET_URL, { 
   transports: ['websocket', 'polling'],
-  reconnectionAttempts: 5,
+  reconnectionAttempts: 10,
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.22";
+const VERSION = "v1.0.24";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -312,6 +312,15 @@ const App = () => {
   }, [potAmount, players]);
 
   // --- ACTIONS ---
+  const handleForceSync = useCallback(() => {
+    // Aggressive Refresh: Cycle the socket to force a full state dump
+    socket.disconnect().connect();
+    socket.emit('getInitialData');
+    if (currentRoomId && userProfile) {
+      socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 }, (res) => {});
+    }
+  }, [currentRoomId, userProfile]);
+
   const handleAction = useCallback((type, amt = 0) => {
     const finalAmount = amt !== 0 ? amt : raiseInput;
     if (currentRoomId) socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(finalAmount) : 0 });
@@ -506,11 +515,8 @@ const App = () => {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (!socket.connected) socket.connect();
-        socket.emit('getInitialData');
-        if (currentRoomId && userProfile) {
-          socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 }, (res) => {});
-        }
+        // IMPROVEMENT: Aggressive reconnect on app focus
+        handleForceSync();
       }
     };
 
@@ -549,11 +555,10 @@ const App = () => {
         socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log');
         document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentRoomId, userProfile]); 
+  }, [currentRoomId, userProfile, handleForceSync]); 
 
   useEffect(() => {
     if (activeIdx === heroIdx && heroPlayerObj) { 
-        // Sync raise slider to minimum bet ONLY when turn begins
         if (turnInitializedRef.current !== activeIdx) {
           turnInitializedRef.current = activeIdx;
           const minAllowed = minRaiseAmount || (highestBet + bigBlind);
@@ -708,10 +713,10 @@ const App = () => {
       {showRebuyModal && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6">
           <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col gap-10">
-            <h3 className="text-3xl text-center text-indigo-400 uppercase font-black">ARENA RE-BUY</h3>
+            <h3 className="text-3xl text-center text-indigo-400 uppercase font-black">ARENA TOP-UP</h3>
             <div className="space-y-4 font-black text-center uppercase">
               <div className="flex justify-between items-center text-[10px] text-white/40 tracking-[0.2em] font-black"><span>CREDIT AMOUNT</span><span className="text-indigo-400 text-2xl font-mono">${Math.min(rebuyAmount, userProfile?.chips || 0).toLocaleString()}</span></div>
-              <input type="range" min={50} max={userProfile?.chips || 100} step={1} value={rebuyAmount} onChange={(e) => setRebuyAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+              <input type="range" min={1} max={userProfile?.chips || 100} step={1} value={rebuyAmount} onChange={(e) => setRebuyAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
             </div>
             <div className="flex gap-4">
               <button onClick={()=>setShowRebuyModal(false)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl font-black text-xs uppercase">CANCEL</button>
@@ -822,6 +827,16 @@ const App = () => {
 
         <div style={{ transform: `scale(${visuals.tableZoom})` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center">
             <div className="absolute inset-0 bg-[#06080c] rounded-[50%] border-[2px] border-cyan-500/20 shadow-[inset_0_0_100px_rgba(34,211,238,0.1)]" />
+            
+            {/* Manual Sync Button (Mobile Persistence Fix) */}
+            <button 
+              onClick={handleForceSync}
+              className="absolute bottom-6 right-6 z-[150] bg-black/60 border border-white/20 p-3 rounded-full text-white/40 hover:text-white hover:border-white/40 transition-all shadow-xl active:scale-95 group pointer-events-auto"
+              title="Force Sync State"
+            >
+              <RefreshCcw size={20} className="group-active:animate-spin" />
+            </button>
+
             <div className="absolute inset-0 pointer-events-none z-20">
               {(players || []).map((p, i) => { 
                 if (!p) return null; 
@@ -932,7 +947,15 @@ const App = () => {
             })()
           ) : (
             <div className={`flex flex-col gap-4 items-center w-full transition-all duration-500`}>
-                {heroPlayerObj && heroPlayerObj.chips >= bigBlind * 2 && phase !== PHASES.IDLE ? (<>
+                {heroPlayerObj && heroPlayerObj.chips < bigBlind && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN || heroPlayerObj.isFolded || heroPlayerObj.waitingForNextHand) ? (
+                    <div className="flex flex-col items-center gap-4 py-6">
+                        <div className="flex flex-col items-center gap-1">
+                            <span className="text-white/40 tracking-[0.2em] text-xs font-black italic uppercase">Broke in Arena • Funds Available in Wallet</span>
+                            <span className="text-indigo-400/60 text-[10px] uppercase font-black tracking-widest">Your Wallet: ${userProfile?.chips.toLocaleString()}</span>
+                        </div>
+                        <button onClick={()=>{ setRebuyAmount(100); setShowRebuyModal(true); }} className="px-12 py-5 bg-indigo-600 border-2 border-indigo-400 rounded-2xl font-black text-xl hover:scale-105 transition-transform flex items-center gap-3 shadow-[0_0_40px_rgba(79,70,229,0.4)] uppercase"><Coins size={24}/> Re-buy & Continue</button>
+                    </div>
+                ) : heroPlayerObj && heroPlayerObj.chips >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
                         <button 
                             onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} 
@@ -975,12 +998,7 @@ const App = () => {
                             </button>
                         </div>
                     </div>
-                </>) : heroPlayerObj && heroPlayerObj.chips < bigBlind * 2 && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN) ? (
-                    <div className="flex flex-col items-center gap-4 py-6">
-                        <span className="text-white/40 tracking-[0.2em] text-xs font-black italic uppercase">Broke in Arena • Funds Available in Wallet</span>
-                        <button onClick={()=>setShowRebuyModal(true)} className="px-12 py-5 bg-indigo-600 border-2 border-indigo-400 rounded-2xl font-black text-xl hover:scale-105 transition-transform flex items-center gap-3 shadow-[0_0_40px_rgba(79,70,229,0.4)] uppercase"><Coins size={24}/> Re-buy & Continue</button>
-                    </div>
-                ) : (
+                </>) : (
                     <div className="flex flex-col items-center gap-1 py-10"><span className="text-white/10 tracking-[0.8em] text-sm font-black italic animate-pulse">ARENA OBSERVATION</span></div>
                 )}
             </div>
@@ -996,8 +1014,9 @@ const App = () => {
                     <X size={24} className="cursor-pointer text-white/40 hover:text-white" onClick={() => setShowVisualControls(false)}/>
                 </div>
                 <div className="space-y-6">
-                    <button onClick={addBot} className="w-full py-4 bg-indigo-600/60 border border-indigo-400 text-white font-black rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all"><Bot size={18}/> Add Arena Bot</button>
-                    <div className="flex flex-col gap-2">
+                    <button onClick={()=>{ setShowRebuyModal(true); setRebuyAmount(100); }} className="w-full py-4 bg-indigo-600/60 border border-indigo-400 text-white font-black rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all"><Coins size={18}/> Top Up Wallet</button>
+                    <button onClick={addBot} className="w-full py-4 bg-white/5 border border-white/10 text-white font-black rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/10 transition-all"><Bot size={18}/> Add Arena Bot</button>
+                    <div className="flex flex-col gap-2 pt-4 border-t border-white/5">
                         <label className="text-[10px] text-white/60 uppercase tracking-widest font-black">Table Zoom</label>
                         <input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" />
                     </div>
