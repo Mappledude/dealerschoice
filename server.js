@@ -39,7 +39,6 @@ const serializeRoom = (room) => {
     return rest;
 };
 
-// ... (Utility functions combinations, rankHand, getBestHand, updateRoomStrengths remain the same)
 const combinations = (array, k) => {
   let result = [];
   const fn = (start, prev) => {
@@ -432,7 +431,6 @@ const removePlayerGlobally = (uid) => {
             if (room.activeIdx === idx) { moveToNextPlayer(room.id); }
             room.players[idx] = null;
             
-            // AUTO-BOOT BOTS IF NO HUMANS REMAIN
             const humanCount = room.players.filter(pl => pl && !pl.isBot).length;
             if (humanCount === 0) {
                 if (room.timer) clearInterval(room.timer);
@@ -474,17 +472,6 @@ io.on('connection', (socket) => {
     io.emit('profilesUpdate', profiles);
     if (room.phase === PHASES.IDLE && room.players.filter(Boolean).length >= 2 && !room.ignitionTimer) {
         room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000);
-    }
-  });
-
-  socket.on('playerRebuy', ({ roomId, uid, amount }) => {
-    const room = rooms[roomId]; const profile = profiles.find(p => p.uid === uid);
-    if (!room || !profile || profile.chips < Number(amount)) return;
-    const player = room.players.find(p => p && p.uid === uid);
-    if (player && player.chips <= 1) {
-        profile.chips -= Number(amount); player.chips += Number(amount); player.waitingForNextHand = room.gameInProgress;
-        io.to(roomId).emit('log', { name: player.name, action: `REBOUGHT FOR $${amount.toFixed(2)}`, type: 'phase' });
-        io.to(roomId).emit('roomUpdate', serializeRoom(room)); io.emit('profilesUpdate', profiles);
     }
   });
 
