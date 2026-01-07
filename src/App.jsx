@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.30
+// VERSION: v1.0.32
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.30";
+const VERSION = "v1.0.32";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -33,6 +33,16 @@ const VARIANT_COLORS = {
   MUFLIS: '#ef4444',      // Red
   HILOW: '#f59e0b',       // Amber
   REDSBLACKS: '#f43f5e'   // Rose
+};
+
+// Helper for HUD Contrast
+const getContrastColor = (hex) => {
+  if (!hex) return 'white';
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  return (yiq >= 128) ? 'black' : 'white';
 };
 
 const NEON_PALETTE = [
@@ -59,7 +69,7 @@ const VARIANTS = {
   }, 
   OMAHA: { 
     id: 'OMAHA', 
-    name: 'Omaha High', 
+    name: 'Omaha', 
     rules: ["Each player gets 4 hole cards.", "You MUST use EXACTLY 2 hole cards and 3 community cards.", "Standard high hand rankings apply."] 
   }, 
   PINEAPPLE: { 
@@ -69,7 +79,7 @@ const VARIANTS = {
   }, 
   MUFLIS: { 
     id: 'MUFLIS', 
-    name: 'Muflis (Lowball)', 
+    name: 'Muflis', 
     rules: ["Worst hand wins the pot.", "Ace is the lowest card (value 1).", "The 'best' hand is the one that would normally be the weakest."] 
   }, 
   HILOW: { 
@@ -130,7 +140,6 @@ const Seat = ({
     const vecX = 50 - displayPos.x;
     const vecY = 50 - displayPos.y;
     
-    // Improved scaling for desktop using VH to prevent giant cards
     const cardInwardX = isMobile ? vecX * 0.15 : vecX * 0.12;
     const cardInwardY = isMobile ? vecY * 0.20 : vecY * 0.18;
 
@@ -795,12 +804,22 @@ const App = () => {
 
       <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[45px] md:h-[55px]">
         <div className="flex-1 flex items-center">
+            {/* IMPROVEMENT: Dynamically colored variant indicator with street-change animation */}
             <button 
                 onClick={()=>setShowRulesModal(true)}
-                className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-300 relative overflow-hidden group active:scale-95 ${handAttention ? 'animate-hand-trigger border-white' : 'border-white/10'} ${!handAttention && idleAlternator ? 'animate-bounce-subtle' : ''}`}>
-              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <span className="text-cyan-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold flex items-center gap-1">This Hand is: <HelpCircle size={8}/></span>
-              <span className="text-white text-xs md:text-sm font-black truncate">{String(activeVariant?.name)}</span>
+                style={{ backgroundColor: VARIANT_COLORS[activeVariant?.id || 'HOLDEM'] || '#1e293b' }}
+                className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'} ${!handAttention && idleAlternator ? 'animate-bounce-subtle' : ''}`}>
+              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <span 
+                style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }}
+                className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-black flex items-center gap-1 opacity-70">
+                  This Hand: <HelpCircle size={8}/>
+              </span>
+              <span 
+                style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }}
+                className="text-xs md:text-sm font-black truncate drop-shadow-sm">
+                  {String(activeVariant?.name)}
+              </span>
             </button>
         </div>
         <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
