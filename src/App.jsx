@@ -112,9 +112,10 @@ const Seat = ({
     const currentCardScale = isHero ? visuals.heroCardScale : visuals.oppCardScale;
     const currentCardY = isHero ? visuals.heroCardY : visuals.oppCardY;
 
-    const timeRatio = timeRemaining / 15;
-    const timerColor = timeRemaining < 5 ? 'rgb(239, 68, 68)' : timeRemaining < 10 ? 'rgb(245, 158, 11)' : 'rgb(34, 211, 238)';
-    const isUrgent = timeRemaining < 5 && isActiveTurn;
+    // Timer calculation for 22 seconds
+    const timeRatio = timeRemaining / 22;
+    const timerColor = timeRemaining < 6 ? '#ef4444' : timeRemaining < 12 ? '#f59e0b' : '#22d3ee';
+    const isUrgent = timeRemaining < 6 && isActiveTurn;
 
     return (
         <div 
@@ -155,38 +156,38 @@ const Seat = ({
             <div 
                 style={{ transform: `translateY(${visuals.badgeY}px)` }}
                 className={`relative z-50 flex flex-col items-center p-1 rounded-xl border bg-slate-900/95 backdrop-blur-md transition-all duration-300 min-w-[84px] md:min-w-[180px] shadow-2xl overflow-hidden
-                  ${isActiveTurn ? 'border-cyan-400/50 ring-1 ring-cyan-400/20 scale-105 shadow-[0_0_200px_rgba(34,211,238,0.1)]' : 'border-white/10'} 
+                  ${isActiveTurn ? 'border-transparent ring-2 ring-white/5 scale-105' : 'border-white/10'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 animate-pulse-glow' : ''}`}
             >
                 {isActiveTurn && timeRemaining > 0 && (
                   <>
-                    <div 
-                      className="absolute inset-0 z-[-1] transition-all duration-1000 linear" 
-                      style={{ 
-                        background: `linear-gradient(to top, ${timerColor}22, transparent)`,
-                        height: `${(1 - timeRatio) * 100}%`,
-                        top: 'auto',
-                        bottom: 0
-                      }} 
-                    />
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                    <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+                    {/* ENHANCED NEON TIMER SVG */}
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" preserveAspectRatio="none">
+                      <filter id="timerGlow">
+                        <feGaussianBlur stdDeviation="2" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
                       <rect 
                         x="0" y="0" width="100%" height="100%" 
                         fill="none" 
                         stroke={timerColor} 
-                        strokeWidth="4" 
+                        strokeWidth="6" 
+                        filter="url(#timerGlow)"
                         className="transition-all duration-1000 linear"
                         style={{
-                          strokeDasharray: '1000',
-                          strokeDashoffset: (1000 - (timeRatio * 1000)).toString()
+                          strokeDasharray: '600',
+                          strokeDashoffset: (600 - (timeRatio * 600)).toString(),
+                          opacity: 0.8
                         }}
                       />
                     </svg>
                     <div 
-                      className="absolute top-1 right-2 text-[10px] font-mono font-black animate-pulse" 
-                      style={{ color: timerColor }}
+                      className="absolute top-1 right-1.5 w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-black/60 border border-white/10 backdrop-blur-sm z-20"
                     >
-                      {timeRemaining}s
+                      <span className="text-[10px] md:text-sm font-mono font-black animate-pulse" style={{ color: timerColor }}>
+                        {timeRemaining}
+                      </span>
                     </div>
                   </>
                 )}
@@ -246,7 +247,7 @@ const App = () => {
   const [winning5Ids, setWinning5Ids] = useState([]);
   const [logs, setLogs] = useState([{ id: 'init', time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), name: 'SYSTEM', action: 'INTELLIGENCE LINK ESTABLISHED', type: 'phase' }]);
   const [potAmount, setPotAmount] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(15); 
+  const [timeRemaining, setTimeRemaining] = useState(22); // Updated to 22s
   const [activeTables, setActiveTables] = useState([]);
   const [allProfiles, setAllProfiles] = useState([]);
   const [selectedTableForJoin, setSelectedTableForJoin] = useState(null);
@@ -752,70 +753,70 @@ const App = () => {
                       {isExpanded && (
                         <div className="flex flex-col border-t border-white/5 bg-black/60 animate-in slide-in-from-top-2 duration-300">
                           {hand.actions.map(l => {
-                             let tag = "";
-                             let colorClass = "bg-white/5 text-white/50 border-white/10";
-                             const act = l.action.toUpperCase();
-                             
-                             if (l.type === 'win' || act.includes('WON')) { 
-                               tag = "[SHOWDOWN]"; 
-                               colorClass = "bg-purple-500/20 text-purple-400 border-purple-500/30"; 
-                             }
-                             else if (l.type === 'variant' || act.includes('CHOSEN') || act.includes('CHOICE') || act.includes('DEALER CHOICE')) { 
-                               tag = "[DEALER'S CHOICE]"; 
-                               colorClass = "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"; 
-                             }
-                             else if (act.includes('RAISED')) {
-                               tag = "[RAISE]";
-                               colorClass = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
-                             }
-                             else if (act.includes('CALLED') || act.includes('POSTED')) {
-                               tag = "[CALL/POST]";
-                               colorClass = "bg-white/10 text-white/90 border-white/20";
-                             }
-                             else if (act.includes('BET')) {
-                               tag = "[BET]";
-                               colorClass = "bg-indigo-500/20 text-indigo-400 border-indigo-500/30";
-                             }
-                             else if (act.includes('CHECKED')) {
-                               tag = "[CHECK]";
-                               colorClass = "bg-slate-500/10 text-slate-300 border-slate-500/20";
-                             }
-                             else if (l.type === 'phase' || act.includes('DEALING') || act.includes('DEALT') || act.includes('START')) {
-                               if (act.includes('FLOP') || act.includes('TURN') || act.includes('RIVER')) { 
-                                 tag = "[DEALER]"; 
-                                 colorClass = "bg-cyan-500/20 text-cyan-400 border-cyan-400/30"; 
-                               } else {
-                                 tag = "[DEALER]"; 
-                                 colorClass = "bg-yellow-500/10 text-yellow-500/60 border-yellow-500/20"; 
-                               }
-                             }
-                             else if (act.includes('NUCLEAR') || act.includes('RESET')) { 
-                               tag = "[SYSTEM]"; 
-                               colorClass = "bg-red-500/20 text-red-400 border-red-500/30"; 
-                             }
-                             else if (act.includes('JOINED') || act.includes('LEFT') || act.includes('ENTERED')) { 
-                               tag = "[SYSTEM]"; 
-                               colorClass = "bg-slate-500/10 text-slate-400 border-slate-500/20"; 
-                             }
-                             else if (l.type === 'fold' || act.includes('FOLDED')) { 
-                               tag = "[FOLD]"; 
-                               colorClass = "bg-red-500/10 text-red-400 border-red-500/20"; 
-                             }
-                             else { tag = "[PLAY]"; }
+                              let tag = "";
+                              let colorClass = "bg-white/5 text-white/50 border-white/10";
+                              const act = l.action.toUpperCase();
+                              
+                              if (l.type === 'win' || act.includes('WON')) { 
+                                tag = "[SHOWDOWN]"; 
+                                colorClass = "bg-purple-500/20 text-purple-400 border-purple-500/30"; 
+                              }
+                              else if (l.type === 'variant' || act.includes('CHOSEN') || act.includes('CHOICE') || act.includes('DEALER CHOICE')) { 
+                                tag = "[DEALER'S CHOICE]"; 
+                                colorClass = "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"; 
+                              }
+                              else if (act.includes('RAISED')) {
+                                tag = "[RAISE]";
+                                colorClass = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+                              }
+                              else if (act.includes('CALLED') || act.includes('POSTED')) {
+                                tag = "[CALL/POST]";
+                                colorClass = "bg-white/10 text-white/90 border-white/20";
+                              }
+                              else if (act.includes('BET')) {
+                                tag = "[BET]";
+                                colorClass = "bg-indigo-500/20 text-indigo-400 border-indigo-500/30";
+                              }
+                              else if (act.includes('CHECKED')) {
+                                tag = "[CHECK]";
+                                colorClass = "bg-slate-500/10 text-slate-300 border-slate-500/20";
+                              }
+                              else if (l.type === 'phase' || act.includes('DEALING') || act.includes('DEALT') || act.includes('START')) {
+                                if (act.includes('FLOP') || act.includes('TURN') || act.includes('RIVER')) { 
+                                  tag = "[DEALER]"; 
+                                  colorClass = "bg-cyan-500/20 text-cyan-400 border-cyan-400/30"; 
+                                } else {
+                                  tag = "[DEALER]"; 
+                                  colorClass = "bg-yellow-500/10 text-yellow-500/60 border-yellow-500/20"; 
+                                }
+                              }
+                              else if (act.includes('NUCLEAR') || act.includes('RESET')) { 
+                                tag = "[SYSTEM]"; 
+                                colorClass = "bg-red-500/20 text-red-400 border-red-500/30"; 
+                              }
+                              else if (act.includes('JOINED') || act.includes('LEFT') || act.includes('ENTERED')) { 
+                                tag = "[SYSTEM]"; 
+                                colorClass = "bg-slate-500/10 text-slate-400 border-slate-500/20"; 
+                              }
+                              else if (l.type === 'fold' || act.includes('FOLDED')) { 
+                                tag = "[FOLD]"; 
+                                colorClass = "bg-red-500/10 text-red-400 border-red-500/20"; 
+                              }
+                              else { tag = "[PLAY]"; }
 
-                             return (
-                               <div key={l.id} className="flex items-start gap-3 p-3 border-b border-white/5 hover:bg-white/5 transition-colors">
-                                 <span className="text-white/20 text-[10px] w-12 shrink-0 font-black pt-0.5">{String(l.time)}</span>
-                                 <div className="flex flex-wrap items-center gap-2 overflow-hidden">
-                                   <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${colorClass}`}>
-                                     {tag}
-                                   </span>
-                                   <span className="text-white/80 text-[12px] font-black tracking-tight uppercase">
-                                     <span className="text-white/30">{l.name}:</span> {l.action}
-                                   </span>
-                                 </div>
-                               </div>
-                             );
+                              return (
+                                <div key={l.id} className="flex items-start gap-3 p-3 border-b border-white/5 hover:bg-white/5 transition-colors">
+                                  <span className="text-white/20 text-[10px] w-12 shrink-0 font-black pt-0.5">{String(l.time)}</span>
+                                  <div className="flex flex-wrap items-center gap-2 overflow-hidden">
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${colorClass}`}>
+                                      {tag}
+                                    </span>
+                                    <span className="text-white/80 text-[12px] font-black tracking-tight uppercase">
+                                      <span className="text-white/30">{l.name}:</span> {l.action}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
                           })}
                         </div>
                       )}
@@ -974,6 +975,34 @@ const App = () => {
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-emerald-950/20 to-transparent overflow-hidden px-1 py-1 font-black uppercase">
+        {/* TOP LEFT OVERLAY: LOW STATS */}
+        {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (activeVariant?.id === 'HILOW' || activeVariant?.id === 'MUFLIS') && (
+          <div className="absolute top-2 left-2 md:top-6 md:left-6 z-[90] flex flex-col items-start bg-black/40 backdrop-blur-md p-2 md:p-4 rounded-2xl border border-white/10 shadow-2xl animate-in slide-in-from-left duration-500">
+            <span className="text-[6px] md:text-[10px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">Low Strength</span>
+            <span className="text-[10px] md:text-xl text-emerald-400 font-black uppercase leading-tight">
+              {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.lowStrength || "Pre-flop"))}
+            </span>
+            <span className="text-[#fbbf24] text-[9px] md:text-lg font-mono font-black mt-1 tracking-tight">
+              {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroLowWinProb)}% PROB.
+            </span>
+          </div>
+        )}
+
+        {/* TOP RIGHT OVERLAY: HIGH/STRENGTH STATS */}
+        {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
+          <div className="absolute top-2 right-2 md:top-6 md:right-6 z-[90] flex flex-col items-end bg-black/40 backdrop-blur-md p-2 md:p-4 rounded-2xl border border-white/10 shadow-2xl animate-in slide-in-from-right duration-500">
+            <span className="text-[6px] md:text-[10px] text-white/40 tracking-[0.2em] font-black uppercase leading-none mb-1">
+              {activeVariant?.id === 'HILOW' ? 'High Strength' : 'Strength'}
+            </span>
+            <span className="text-[10px] md:text-xl text-purple-400 font-black uppercase leading-tight">
+              {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.strength || "Pre-flop"))}
+            </span>
+            <span className="text-[#fbbf24] text-[9px] md:text-lg font-mono font-black mt-1 tracking-tight">
+              {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroWinProb)}% PROB.
+            </span>
+          </div>
+        )}
+
         <div style={{ transform: `scale(${tableZoom})`, maxHeight: `calc(100vh - ${headerHeight + footerHeight + 40}px)` }} className="relative w-full max-w-[1400px] aspect-[15/10] md:aspect-[21/10] flex items-center justify-center h-full origin-center font-black">
             <div className="absolute inset-0 bg-[#0f3d2e]/40 rounded-[50%] border-[3vw] md:border-[2vw] border-slate-900/60 shadow-[inset_0_0_15vw_rgba(0,0,0,0.8)] border-double font-black uppercase" />
             <div className="absolute inset-0 pointer-events-none z-20 font-black uppercase">
@@ -1047,7 +1076,18 @@ const App = () => {
           ) : (
             <div className={`flex flex-col gap-2 md:gap-4 items-center w-full font-black uppercase transition-all duration-500 ${activeIdx !== heroIdx ? 'opacity-40 grayscale pointer-events-none' : 'opacity-100'}`}>
                 {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE ? (<>
-                    <div className="flex gap-1 w-full max-w-[600px] font-black uppercase mt-4">
+                    {/* ENLARGED BALANCE DISPLAY IN HUD */}
+                    <div className="flex flex-col items-center mb-1">
+                      <span className="text-[7px] md:text-[10px] text-white/40 tracking-[0.4em] mb-0.5">YOUR TABLE STACK</span>
+                      <div className="flex items-center gap-2 bg-black/40 px-6 py-1.5 rounded-full border border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                        <Coins size={16} className="text-emerald-400" />
+                        <span className="text-xl md:text-3xl font-mono font-black text-emerald-400 tracking-tighter">
+                          ${Number(heroPlayerObj?.chips || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-1 w-full max-w-[600px] font-black uppercase mt-2">
                         <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">1/2 POT</button>
                         <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-md text-[8px] md:text-[12px] hover:bg-white/20 transition-all font-black uppercase flex items-center justify-center">POT</button>
                         <button disabled={activeIdx !== heroIdx} onClick={handleAllIn} className="flex-1 h-7 md:h-10 bg-red-900/30 border border-red-500/50 rounded-md text-[8px] md:text-[12px] text-red-500 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center justify-center">ALL-IN</button>
@@ -1065,33 +1105,6 @@ const App = () => {
                             <button disabled={activeIdx !== heroIdx} onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 h-9 md:h-14 bg-emerald-600/60 border border-400/50 rounded-md flex items-center justify-center hover:brightness-125 font-black uppercase text-[9px] md:text-xl shadow-xl"><Zap size={10} className="mr-0.5 text-emerald-400"/> RAISE</button>
                         </div>
                     </div>
-
-                    <div className="flex justify-between w-full max-w-[600px] mt-1 px-1.5 pb-2">
-                        <div className="flex flex-col items-start min-w-[80px]">
-                            {activeVariant?.id === 'HILOW' && (
-                                <>
-                                    <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">Low Strength</span>
-                                    <span className="text-[9px] md:text-[18px] text-emerald-400 font-black uppercase leading-none">
-                                        {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.lowStrength || "Pre-flop"))}
-                                    </span>
-                                    <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
-                                        {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroLowWinProb)}% PROB.
-                                    </span>
-                                </>
-                            )}
-                        </div>
-                        <div className="flex flex-col items-end min-w-[80px]">
-                            <span className="text-[4px] md:text-[7px] text-white/40 tracking-[0.1em] font-black uppercase leading-none">
-                                {activeVariant?.id === 'HILOW' ? 'High Strength' : 'Strength'}
-                            </span>
-                            <span className="text-[9px] md:text-[18px] text-purple-400 font-black uppercase leading-none">
-                                {phase === PHASES.PRE_FLOP ? "Pre-flop" : formatRank(String(heroPlayerObj?.strength || "Pre-flop"))}
-                            </span>
-                            <span className="text-[#fbbf24] text-[8px] md:text-[14px] font-mono font-black mt-0.5 tracking-tight">
-                                {phase === PHASES.PRE_FLOP ? '-' : Math.round(heroWinProb)}% PROB.
-                            </span>
-                        </div>
-                    </div>
                 </>) : (
                     <div className="flex flex-col items-center gap-1 py-10">
                         <span className="text-white/20 tracking-[0.4em] text-[10px] md:text-lg font-black italic uppercase">Arena Idle / Observing</span>
@@ -1104,11 +1117,11 @@ const App = () => {
       <style>{`
           @keyframes panic-pulse {
             0% { transform: scale(1) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 0px #ef4444); }
-            50% { transform: scale(1.05) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 30px #ef4444); }
+            50% { transform: scale(1.1) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 40px #ef4444); }
             100% { transform: scale(1) translateX(-50%) translateY(-50%); filter: drop-shadow(0 0 0px #ef4444); }
           }
           .animate-panic-pulse { 
-            animation: panic-pulse 0.4s infinite cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            animation: panic-pulse 0.3s infinite cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             z-index: 100 !important;
           }
           @keyframes fling-to-pot { 
