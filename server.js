@@ -14,8 +14,8 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-// VERSION: v1.0.9 (Internal Server)
-const VERSION = "v1.0.9";
+// VERSION: v1.0.10 (Internal Server)
+const VERSION = "v1.0.10";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -538,7 +538,7 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
         return;
     }
-    const alreadyInOther room = Object.values(rooms).some(r => r.players.some(p => p && p.uid === profile.uid));
+    const alreadyInOtherRoom = Object.values(rooms).some(r => r.players.some(p => p && p.uid === profile.uid));
     if (alreadyInOtherRoom) {
       if (typeof callback === 'function') callback({ status: 'error', message: 'ALREADY_SEATED' });
       return;
