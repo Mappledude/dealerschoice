@@ -6,9 +6,15 @@ import cors from 'cors';
 const app = express();
 app.use(cors());
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.0.5";
+// Logic Upgrade: Increased ping timeouts to handle mobile background suspension gracefully
+const io = new Server(server, { 
+  cors: { origin: "*" },
+  pingTimeout: 60000, // 60 seconds
+  pingInterval: 25000  // 25 seconds
+});
+
+const VERSION = "v1.0.7";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -445,7 +451,6 @@ const removePlayerGlobally = (uid, force = false) => {
         if (idx !== -1) {
             const player = room.players[idx];
             if (force || player.isBot) {
-                // RETURN CHIPS TO WALLET CORRECTLY
                 const prof = profiles.find(x => x.uid === uid);
                 if (prof) {
                   const tableStack = Number(player.chips) + Number(player.currentBet || 0);
@@ -455,7 +460,6 @@ const removePlayerGlobally = (uid, force = false) => {
                 if (room.activeIdx === idx) { moveToNextPlayer(room.id); }
                 room.players[idx] = null;
                 
-                // BOOT ALL BOTS AND RESET IF NO HUMANS REMAIN
                 const humanCount = room.players.filter(pl => pl && !pl.isBot).length;
                 if (humanCount === 0) {
                     if (room.timer) clearInterval(room.timer);
