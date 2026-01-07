@@ -167,7 +167,10 @@ const Seat = ({
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}
             >
                 {showActionOverlay && (
-                    <div className={`absolute inset-0 z-50 flex items-center justify-center bg-black animate-action-flash border-2 rounded-xl border-white/40 ${action.glow}`}>
+                    <div 
+                      key={action.text} 
+                      className={`absolute inset-0 z-50 flex items-center justify-center bg-black animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
+                    >
                         <span className={`text-sm md:text-3xl font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
                             {action.text}
                         </span>
@@ -632,6 +635,16 @@ const App = () => {
                             </div>
                             {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(hand.rank)}</div>)}
                         </button>
+                        {expandedHands.has(hand.id) && (
+                            <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
+                                {hand.events.map((ev, i) => (
+                                    <div key={i} className={`text-[9px] md:text-[10px] font-black leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
+                                        <span className="text-white/30 font-mono mr-2">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
+                                        <span className={getNeonNameColor(ev.name)}>{ev.name}</span>: <span className="text-white/90">{ev.action}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )) : (<div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3"><Activity size={32} className="animate-pulse" /><span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span></div>)}
             </div>
@@ -688,7 +701,6 @@ const App = () => {
               )}
             </div>
 
-            {/* RESTORED Betting Slider - Thicker, Neon, 160px Right */}
             {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
               <div className="absolute right-[-160px] top-[15%] bottom-[15%] w-16 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                 <div className="flex-1 w-full relative flex items-center justify-center py-4">
@@ -712,7 +724,7 @@ const App = () => {
       </main>
 
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="flex-1 flex flex-col justify-center px-4 relative pt-2 pb-6 md:pb-8"> {/* Shifting content up slightly for iPhone */}
+        <div className="flex-1 flex flex-col justify-center px-4 relative pt-2 pb-6 md:pb-8"> 
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
                 const winner = showdownWinners[currentShowdownIdx];
@@ -740,7 +752,7 @@ const App = () => {
                         <div className="flex gap-1 justify-center">
                             {(winner.hand || []).map((c, ci) => (
                                 <div key={ci} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
-                                    <span className={`text-[11px] md:text-sm font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
+                                    <span className={`text-[11px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
                                     <span className={`text-[13px] md:text-xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
                                     <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
                                 </div>
@@ -798,18 +810,18 @@ const App = () => {
             100% { transform: scale(1.3); opacity: 0; filter: blur(20px); }
           }
           .animate-announcement-pop { animation: announcement-pop 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-          @keyframes action-flash {
-            0% { opacity: 0.9; transform: scale(1); filter: brightness(1); }
-            50% { opacity: 1; transform: scale(1.03); filter: brightness(1.3); }
-            100% { opacity: 0.9; transform: scale(1); filter: brightness(1); }
+          @keyframes action-flash-once {
+            0% { opacity: 0; transform: scale(0.9); }
+            40% { opacity: 1; transform: scale(1.05); filter: brightness(1.5); }
+            100% { opacity: 1; transform: scale(1); filter: brightness(1.1); }
           }
-          .animate-action-flash { animation: action-flash 0.4s infinite alternate ease-in-out; }
+          .animate-action-flash-once { animation: action-flash-once 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
           html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #000; }
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
           .scrollbar-hide::-webkit-scrollbar { display: none; }
-          .vertical-range { -webkit-appearance: slider-vertical; width: 36px; height: 100%; background: rgba(255, 255, 255, 0.1); outline: none; border-radius: 999px; }
-          .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 64px; height: 64px; background: rgba(16, 185, 129, 0.4); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(8px); }
-          .vertical-range::-moz-range-thumb { width: 64px; height: 64px; background: rgba(16, 185, 129, 0.4); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(8px); }
+          .vertical-range { -webkit-appearance: slider-vertical; width: 32px; height: 100%; background: rgba(255, 255, 255, 0.1); outline: none; border-radius: 999px; }
+          .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 64px; height: 64px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
+          .vertical-range::-moz-range-thumb { width: 64px; height: 64px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
       `}</style>
     </div>
   );
