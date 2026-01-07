@@ -14,7 +14,7 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-const VERSION = "v1.0.7";
+const VERSION = "v1.0.8";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -456,10 +456,8 @@ const removePlayerGlobally = (uid, force = false) => {
                   const tableStack = Number(player.chips) + Number(player.currentBet || 0);
                   prof.chips += tableStack;
                 }
-                
                 if (room.activeIdx === idx) { moveToNextPlayer(room.id); }
                 room.players[idx] = null;
-                
                 const humanCount = room.players.filter(pl => pl && !pl.isBot).length;
                 if (humanCount === 0) {
                     if (room.timer) clearInterval(room.timer);
@@ -468,10 +466,6 @@ const removePlayerGlobally = (uid, force = false) => {
                     room.gameInProgress = false;
                     room.community = [];
                     room.potData = [{amount: 0}];
-                    room.highestBet = 0;
-                    room.activeIdx = -1;
-                    room.dealerIdx = 0;
-                    room.showdownWinners = null;
                 }
                 io.to(room.id).emit('roomUpdate', serializeRoom(room));
             } else {
@@ -524,7 +518,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
-    const room = rooms[roomId]; if (!room) return callback({ status: 'error' });
+    const room = rooms[roomId]; if (!room) {
+      if (typeof callback === 'function') callback({ status: 'error' });
+      return;
+    }
     const existingIdx = room.players.findIndex(p => p && p.uid === profile.uid);
     if (existingIdx !== -1) {
         const timeoutKey = `${profile.uid}_${roomId}`;
@@ -536,23 +533,32 @@ io.on('connection', (socket) => {
         seatedUid = profile.uid;
         socket.join(roomId);
         io.to(roomId).emit('log', { name: String(profile.name), action: 'RE-JOINED THE ARENA (SESSION RECOVERED)', type: 'phase' });
-        callback({ status: 'ok' });
+        if (typeof callback === 'function') callback({ status: 'ok' });
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
         return;
     }
     const alreadyInOtherRoom = Object.values(rooms).some(r => r.players.some(p => p && p.uid === profile.uid));
-    if (alreadyInOtherRoom) return callback({ status: 'error', message: 'ALREADY_SEATED' });
+    if (alreadyInOtherRoom) {
+      if (typeof callback === 'function') callback({ status: 'error', message: 'ALREADY_SEATED' });
+      return;
+    }
     let globalProfile = profiles.find(p => p.uid === profile.uid || p.name === profile.name);
     if (!globalProfile) { globalProfile = { ...profile, chips: 100 }; profiles.push(globalProfile); }
-    if (globalProfile.chips < Number(buyIn)) return callback({ status: 'error' });
+    if (globalProfile.chips < Number(buyIn)) {
+      if (typeof callback === 'function') callback({ status: 'error' });
+      return;
+    }
     globalProfile.chips -= Number(buyIn);
     const emptyIdx = room.players.findIndex(p => p === null);
-    if (emptyIdx === -1) return callback({ status: 'error' });
+    if (emptyIdx === -1) {
+      if (typeof callback === 'function') callback({ status: 'error' });
+      return;
+    }
     seatedUid = profile.uid;
     room.players[emptyIdx] = { ...profile, chips: Number(buyIn), seatIdx: emptyIdx, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: globalProfile.pendingVariant || profile.pendingVariant || 'HOLDEM', isDisconnected: false };
     socket.join(roomId);
     io.to(roomId).emit('log', { name: String(profile.name), action: 'JOINED THE ARENA', type: 'phase' });
-    callback({ status: 'ok' });
+    if (typeof callback === 'function') callback({ status: 'ok' });
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     io.emit('profilesUpdate', profiles);
     if (room.phase === PHASES.IDLE && room.players.filter(Boolean).length >= 2 && !room.ignitionTimer) {
@@ -563,7 +569,6 @@ io.on('connection', (socket) => {
   socket.on('playerAction', ({ roomId, type, amount }) => performAction(roomId, type, amount));
   socket.on('leaveRoom', ({ uid }) => { removePlayerGlobally(uid, true); seatedUid = null; io.emit('profilesUpdate', profiles); });
   socket.on('disconnect', () => { if (seatedUid) { removePlayerGlobally(seatedUid, false); io.emit('profilesUpdate', profiles); } });
-  
   socket.on('adminAddBot', ({ roomId }) => {
     const room = rooms[roomId]; if (!room) return;
     const emptyIdx = room.players.findIndex(p => p === null); if (emptyIdx === -1) return;
@@ -577,7 +582,6 @@ io.on('connection', (socket) => {
         room.ignitionTimer = setTimeout(() => runIgnition(roomId), 3000);
     }
   });
-
   socket.on('updatePlayerSettings', ({ uid, pendingVariant }) => {
     const p = profiles.find(x => x.uid === uid); if (p) p.pendingVariant = pendingVariant;
     Object.values(rooms).forEach(room => {
@@ -588,17 +592,14 @@ io.on('connection', (socket) => {
         }
     });
   });
-
   socket.on('adminNuclearReset', () => { rooms = {}; profiles = profiles.filter(p => p.role === 'admin'); io.emit('lobbyUpdate', []); io.emit('profilesUpdate', profiles); io.emit('roomUpdate', null); });
   socket.on('adminCreatePlayer', (p) => { profiles.push({ ...p, chips: Number(p.chips) }); io.emit('profilesUpdate', profiles); });
-  
   socket.on('adminUpdatePlayer', (data) => {
     const { uid, chips, password } = data;
     const p = profiles.find(x => x.uid === uid);
     if (p) {
         if (chips !== undefined) p.chips = Number(chips);
         if (password !== undefined) p.password = password;
-        
         Object.values(rooms).forEach(room => {
             const player = room.players.find(pl => pl && pl.uid === uid);
             if (player) { 
@@ -610,7 +611,6 @@ io.on('connection', (socket) => {
         io.emit('profilesUpdate', profiles);
     }
   });
-
   socket.on('adminDeleteRoom', (roomId) => { if (rooms[roomId]) { delete rooms[roomId]; io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom)); } });
   socket.on('adminCreateRoom', (data) => { 
     const defaultData = { sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10 };
@@ -620,4 +620,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`${APP_NAME} ${VERSION} running on port ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`${APP_NAME} ${VERSION} running on port ${PORT}`));
