@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.24
+// VERSION: v1.0.26
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.24";
+const VERSION = "v1.0.26";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -80,7 +80,7 @@ const VARIANTS = {
   REDSBLACKS: { 
     id: 'REDSBLACKS', 
     name: 'Reds & Blacks', 
-    rules: ["4 hole cards dealt.", "Special Joker mechanic: If your hand contains specific color combinations, you may play with enhanced strength.", "Dynamic wildcards based on suit parity."] 
+    rules: ["4 hole cards dealt.", "Special Joker mechanic: If your hand contains color combinations, you may play with enhanced strength.", "Dynamic wildcards based on suit parity."] 
   }
 };
 
@@ -268,7 +268,7 @@ const App = () => {
   const [currentShowdownIdx, setCurrentShowdownIdx] = useState(0);
   const [nuclearConfirm, setNuclearConfirm] = useState(false);
   const [showVisualControls, setShowVisualControls] = useState(false);
-  const [intelExpanded, setIntelExpanded] = useState(true);
+  const [intelExpanded, setIntelExpanded] = useState(false); // Default to false as requested
   const [expandedHands, setExpandedHands] = useState(new Set());
   const [isConnected, setIsConnected] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -313,7 +313,6 @@ const App = () => {
 
   // --- ACTIONS ---
   const handleForceSync = useCallback(() => {
-    // Aggressive Refresh: Cycle the socket to force a full state dump
     socket.disconnect().connect();
     socket.emit('getInitialData');
     if (currentRoomId && userProfile) {
@@ -515,7 +514,6 @@ const App = () => {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // IMPROVEMENT: Aggressive reconnect on app focus
         handleForceSync();
       }
     };
@@ -672,7 +670,14 @@ const App = () => {
         )}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 md:px-12 bg-black/60 backdrop-blur-md shrink-0 pt-[env(safe-area-inset-top)]">
           <div className="flex flex-col"><h2 className="tracking-[0.5em] text-lg font-black flex items-center gap-3"><LayoutGrid className="text-emerald-400 w-5"/> ARENA DIRECTORY</h2><span className="text-[8px] text-white/30 tracking-[0.2em]">VERSION {VERSION}</span></div>
-          <div className="flex items-center gap-6 font-black"><div className="flex items-end flex-col"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
+          <div className="flex items-center gap-6 font-black">
+            <div className="flex items-end flex-col">
+              <span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span>
+              <span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span>
+            </div>
+            <button onClick={handleForceSync} className="text-white/20 hover:text-emerald-400 transition-all" title="Refresh Directory"><RefreshCcw size={20} className="active:animate-spin"/></button>
+            <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button>
+          </div>
         </header>
         <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black font-black uppercase text-center">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
@@ -959,21 +964,21 @@ const App = () => {
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
                         <button 
                             onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} 
-                            className={`flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>
+                            className={`flex-1 h-9 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>
                             1/2 POT
                         </button>
                         <button 
                             onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} 
-                            className={`flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>
+                            className={`flex-1 h-9 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>
                             POT
                         </button>
                         <button 
                             onClick={handleAllIn} 
-                            className={`flex-1 h-10 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
+                            className={`flex-1 h-9 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
                             ALL-IN
                         </button>
                     </div>
-                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-16">
+                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-14">
                         <button 
                             onClick={() => {
                                 if (activeIdx === heroIdx) handleAction('FOLD');
