@@ -94,6 +94,7 @@ const Seat = ({
 }) => {
     if (!player || !displayPos) return null;
 
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
     const vecX = 50 - displayPos.x;
     const vecY = 50 - displayPos.y;
     const cardInwardX = vecX * 0.15;
@@ -109,7 +110,7 @@ const Seat = ({
         switch (player.lastAction) {
             case 'RAISE': return { text: `RAISED $${player.currentBet}`, color: "text-emerald-400", glow: "shadow-[0_0_30px_rgba(16,185,129,0.8)]" };
             case 'CALL': return { text: player.currentBet > 0 ? `CALLED $${player.currentBet}` : "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.8)]" };
-            case 'CHECK': return { text: "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.8)]" };
+            case 'CHECK': return { text: "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30_rgba(34,211,238,0.8)]" };
             default: return null;
         }
     };
@@ -138,11 +139,16 @@ const Seat = ({
                         const mid = (player.hand.length - 1) / 2;
                         const offset = ci - mid;
                         const isRedSuit = c.suit === '♥' || c.suit === '♦';
+                        
+                        const cardSpacing = isHero ? 2 : (isMobile ? 3.75 : 2);
+                        const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
+                        const scale = isHero ? 1.6 : 1.0;
+
                         return (
                           <div key={c.id || ci} 
                               className={`w-[7.5vw] md:w-[4vw] h-[10.5vw] md:h-[5.5vw] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${phase === PHASES.SHOWDOWN || isHero ? 'bg-white' : 'bg-slate-900 border-white/20'}`} 
                               style={{ 
-                                transform: `translateX(${offset * 2}vw) rotate(${offset * visuals.holeCardFan}deg) scale(${isHero ? 1.6 : 1.0})`, 
+                                transform: `translateX(${offset * cardSpacing}vw) rotate(${rotation}deg) scale(${scale})`, 
                                 transformOrigin: 'bottom center', 
                                 zIndex: 100 + ci
                               }}>
@@ -194,7 +200,7 @@ const Seat = ({
                     {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
                 </div>
 
-                {isDealer && <div className="absolute top-1 right-1 w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full shadow-[0_0_10px_#ef4444]" />}
+                {isDealer && <div className="absolute top-2 right-2 w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full shadow-[0_0_15px_#ef4444] animate-pulse z-20" />}
             </div>
         </div>
     );
@@ -237,6 +243,7 @@ const App = () => {
   const joinLock = useRef(false);
   const phaseRef = useRef(PHASES.IDLE); 
   const currentHandId = useRef(Date.now());
+  const showdownSequenceActive = useRef(false);
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
@@ -357,7 +364,6 @@ const App = () => {
     setNewTable({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
   }, [newTable]);
 
-  // Fixed formatRank: scoping/map variable safety to prevent ReferenceErrors
   const formatRank = (rank) => {
     if (!rank || typeof rank !== 'string') return "";
     let cleanVal = rank.split(',')[0].split(' of ')[0];
@@ -392,16 +398,20 @@ const App = () => {
           (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); 
           return next; 
         });
-        if (d.phase !== phaseRef.current && d.phase === PHASES.TURN) {
+        
+        if (d.phase !== phaseRef.current && d.phase === PHASES.FLOP) {
             const vId = d.activeVariant?.id || 'HOLDEM';
             setTimeout(() => {
                 setAnnouncement({ text: VARIANTS[vId]?.name || "Poker", color: VARIANT_COLORS[vId] || '#fff' });
                 setTimeout(() => setAnnouncement(null), 1500);
             }, 3000); 
         }
+
         if (d.phase === PHASES.PRE_FLOP && phaseRef.current !== PHASES.PRE_FLOP) {
             currentHandId.current = Date.now();
         }
+        
+        const isShowdownTransition = d.phase === PHASES.SHOWDOWN && phaseRef.current !== PHASES.SHOWDOWN;
         phaseRef.current = d.phase;
         setPhase(d.phase);
         setCommunity(d.community || []);
@@ -415,19 +425,26 @@ const App = () => {
             const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
             setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId, rules: [] });
         }
-        if (d.phase === PHASES.SHOWDOWN) {
+        
+        if (isShowdownTransition) {
             setPotTransferring(true);
             setCurrentShowdownIdx(0);
             const rawWinners = d.showdownWinners || [];
             setShowdownWinners(rawWinners);
             setWinning5Ids(d.winning5Ids || []);
             const durationPerWinner = 4000;
+            
             if (rawWinners.length > 1) {
                 for (let i = 1; i < rawWinners.length; i++) {
-                    setTimeout(() => setCurrentShowdownIdx(i), i * durationPerWinner);
+                    setTimeout(() => {
+                      if (phaseRef.current === PHASES.SHOWDOWN) setCurrentShowdownIdx(i);
+                    }, i * durationPerWinner);
                 }
             }
-            setTimeout(() => setPotTransferring(false), rawWinners.length * durationPerWinner);
+            setTimeout(() => setPotTransferring(false), Math.max(1, rawWinners.length) * durationPerWinner);
+        } else if (d.phase !== PHASES.SHOWDOWN) {
+            setPotTransferring(false);
+            setShowdownWinners(null);
         }
     };
     socket.on('connect', () => { setIsConnected(true); socket.emit('getInitialData'); });
@@ -656,15 +673,15 @@ const App = () => {
           <>
             {activeVariant?.id === 'HILOW' && (
                <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
-                <span className="text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                <span className="text-2xl md:text-4xl text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
-                <span className="text-[#fbbf24] text-[14px] md:text-2xl font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
+                <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
+                <span className="text-[12px] md:text-[25px] text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
+                <span className="text-[#fbbf24] text-[7px] md:text-[17px] font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
               </div>
             )}
             <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
-              <span className="text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-              <span className="text-2xl md:text-4xl text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-              <span className="text-[#fbbf24] text-[14px] md:text-2xl font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
+              <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
+              <span className="text-[12px] md:text-[25px] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
+              <span className="text-[#fbbf24] text-[7px] md:text-[17px] font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
             </div>
           </>
         )}
@@ -724,32 +741,37 @@ const App = () => {
       </main>
 
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="flex-1 flex flex-col justify-center px-4 relative pt-2 pb-6 md:pb-8"> 
+        <div className="flex-1 flex flex-col justify-center px-4 relative pt-2 pb-2 md:pb-4"> 
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
                 const winner = showdownWinners[currentShowdownIdx];
                 if (!winner) return null;
+                const isHiLo = activeVariant?.id === 'HILOW';
                 const isLowWin = String(winner.rank).includes("LOW:");
-                const themeColor = isLowWin ? "text-emerald-400" : "text-amber-400";
-                const bgColor = isLowWin ? "bg-emerald-400/10" : "bg-amber-400/10";
-                const borderColor = isLowWin ? "border-emerald-400/30" : "border-amber-400/30";
-                const cardBorder = isLowWin ? "border-emerald-400/50" : "border-amber-400/50";
+                
+                const themeColor = isLowWin ? "text-emerald-400" : (isHiLo ? "text-amber-400" : "text-white");
+                const bgColor = isLowWin ? "bg-emerald-400/10" : (isHiLo ? "bg-amber-400/10" : "bg-white/5");
+                const borderColor = isLowWin ? "border-emerald-400/30" : (isHiLo ? "border-amber-400/30" : "border-white/10");
+                const cardBorder = isLowWin ? "border-emerald-400/50" : (isHiLo ? "border-amber-400/50" : "border-white/20");
+                
+                const winTypeLabel = isHiLo ? (isLowWin ? "THE LOW SIDE" : "THE HIGH SIDE") : "THE POT";
                 const displayRank = formatRank(String(winner.rank).replace("LOW: ", "").replace("HIGH: ", ""));
+                
                 return (
-                    <div className="flex flex-col items-center justify-center w-full h-full gap-2 animate-in fade-in duration-500 -translate-y-2 md:-translate-y-4">
-                        <div className={`flex items-center gap-3 ${bgColor} px-5 py-1 rounded-full border ${borderColor} max-w-full overflow-hidden`}>
+                    <div key={winner.name + currentShowdownIdx} className="flex flex-col items-center justify-center w-full h-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500 -translate-y-[70px] md:-translate-y-[60px]">
+                        <div className={`flex items-center gap-3 ${bgColor} px-5 py-1 rounded-full border ${borderColor} max-w-full overflow-hidden shadow-2xl`}>
                             <Trophy size={14} className={themeColor + " animate-bounce shrink-0"} />
                             <div className="text-sm md:text-xl font-black tracking-tighter flex items-center gap-2 leading-none whitespace-nowrap">
                                 <span className={getNeonNameColor(winner.name)}>{String(winner.name).toUpperCase()}</span>
-                                <span className="text-white opacity-40">WON</span>
-                                <span className={themeColor}>{isLowWin ? "LOW" : "HIGH"}</span>
-                                <span className="text-emerald-400">+${Number(winner.amount).toLocaleString()}</span>
+                                <span className="text-white/40">WON</span>
+                                <span className={themeColor}>{winTypeLabel}</span>
+                                <span className="text-emerald-400 font-mono ml-2">+${Number(winner.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                             </div>
                         </div>
-                        <div className="text-[10px] md:text-sm font-black text-white/60 tracking-wider uppercase">
-                          WITH <span className={themeColor}>{winner.rank === "!" ? "A DEFAULT WIN" : displayRank}</span>
+                        <div className="text-[10px] md:text-sm font-black text-white/60 tracking-widest uppercase">
+                          HOLDING <span className={themeColor}>{winner.rank === "!" ? "THE BEST HAND" : displayRank}</span>
                         </div>
-                        <div className="flex gap-1 justify-center">
+                        <div className="flex gap-1 justify-center mt-1">
                             {(winner.hand || []).map((c, ci) => (
                                 <div key={ci} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
                                     <span className={`text-[11px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
@@ -762,7 +784,7 @@ const App = () => {
                 );
             })()
           ) : (
-            <div className={`flex flex-col gap-3 items-center w-full transition-all duration-500 -translate-y-2 md:-translate-y-4 ${activeIdx !== heroIdx ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
+            <div className={`flex flex-col gap-3 items-center w-full transition-all duration-500 -translate-y-[70px] md:-translate-y-[60px] ${activeIdx !== heroIdx ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
                 {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
                         <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl text-[10px] hover:bg-white/10 font-black">1/2 POT</button>
