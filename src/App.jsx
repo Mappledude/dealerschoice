@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.18
+// VERSION: v1.0.19
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.18";
+const VERSION = "v1.0.19";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -284,6 +284,7 @@ const App = () => {
   const joinLock = useRef(false);
   const phaseRef = useRef(PHASES.IDLE); 
   const currentHandId = useRef(Date.now());
+  const turnInitializedRef = useRef(-1); // Fixes slider reset bug
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
@@ -550,16 +551,21 @@ const App = () => {
 
   useEffect(() => {
     if (activeIdx === heroIdx && heroPlayerObj) { 
-        // Sync raise slider to minimum bet when turn begins
-        const minAllowed = highestBet + bigBlind;
-        const maxAllowed = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
-        setRaiseInput(Math.min(minAllowed, maxAllowed)); 
+        // Sync raise slider to minimum bet ONLY when turn begins (detected via turnInitializedRef)
+        if (turnInitializedRef.current !== activeIdx) {
+          turnInitializedRef.current = activeIdx;
+          const minAllowed = highestBet + bigBlind;
+          const maxAllowed = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
+          setRaiseInput(Math.min(minAllowed, maxAllowed)); 
+        }
         
         if (preAction) {
             if (preAction === 'FOLD') handleAction('FOLD');
             else if (preAction === 'CHECK') handleAction('CALL'); 
             setPreAction(null);
         }
+    } else {
+        turnInitializedRef.current = -1;
     }
   }, [activeIdx, heroIdx, highestBet, bigBlind, heroPlayerObj, preAction, handleAction]);
 
