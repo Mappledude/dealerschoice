@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.6";
+const VERSION = "v1.0.7";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -271,7 +271,6 @@ const App = () => {
     return Number(potAmount) + currentBetsSum;
   }, [potAmount, players]);
 
-  // FIXED: handHistory now uses a more robust ID logic to avoid duplicate key warnings
   const handHistory = useMemo(() => {
     const hands = [];
     let currentHand = null;
@@ -463,11 +462,24 @@ const App = () => {
             setShowdownWinners(null);
         }
     };
+
+    // Passive-to-Active Resync Logic for Mobile Phones
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (!socket.connected) {
+          socket.connect();
+        }
+        socket.emit('getInitialData');
+        if (currentRoomId && userProfile) {
+          // Soft-rejoin to force state push
+          socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 });
+        }
+      }
+    };
+
     socket.on('connect', () => { setIsConnected(true); socket.emit('getInitialData'); });
     socket.on('roomUpdate', handleRoomUpdate);
     socket.on('lobbyUpdate', setActiveTables);
-    
-    // FIXED: Appending unique ID to timestamp to avoid duplicate keys in React loops
     socket.on('log', (l) => setLogs(prev => [
       {...l, handId: currentHandId.current, timestamp: Date.now(), uniqueKey: `${Date.now()}-${Math.random()}`}, 
       ...prev
@@ -495,11 +507,15 @@ const App = () => {
             });
         } else { setCurrentView(VIEWS.LOBBY); }
     });
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => { 
         socket.off('connect'); socket.off('roomUpdate'); socket.off('lobbyUpdate'); 
         socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log');
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []); 
+  }, [currentRoomId, userProfile]); 
 
   useEffect(() => {
     if (activeIdx === heroIdx && heroPlayerObj) { 
@@ -610,7 +626,7 @@ const App = () => {
         )}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 md:px-12 bg-black/60 backdrop-blur-md shrink-0 pt-[env(safe-area-inset-top)]">
           <div className="flex flex-col"><h2 className="tracking-[0.5em] text-lg font-black flex items-center gap-3"><LayoutGrid className="text-emerald-400 w-5"/> ARENA DIRECTORY</h2><span className="text-[8px] text-white/30 tracking-[0.2em]">VERSION {VERSION}</span></div>
-          <div className="flex items-center gap-6 font-black"><div className="flex items-end flex-col"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
+          <div className="flex items-center gap-6 font-black"><div className="flex flex-col items-end"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
         </header>
         <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black font-black uppercase text-center">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
@@ -774,6 +790,7 @@ const App = () => {
               )}
             </div>
 
+            {/* Vertical Betting Slider HUD */}
             {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
               <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                 <div className="flex-1 w-full relative flex items-center justify-center py-4">
