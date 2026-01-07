@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.3";
+const VERSION = "v1.0.6";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -145,7 +145,7 @@ const Seat = ({
                         const scale = isHero ? 1.6 : 1.0;
 
                         return (
-                          <div key={c.id || ci} 
+                          <div key={`${c.id || ci}-${ci}`} 
                               className={`w-[7.5vw] md:w-[4vw] h-[10.5vw] md:h-[5.5vw] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${phase === PHASES.SHOWDOWN || isHero ? 'bg-white' : 'bg-slate-900 border-white/20'}`} 
                               style={{ 
                                 transform: `translateX(${offset * cardSpacing}vw) rotate(${rotation}deg) scale(${scale})`, 
@@ -271,6 +271,7 @@ const App = () => {
     return Number(potAmount) + currentBetsSum;
   }, [potAmount, players]);
 
+  // FIXED: handHistory now uses a more robust ID logic to avoid duplicate key warnings
   const handHistory = useMemo(() => {
     const hands = [];
     let currentHand = null;
@@ -278,7 +279,7 @@ const App = () => {
         if (log.action.includes("IS DEALING") || log.action.includes("PRE_FLOP DEALT")) {
             if (currentHand) hands.push(currentHand);
             currentHand = { 
-                id: log.handId || Date.now() + Math.random(), 
+                id: log.handId || `hand-${log.timestamp}-${Math.random()}`, 
                 winner: null, rank: null, amount: null, events: [], 
                 variant: log.action.split('DEALING ')[1] || "Poker"
             };
@@ -373,7 +374,6 @@ const App = () => {
     setNewTable({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
   }, [newTable]);
 
-  // UPDATED: Standardized Poker Rank formatting logic
   const formatRank = (rank) => {
     if (!rank || typeof rank !== 'string') return "";
     const lower = rank.toLowerCase();
@@ -397,7 +397,6 @@ const App = () => {
       return `Low ${parts[parts.length - 1]}`;
     }
     
-    // Default fallback to keep things readable
     return rank.split(',')[0].split(' of ')[0];
   };
 
@@ -467,7 +466,13 @@ const App = () => {
     socket.on('connect', () => { setIsConnected(true); socket.emit('getInitialData'); });
     socket.on('roomUpdate', handleRoomUpdate);
     socket.on('lobbyUpdate', setActiveTables);
-    socket.on('log', (l) => setLogs(prev => [{...l, handId: currentHandId.current, timestamp: Date.now()}, ...prev].slice(0, 100)));
+    
+    // FIXED: Appending unique ID to timestamp to avoid duplicate keys in React loops
+    socket.on('log', (l) => setLogs(prev => [
+      {...l, handId: currentHandId.current, timestamp: Date.now(), uniqueKey: `${Date.now()}-${Math.random()}`}, 
+      ...prev
+    ].slice(0, 100)));
+
     socket.on('profilesUpdate', (list) => { 
         setAllProfiles(list); 
         setUserProfile(prev => {
@@ -499,12 +504,11 @@ const App = () => {
   useEffect(() => {
     if (activeIdx === heroIdx && heroPlayerObj) { 
         setRaiseInput(highestBet + bigBlind); 
-        // Execute Pre-Action if set
         if (preAction) {
             if (preAction === 'FOLD') {
                 handleAction('FOLD');
             } else if (preAction === 'CHECK') {
-                handleAction('CALL'); // Call(0) is Check
+                handleAction('CALL'); 
             }
             setPreAction(null);
         }
@@ -606,7 +610,7 @@ const App = () => {
         )}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 md:px-12 bg-black/60 backdrop-blur-md shrink-0 pt-[env(safe-area-inset-top)]">
           <div className="flex flex-col"><h2 className="tracking-[0.5em] text-lg font-black flex items-center gap-3"><LayoutGrid className="text-emerald-400 w-5"/> ARENA DIRECTORY</h2><span className="text-[8px] text-white/30 tracking-[0.2em]">VERSION {VERSION}</span></div>
-          <div className="flex items-center gap-6 font-black"><div className="flex flex-col items-end"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
+          <div className="flex items-center gap-6 font-black"><div className="flex items-end flex-col"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
         </header>
         <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black font-black uppercase text-center">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
@@ -621,7 +625,7 @@ const App = () => {
                         <div className="flex flex-col gap-2">
                           <span className="text-[9px] text-white/30 tracking-widest flex items-center gap-1.5 uppercase"><Users size={10} /> Seated Players ({(t.players || []).filter(p=>p).length}/10)</span>
                           <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 bg-black/40 rounded-xl border border-white/5">
-                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={idx} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] text-white/80 font-black tracking-tight flex items-center gap-1">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
+                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`${t.id}-p-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] text-white/80 font-black tracking-tight flex items-center gap-1">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
                           </div>
                         </div>
                       </div>
@@ -660,7 +664,7 @@ const App = () => {
         </div>
       )}
 
-      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-15 md:h-19">
+      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-14 md:h-17">
         <div className="flex-1 flex items-center">
             <div className={`bg-slate-900 border px-3 py-1.5 rounded-lg flex flex-col min-w-[120px] transition-all duration-300 ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
               <span className="text-cyan-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">Current Hand:</span>
@@ -668,9 +672,9 @@ const App = () => {
             </div>
         </div>
         <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
-            <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-2.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Feed"><Eye size={18}/></button>
-            <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-2.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={18}/></button>
-            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={18}/></button>
+            <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-2 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Feed"><Eye size={18}/></button>
+            <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-2 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={18}/></button>
+            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={18}/></button>
         </div>
         <div className="flex-1 flex items-center justify-end">
             <div className={`bg-slate-900 border px-3 py-1.5 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${phaseShine ? 'animate-phase-shine border-white' : 'border-white/10'}`}>
@@ -707,7 +711,7 @@ const App = () => {
                         {expandedHands.has(hand.id) && (
                             <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
                                 {hand.events.map((ev, i) => (
-                                    <div key={i} className={`text-[9px] md:text-[10px] font-black leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
+                                    <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] font-black leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
                                         <span className="text-white/30 font-mono mr-2">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
                                         <span className={getNeonNameColor(ev.name)}>{ev.name}</span>: <span className="text-white/90">{ev.action}</span>
                                     </div>
@@ -744,7 +748,7 @@ const App = () => {
               {(players || []).map((p, i) => { 
                 if (!p) return null; 
                 const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; 
-                return (<Seat key={i} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} bigBlind={bigBlind} />); 
+                return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} bigBlind={bigBlind} />); 
               })}
             </div>
             
@@ -760,7 +764,7 @@ const App = () => {
                   {(community || []).map((c, j) => {
                     const isRedSuit = c.suit === '♥' || c.suit === '♦';
                     return (
-                      <div key={c.id || j} className={`w-[8vw] md:w-[4vw] h-[11vw] md:h-[6vw] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10'}`}>
+                      <div key={`${c.id || j}-${j}`} className={`w-[8vw] md:w-[4vw] h-[11vw] md:h-[6vw] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10'}`}>
                         <span className={`text-[12px] md:text-sm font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
                         <span className={`text-[14px] md:text-lg font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
                       </div>
@@ -770,7 +774,6 @@ const App = () => {
               )}
             </div>
 
-            {/* Vertical Betting Slider HUD */}
             {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
               <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                 <div className="flex-1 w-full relative flex items-center justify-center py-4">
@@ -824,7 +827,7 @@ const App = () => {
                 const displayRank = formatRank(String(winner.rank).replace("LOW: ", "").replace("HIGH: ", ""));
                 
                 return (
-                    <div key={winner.name + currentShowdownIdx} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div key={`${winner.name}-${currentShowdownIdx}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className={`flex items-center gap-3 ${bgColor} px-5 py-1 rounded-full border ${borderColor} max-w-full overflow-hidden shadow-2xl`}>
                             <Trophy size={14} className={themeColor + " animate-bounce shrink-0"} />
                             <div className="text-sm md:text-xl font-black tracking-tighter flex items-center gap-2 leading-none whitespace-nowrap">
@@ -839,7 +842,7 @@ const App = () => {
                         </div>
                         <div className="flex gap-1 justify-center mt-1">
                             {(winner.hand || []).map((c, ci) => (
-                                <div key={ci} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
+                                <div key={`winning-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
                                     <span className={`text-[11px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
                                     <span className={`text-[13px] md:text-xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
                                     <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
@@ -851,7 +854,7 @@ const App = () => {
             })()
           ) : (
             <div className={`flex flex-col gap-4 items-center w-full transition-all duration-500`}>
-                {heroPlayerObj && heroPlayerObj.chips > 0 && phase !== PHASES.IDLE ? (<>
+                {heroPlayerObj && heroPlayerObj.chips >= bigBlind * 2 && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
                         <button 
                             onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} 
@@ -893,7 +896,7 @@ const App = () => {
                             <button onClick={()=>handleAction('RAISE', raiseInput)} className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase"><Zap size={20} className="mr-1"/> RAISE</button>
                         </div>
                     </div>
-                </>) : heroPlayerObj && heroPlayerObj.chips <= 0 && phase !== PHASES.IDLE ? (
+                </>) : heroPlayerObj && heroPlayerObj.chips < bigBlind * 2 && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN) ? (
                     <div className="flex flex-col items-center gap-4 py-6">
                         <span className="text-white/40 tracking-[0.2em] text-xs font-black italic uppercase">Broke in Arena • Funds Available in Wallet</span>
                         <button onClick={()=>setShowRebuyModal(true)} className="px-12 py-5 bg-indigo-600 border-2 border-indigo-400 rounded-2xl font-black text-xl hover:scale-105 transition-transform flex items-center gap-3 shadow-[0_0_40px_rgba(79,70,229,0.4)] uppercase"><Coins size={24}/> Re-buy & Continue</button>
