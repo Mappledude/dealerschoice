@@ -110,7 +110,8 @@ const Seat = ({
     return (
         <div 
           style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} 
-          className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 transition-all duration-500 
+          className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-500 
+            ${isHero ? 'z-[100]' : 'z-20'}
             ${player.isFolded ? 'opacity-30 grayscale scale-90' : 'opacity-100'} 
             ${player.waitingForNextHand ? 'opacity-50' : ''}`}
         >
@@ -118,6 +119,7 @@ const Seat = ({
                 <div className="absolute top-[-35px] bg-slate-900 text-cyan-400 text-[8px] px-2 py-0.5 rounded-full border border-cyan-500/50 uppercase font-bold tracking-[0.2em] z-[150] backdrop-blur-md">WAITING</div>
             )}
             
+            {/* BET AMOUNT */}
             {player.currentBet > 0 && (
                 <div className={`absolute z-[80] transition-all duration-700 ${isCollectingBets ? 'animate-fling-to-pot' : 'animate-bet-float'}`}
                     style={{ transform: `translate(calc(-50% + ${betInwardX}vw), ${betInwardY}vw)`, left: '50%', top: '50%' }}>
@@ -127,6 +129,7 @@ const Seat = ({
                 </div>
             )}
 
+            {/* HOLE CARDS */}
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div 
                   className={`absolute flex items-center justify-center w-[15vw] h-[8vw] pointer-events-none ${isHero ? 'z-[200]' : 'z-[40]'}`}
@@ -159,6 +162,7 @@ const Seat = ({
                 </div>
             )}
 
+            {/* PLAYER BADGE */}
             <div 
                 className={`relative z-[90] flex flex-col items-center p-2 md:p-4 rounded-xl border transition-all duration-300 min-w-[120px] md:min-w-[220px] overflow-hidden backdrop-blur-xl
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
@@ -349,11 +353,7 @@ const App = () => {
     const lowerRank = clean.toLowerCase();
     for (const cat of categories) {
         if (lowerRank.includes(cat)) {
-            // For Low hands and High Card hands, preserve the specific value (e.g. Low 7 or High Card Ace)
-            if (cat === "low" || cat === "high card") {
-                return clean.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-            }
-            // For structured hands, return the title-cased category name
+            if (cat === "low" || cat === "high card") return clean.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             return cat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
     }
@@ -611,7 +611,7 @@ const App = () => {
                             <div className="px-3 pb-3 border-t border-white/5 bg-transparent space-y-1 pt-2">
                                 {hand.events.map((ev, i) => (
                                     <div key={i} className={`text-[9px] md:text-[10px] font-black leading-tight py-0.5 border-l-2 pl-2 opacity-50 ${ev.type === 'win' ? 'border-emerald-500' : ev.type === 'fold' ? 'border-red-500' : 'border-cyan-500'}`}>
-                                        <span className="text-white/30 font-mono">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> <span className={getNeonNameColor(ev.name)}>{ev.name}</span>: <span className="text-white">{ev.action}</span>
+                                        <span className="text-white/20 font-mono">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> <span className={getNeonNameColor(ev.name)}>{ev.name}</span>: <span className="text-white">{ev.action}</span>
                                     </div>
                                 ))}
                             </div>
@@ -723,7 +723,7 @@ const App = () => {
                         <button onClick={handleAllIn} className="flex-1 h-10 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black">ALL-IN</button>
                     </div>
                     <div className="flex flex-row gap-2 w-full max-w-[800px] items-center justify-center font-black">
-                        <button onClick={()=>handleAction('FOLD')} className="flex-1 h-16 bg-red-950/60 border border-red-500/50 rounded-xl text-lg font-black tracking-widest">FOLD</button>
+                        <button onClick={()=>handleAction('FOLD')} className="flex-1 h-16 bg-red-950/60 border border-red-500/50 rounded-xl text-lg font-black tracking-widest uppercase font-black">FOLD</button>
                         <button onClick={()=>handleAction('CALL')} className="flex-1 h-16 bg-white/10 border border-white/20 rounded-xl text-xl font-black truncate px-2">{highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK'}</button>
                         <div className="flex-[1.5] flex gap-2 items-center bg-black/40 border border-white/10 p-2 rounded-xl">
                             <input type="number" step="0.25" value={raiseInput} onChange={(e) => setRaiseInput(Math.max(0, Number(e.target.value)))} className="w-full bg-transparent text-center font-mono text-xl text-[#fbbf24] outline-none font-black" />
