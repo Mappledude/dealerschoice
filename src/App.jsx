@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.26
+// VERSION: v1.0.29
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.26";
+const VERSION = "v1.0.29";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -122,7 +122,7 @@ const DashTimer = ({ timeRemaining }) => {
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, 
   isDealer, potTransferring, timeRemaining, isHero, 
-  relativeIdx, visuals, bigBlind
+  relativeIdx, visuals, bigBlind, showdownWinners
 }) => {
     if (!player || !displayPos) return null;
 
@@ -150,6 +150,13 @@ const Seat = ({
     const action = getActionDisplay();
     const showActionOverlay = action && !isCollectingBets;
 
+    // IMPROVEMENT: Logic to hide cards if everyone else folded (Win by default/muck)
+    const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
+    const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !isMuckWin);
+    
+    // IMPROVEMENT: During showdown, bring opponent cards above the HUD (z-index higher than z-90)
+    const cardZIndex = isHero ? 'z-[200]' : (phase === PHASES.SHOWDOWN ? 'z-[150]' : 'z-[40]');
+
     return (
         <div 
           style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} 
@@ -164,7 +171,7 @@ const Seat = ({
 
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div 
-                  className={`absolute flex items-center justify-center w-[15vw] h-[8vw] pointer-events-none ${isHero ? 'z-[200]' : 'z-[40]'}`}
+                  className={`absolute flex items-center justify-center w-[15vw] h-[8vw] pointer-events-none ${cardZIndex}`}
                   style={{ transform: `translate(${cardInwardX}vw, ${cardInwardY}vw)` }}
                 >
                     {player.hand.map((c, ci) => {
@@ -177,19 +184,19 @@ const Seat = ({
 
                         return (
                           <div key={`${c.id || ci}-${ci}`} 
-                              className={`w-[7.5vw] md:w-[4vw] h-[10.5vw] md:h-[5.5vw] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${phase === PHASES.SHOWDOWN || isHero ? 'bg-white' : 'bg-slate-900 border-white/20'}`} 
+                              className={`w-[7.5vw] md:w-[4vw] h-[10.5vw] md:h-[5.5vw] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-slate-900 border-white/20'}`} 
                               style={{ 
                                 transform: `translateX(${offset * cardSpacing}vw) rotate(${rotation}deg) scale(${scale})`, 
                                 transformOrigin: 'bottom center', 
                                 zIndex: 100 + ci
                               }}>
-                              {(phase === PHASES.SHOWDOWN || isHero) && ( 
+                              {shouldRevealCards && ( 
                                 <>
                                   <span className={`text-[10px] md:text-sm font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
                                   <span className={`text-[12px] md:text-lg leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
                                 </> 
                               )}
-                              {phase === PHASES.SHOWDOWN && player.isWinner && (winning5Ids || []).includes(c.id) && (
+                              {phase === PHASES.SHOWDOWN && player.isWinner && (winning5Ids || []).includes(c.id) && !isMuckWin && (
                                 <div className="absolute inset-0 ring-4 ring-yellow-400 rounded-lg animate-pulse" />
                               )}
                           </div>
@@ -231,7 +238,8 @@ const Seat = ({
                     {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
                 </div>
 
-                {isDealer && <div className="absolute bottom-[6px] left-1/2 -translate-x-1/2 w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full shadow-[0_0_15px_#ef4444] animate-pulse z-20" />}
+                {/* IMPROVEMENT: Higher z-index for dealer button so it stays on top of action overlays */}
+                {isDealer && <div className="absolute bottom-[6px] left-1/2 -translate-x-1/2 w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full shadow-[0_0_15px_#ef4444] animate-pulse z-[60]" />}
             </div>
         </div>
     );
@@ -268,7 +276,7 @@ const App = () => {
   const [currentShowdownIdx, setCurrentShowdownIdx] = useState(0);
   const [nuclearConfirm, setNuclearConfirm] = useState(false);
   const [showVisualControls, setShowVisualControls] = useState(false);
-  const [intelExpanded, setIntelExpanded] = useState(false); // Default to false as requested
+  const [intelExpanded, setIntelExpanded] = useState(false);
   const [expandedHands, setExpandedHands] = useState(new Set());
   const [isConnected, setIsConnected] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -846,7 +854,7 @@ const App = () => {
               {(players || []).map((p, i) => { 
                 if (!p) return null; 
                 const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; 
-                return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} bigBlind={bigBlind} />); 
+                return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} bigBlind={bigBlind} showdownWinners={showdownWinners} />); 
               })}
             </div>
             
@@ -1019,7 +1027,6 @@ const App = () => {
                     <X size={24} className="cursor-pointer text-white/40 hover:text-white" onClick={() => setShowVisualControls(false)}/>
                 </div>
                 <div className="space-y-6">
-                    <button onClick={()=>{ setShowRebuyModal(true); setRebuyAmount(100); }} className="w-full py-4 bg-indigo-600/60 border border-indigo-400 text-white font-black rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all"><Coins size={18}/> Top Up Wallet</button>
                     <button onClick={addBot} className="w-full py-4 bg-white/5 border border-white/10 text-white font-black rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/10 transition-all"><Bot size={18}/> Add Arena Bot</button>
                     <div className="flex flex-col gap-2 pt-4 border-t border-white/5">
                         <label className="text-[10px] text-white/60 uppercase tracking-widest font-black">Table Zoom</label>
