@@ -18,7 +18,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v2.0.8-PRO";
+const VERSION = "v2.0.9-PRO";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -662,7 +662,7 @@ const App = () => {
             <button onClick={() => socket.emit('adminAddBot', { roomId: currentRoomId })} className="text-indigo-400 p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all border border-white/5"><Bot size={18}/></button>
             <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600' : 'text-[#fbbf24] bg-white/5'} p-2 border border-white/5 rounded-xl hover:bg-white/10 transition-colors shadow-lg`}><Eye size={18}/></button>
             <button onClick={() => setShowVisualControls(true)} className="text-cyan-400 p-2 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all"><Settings size={18}/></button>
-            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"><LogOut size={18}/></button>
+            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all"><LogOut size={18}/></button>
           </div>
         </div>
       </header>
@@ -730,7 +730,7 @@ const App = () => {
         </div>
       </main>
 
-      <footer style={{ height: visuals.footerHeight }} className="bg-black/95 border-t border-white/10 z-[100] pt-0 px-2 pb-2 md:p-8 shrink-0 shadow-[0_-15px_50px_rgba(0,0,0,0.7)] flex flex-col items-center justify-start">
+      <footer style={{ height: visuals.footerHeight }} className="bg-black/95 border-t border-white/10 z-[100] pt-2 px-2 pb-2 md:p-8 shrink-0 shadow-[0_-15px_50px_rgba(0,0,0,0.7)] flex flex-col items-center justify-start">
         {phase === PHASES.SHOWDOWN && currentWinner ? (
           <div key={currentShowdownIdx} className="h-full flex flex-col items-center justify-center animate-in zoom-in duration-700">
             <div className="flex items-center gap-2 md:gap-4 text-yellow-400 text-[2.6vw] sm:text-lg md:text-4xl mb-2 md:mb-4 rank-shimmer font-black italic tracking-tighter uppercase text-center whitespace-nowrap">
@@ -753,7 +753,7 @@ const App = () => {
           <div className={`flex flex-col items-center w-full max-w-4xl mx-auto transition-all duration-500 ${activeIdx !== heroIdx && phase !== PHASES.IDLE ? 'opacity-30 grayscale pointer-events-none scale-95' : ''}`}>
              
              {heroPlayerObj && phase !== PHASES.IDLE && (
-               <div className="flex justify-between w-full px-2 mt-[-6px]">
+               <div className="flex justify-between w-full px-2 mt-1">
                   <div className="flex flex-col items-start min-w-[120px] md:min-w-[140px]">
                     {activeVariant?.id === 'HILOW' && (
                       <>
@@ -773,7 +773,7 @@ const App = () => {
              )}
 
              {phase !== PHASES.IDLE && (
-               <div className="flex flex-col gap-1 md:gap-2 w-full mt-0.5">
+               <div className="flex flex-col gap-1 md:gap-2 w-full mt-1.5">
                   <div className="flex gap-1 w-full font-black uppercase">
                     <button onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">1/2 POT</button>
                     <button onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} className="flex-1 h-7 md:h-10 bg-white/5 border border-white/10 rounded-lg text-[8px] md:text-xs hover:bg-white/20 transition-all font-black">POT</button>
