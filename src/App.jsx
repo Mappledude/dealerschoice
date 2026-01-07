@@ -161,8 +161,9 @@ const Seat = ({
                 </div>
             )}
 
+            {/* PLAYER BADGE - Shrunk by 15% using scale-[0.85] */}
             <div 
-                className={`relative z-[90] flex flex-col items-center p-2 md:p-4 rounded-xl border transition-all duration-300 min-w-[120px] md:min-w-[220px] overflow-hidden backdrop-blur-xl
+                className={`relative z-[90] flex flex-col items-center p-2 md:p-4 rounded-xl border transition-all duration-300 min-w-[120px] md:min-w-[220px] overflow-hidden backdrop-blur-xl scale-[0.85]
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}
             >
@@ -362,7 +363,7 @@ const App = () => {
     for (const cat of categories) {
         if (lowerRank.includes(cat)) {
             if (cat === "low" || cat === "high card") return clean.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-            return cat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            return cat.split(' ').map(w => w.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
     }
     return clean.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -653,7 +654,7 @@ const App = () => {
               })}
             </div>
             
-            <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full">
+            <div className="absolute top-[calc(48%-50px)] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full">
               {!potTransferring && ( 
                 <div className="flex flex-col items-center mb-6">
                   <span className="text-white/20 text-[10px] tracking-[0.5em] mb-1 uppercase font-bold">Total Pot:</span>
@@ -675,7 +676,7 @@ const App = () => {
               )}
             </div>
 
-            {/* RESTORED Betting Slider - Restored and shifted right */}
+            {/* RESTORED Betting Slider - Thicker, Neon, 160px Right */}
             {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
               <div className="absolute right-[-160px] top-[15%] bottom-[15%] w-16 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                 <div className="flex-1 w-full relative flex items-center justify-center py-4">
