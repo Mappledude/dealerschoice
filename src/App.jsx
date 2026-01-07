@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.15";
+const VERSION = "v1.0.17";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -42,6 +42,13 @@ const NEON_PALETTE = [
   'text-[#FFFF00]', // Neon Yellow
   'text-[#B026FF]', // Neon Purple
 ];
+
+const getNeonNameColor = (name) => {
+  if (!name || name === "SYSTEM") return "text-white";
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return NEON_PALETTE[Math.abs(hash) % NEON_PALETTE.length];
+};
 
 const VARIANTS = { 
   HOLDEM: { 
@@ -99,7 +106,7 @@ const DashTimer = ({ timeRemaining }) => {
     <div className="flex gap-1 items-center justify-center mt-1">
       {Array.from({ length: 8 }).map((_, i) => (
         <div 
-          key={i} 
+          key={`timer-seg-${i}`} 
           className={`h-1 w-3 md:w-5 rounded-full transition-all duration-500 ${i < segments ? 'opacity-100 shadow-[0_0_8px]' : 'opacity-10'}`}
           style={{ 
             backgroundColor: color, 
@@ -197,11 +204,11 @@ const Seat = ({
             >
                 {showActionOverlay && (
                     <div 
-                      key={action.text} 
+                      key={`action-${String(action.text)}`} 
                       className={`absolute inset-0 z-50 flex items-center justify-center bg-black animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
                     >
                         <span className={`text-sm md:text-3xl font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
-                            {action.text}
+                            {String(action.text)}
                         </span>
                     </div>
                 )}
@@ -230,6 +237,7 @@ const Seat = ({
 };
 
 const App = () => {
+  // --- STATE ---
   const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
   const [adminTab, setAdminTab] = useState(ADMIN_TABS.PLAYERS);
   const [userProfile, setUserProfile] = useState(null);
@@ -263,21 +271,23 @@ const App = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [announcement, setAnnouncement] = useState(null); 
-  const joinLock = useRef(false);
-  const phaseRef = useRef(PHASES.IDLE); 
-  const currentHandId = useRef(Date.now());
   const [rebuyAmount, setRebuyAmount] = useState(10);
   const [showRebuyModal, setShowRebuyModal] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [preAction, setPreAction] = useState(null);
-
   const [handAttention, setHandAttention] = useState(false);
   const [dealAttention, setDealAttention] = useState(false);
   const [idleAlternator, setIdleAlternator] = useState(true);
+
+  // --- REFS ---
+  const joinLock = useRef(false);
+  const phaseRef = useRef(PHASES.IDLE); 
+  const currentHandId = useRef(Date.now());
   
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 100, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 0.25, bb: 0.50, minBuy: 5, maxBuy: 10, pendingVariant: 'HOLDEM' });
 
+  // --- DERIVED ---
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
   const [visuals, setVisuals] = useState({
@@ -298,50 +308,7 @@ const App = () => {
     return Number(potAmount) + currentBetsSum;
   }, [potAmount, players]);
 
-  const handHistory = useMemo(() => {
-    const hands = [];
-    let currentHand = null;
-    [...logs].reverse().forEach(log => {
-        if (log.action.includes("IS DEALING") || log.action.includes("PRE_FLOP DEALT")) {
-            if (currentHand) hands.push(currentHand);
-            currentHand = { 
-                id: log.handId || `hand-${log.timestamp}-${Math.random()}`, 
-                winner: null, rank: null, amount: null, events: [], 
-                variant: log.action.split('DEALING ')[1] || "Poker"
-            };
-        }
-        if (currentHand) {
-            currentHand.events.push(log);
-            if (log.type === 'win') {
-                const match = String(log.action).match(/WON \$([\d.]+) WITH (.*)/);
-                if (match) {
-                    currentHand.winner = log.name;
-                    currentHand.amount = match[1];
-                    currentHand.rank = match[2];
-                } else if (String(log.action).includes("BY DEFAULT")) {
-                    currentHand.winner = log.name;
-                    currentHand.rank = "Muck/Default";
-                }
-            }
-        }
-    });
-    if (currentHand) hands.push(currentHand);
-    return hands.reverse();
-  }, [logs]);
-
-  const toggleHand = (id) => {
-    const next = new Set(expandedHands);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    setExpandedHands(next);
-  };
-
-  const getNeonNameColor = (name) => {
-    if (!name || name === "SYSTEM") return "text-white";
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return NEON_PALETTE[Math.abs(hash) % NEON_PALETTE.length];
-  };
-
+  // --- ACTIONS (Declared before early returns to fix ReferenceError) ---
   const handleAction = useCallback((type, amt = 0) => {
     const finalAmount = amt !== 0 ? amt : raiseInput;
     if (currentRoomId) socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(finalAmount) : 0 });
@@ -358,6 +325,10 @@ const App = () => {
     socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: rebuyAmount });
     setShowRebuyModal(false);
   }, [currentRoomId, userProfile, rebuyAmount]);
+
+  const addBot = useCallback(() => { 
+    if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId });
+  }, [currentRoomId]);
 
   const handleLogin = useCallback(() => { 
     if (passwordInput.toLowerCase().trim() === 'pass') { 
@@ -419,6 +390,44 @@ const App = () => {
     return rank.split(',')[0].split(' of ')[0];
   };
 
+  const handHistory = useMemo(() => {
+    const hands = [];
+    let currentHand = null;
+    [...logs].reverse().forEach(log => {
+        if (String(log.action).includes("IS DEALING") || String(log.action).includes("PRE_FLOP DEALT")) {
+            if (currentHand) hands.push(currentHand);
+            currentHand = { 
+                id: log.handId || `hand-${log.timestamp}-${Math.random()}`, 
+                winner: null, rank: null, amount: null, events: [], 
+                variant: String(log.action).split('DEALING ')[1] || "Poker"
+            };
+        }
+        if (currentHand) {
+            currentHand.events.push(log);
+            if (log.type === 'win') {
+                const match = String(log.action).match(/WON \$([\d.]+) WITH (.*)/);
+                if (match) {
+                    currentHand.winner = log.name;
+                    currentHand.amount = match[1];
+                    currentHand.rank = match[2];
+                } else if (String(log.action).includes("BY DEFAULT")) {
+                    currentHand.winner = log.name;
+                    currentHand.rank = "Muck/Default";
+                }
+            }
+        }
+    });
+    if (currentHand) hands.push(currentHand);
+    return hands.reverse();
+  }, [logs]);
+
+  const toggleHand = (id) => {
+    const next = new Set(expandedHands);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setExpandedHands(next);
+  };
+
+  // --- EFFECTS ---
   useEffect(() => {
     const interval = setInterval(() => setIdleAlternator(p => !p), 2000);
     return () => clearInterval(interval);
@@ -495,7 +504,6 @@ const App = () => {
       if (document.visibilityState === 'visible') {
         if (!socket.connected) socket.connect();
         socket.emit('getInitialData');
-        // FIXED: Added callback check in joinRoom sync call to prevent server crash
         if (currentRoomId && userProfile) {
           socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 }, (res) => {});
         }
@@ -550,6 +558,7 @@ const App = () => {
     }
   }, [activeIdx, heroIdx, highestBet, bigBlind, heroPlayerObj, preAction, handleAction]);
 
+  // --- VIEWS ---
   if (currentView === VIEWS.LOGIN) return (
     <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
         <div className="w-full max-w-[400px] p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8">
@@ -645,7 +654,7 @@ const App = () => {
         )}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 md:px-12 bg-black/60 backdrop-blur-md shrink-0 pt-[env(safe-area-inset-top)]">
           <div className="flex flex-col"><h2 className="tracking-[0.5em] text-lg font-black flex items-center gap-3"><LayoutGrid className="text-emerald-400 w-5"/> ARENA DIRECTORY</h2><span className="text-[8px] text-white/30 tracking-[0.2em]">VERSION {VERSION}</span></div>
-          <div className="flex items-center gap-6 font-black"><div className="flex flex-col items-end"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
+          <div className="flex items-center gap-6 font-black"><div className="flex items-end flex-col"><span className="text-[10px] text-white/40 uppercase font-bold tracking-widest">{String(userProfile?.name)}</span><span className="text-emerald-400 font-mono text-2xl tracking-tighter leading-none">${Number(userProfile?.chips || 0).toLocaleString()}</span></div><button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button></div>
         </header>
         <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black font-black uppercase text-center">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
@@ -678,7 +687,7 @@ const App = () => {
           <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
               <div className="relative">
                 <div className="absolute inset-0 blur-[40px] opacity-50 bg-current scale-150 animate-pulse" style={{ color: announcement.color }} />
-                <h1 className="text-[10vw] font-black uppercase italic animate-announcement-pop drop-shadow-[0_0_50px_rgba(0,0,0,1)] text-center px-10 relative z-10" style={{ color: announcement.color }}>{announcement.text}</h1>
+                <h1 className="text-[10vw] font-black uppercase italic animate-announcement-pop drop-shadow-[0_0_50px_rgba(0,0,0,1)] text-center px-10 relative z-10" style={{ color: announcement.color }}>{String(announcement.text)}</h1>
               </div>
           </div>
       )}
@@ -706,9 +715,9 @@ const App = () => {
             <h3 className="text-2xl font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><BookOpen size={24}/> {activeVariant?.name} Rules</h3>
             <div className="space-y-4 overflow-y-auto max-h-[60vh] pr-2 font-black">
                 {activeVariant?.rules?.map((rule, ri) => (
-                    <div key={ri} className="flex gap-3 text-sm text-white/80 leading-relaxed uppercase">
+                    <div key={`rule-${ri}`} className="flex gap-3 text-sm text-white/80 leading-relaxed uppercase">
                         <span className="text-cyan-500 shrink-0">•</span>
-                        <span>{rule}</span>
+                        <span>{String(rule)}</span>
                     </div>
                 ))}
             </div>
@@ -717,7 +726,7 @@ const App = () => {
         </div>
       )}
 
-      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-14 md:h-17">
+      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[45px] md:h-[55px]">
         <div className="flex-1 flex items-center">
             <button 
                 onClick={()=>setShowRulesModal(true)}
@@ -728,16 +737,16 @@ const App = () => {
             </button>
         </div>
         <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
-            <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-2 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Feed"><Eye size={18}/></button>
-            <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-2 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={18}/></button>
-            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-2 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={18}/></button>
+            <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Feed"><Eye size={16}/></button>
+            <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button>
+            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
         </div>
         <div className="flex-1 flex items-center justify-end">
             <div className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}>
                 <span className="text-emerald-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">On My Deal:</span>
                 <div className="flex items-center">
                     <select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} className="bg-transparent text-white text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full">
-                        {Object.entries(VARIANTS).map(([k,v]) => (<option key={k} value={k} className="bg-slate-900">{v.name}</option>))}
+                        {Object.entries(VARIANTS).map(([k,v]) => (<option key={`opt-${k}`} value={k} className="bg-slate-900">{v.name}</option>))}
                     </select>
                     <ChevronDown size={12} className={`text-white/30 pointer-events-none ml-1 ${!dealAttention && !idleAlternator ? 'animate-bounce-subtle' : ''}`} />
                 </div>
@@ -756,11 +765,11 @@ const App = () => {
                     <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
                         <button onClick={() => toggleHand(hand.id)} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
                             <div className="flex items-center justify-between w-full">
-                                <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{hand.variant} HAND</span>
+                                <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span>
                                 <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
                             </div>
-                            <div className="text-[11px] font-black text-white/90 text-left">
-                                {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400 uppercase"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{hand.winner}</span> WON ${hand.amount}</span>) : (<span className="text-white/40 italic uppercase">HAND IN PROGRESS...</span>)}
+                            <div className="text-[11px] text-white/90 text-left">
+                                {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400 uppercase"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic uppercase">HAND IN PROGRESS...</span>)}
                             </div>
                             {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(String(hand.rank))}</div>)}
                         </button>
@@ -769,7 +778,7 @@ const App = () => {
                                 {hand.events.map((ev, i) => (
                                     <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
                                         <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
-                                        <span className={getNeonNameColor(ev.name)}>{ev.name}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
+                                        <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -820,7 +829,7 @@ const App = () => {
                   {(community || []).map((c, j) => {
                     const isRedSuit = c.suit === '♥' || c.suit === '♦';
                     return (
-                      <div key={`${c.id || j}-${j}`} className={`w-[8vw] md:w-[4vw] h-[11vw] md:h-[6vw] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10'}`}>
+                      <div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] md:w-[4vw] h-[11vw] md:h-[6vw] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10'}`}>
                         <span className={`text-[12px] md:text-sm font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
                         <span className={`text-[14px] md:text-lg font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
                       </div>
@@ -882,24 +891,24 @@ const App = () => {
                 const displayRank = formatRank(String(winner.rank).replace("LOW: ", "").replace("HIGH: ", ""));
                 
                 return (
-                    <div key={`${winner.name}-${currentShowdownIdx}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div key={`winner-disp-${winner.name}-${currentShowdownIdx}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className={`flex items-center gap-3 ${bgColor} px-5 py-1 rounded-full border ${borderColor} max-w-full overflow-hidden shadow-2xl`}>
                             <Trophy size={14} className={themeColor + " animate-bounce shrink-0"} />
                             <div className="text-sm md:text-xl font-black tracking-tighter flex items-center gap-2 leading-none whitespace-nowrap">
                                 <span className={getNeonNameColor(winner.name)}>{String(winner.name).toUpperCase()}</span>
                                 <span className="text-white/40">WON</span>
-                                <span className={themeColor}>{winTypeLabel}</span>
+                                <span className={themeColor}>{String(winTypeLabel)}</span>
                                 <span className="text-emerald-400 font-mono ml-2">+${Number(winner.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                             </div>
                         </div>
                         <div className="text-[10px] md:text-sm font-black text-white/60 tracking-widest uppercase">
-                          HOLDING <span className={themeColor}>{winner.rank === "!" ? "THE BEST HAND" : displayRank}</span>
+                          HOLDING <span className={themeColor}>{winner.rank === "!" ? "THE BEST HAND" : String(displayRank)}</span>
                         </div>
                         <div className="flex gap-1 justify-center mt-1">
                             {(winner.hand || []).map((c, ci) => (
-                                <div key={`winning-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
-                                    <span className={`text-[11px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.value}</span>
-                                    <span className={`text-[13px] md:text-xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{c.suit}</span>
+                                <div key={`winner-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
+                                    <span className={`text-[11px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.value)}</span>
+                                    <span className={`text-[13px] md:text-xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
                                     <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
                                 </div>
                             ))}
@@ -1004,7 +1013,6 @@ const App = () => {
             30% { box-shadow: 0 0 40px rgba(255,255,255,0.9), inset 0 0 10px rgba(255,255,255,0.5); border-color: rgba(255,255,255,1); transform: scale(1.08); }
             100% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); transform: scale(1); }
           }
-          /* Custom classes for staggered durations */
           .animate-hand-trigger { animation: attention-trigger 3s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
           .animate-deal-trigger { animation: attention-trigger 1s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
 
