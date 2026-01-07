@@ -8,7 +8,7 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const VERSION = "v1.0.1";
+const VERSION = "v1.0.5";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -243,7 +243,6 @@ const processShowdown = (roomId) => {
     });
 
     setTimeout(() => {
-        // Logic Upgrade: Automatic Bot Rebuy
         room.players.forEach(p => { 
           if (p) { 
             p.waitingForNextHand = false; 
@@ -406,7 +405,6 @@ const runIgnition = (roomId) => {
   if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
   const dealerSeat = room.players[room.dealerIdx];
 
-  // Logic Upgrade: Bots pick a random variation instead of just holding onto their last setting
   if (dealerSeat.isBot) {
     const vIds = Object.keys(variantNames);
     dealerSeat.pendingVariant = vIds[Math.floor(Math.random() * vIds.length)];
@@ -447,10 +445,17 @@ const removePlayerGlobally = (uid, force = false) => {
         if (idx !== -1) {
             const player = room.players[idx];
             if (force || player.isBot) {
+                // RETURN CHIPS TO WALLET CORRECTLY
                 const prof = profiles.find(x => x.uid === uid);
-                if (prof) prof.chips += (Number(player.chips) + Number(player.currentBet || 0));
+                if (prof) {
+                  const tableStack = Number(player.chips) + Number(player.currentBet || 0);
+                  prof.chips += tableStack;
+                }
+                
                 if (room.activeIdx === idx) { moveToNextPlayer(room.id); }
                 room.players[idx] = null;
+                
+                // BOOT ALL BOTS AND RESET IF NO HUMANS REMAIN
                 const humanCount = room.players.filter(pl => pl && !pl.isBot).length;
                 if (humanCount === 0) {
                     if (room.timer) clearInterval(room.timer);
@@ -459,6 +464,10 @@ const removePlayerGlobally = (uid, force = false) => {
                     room.gameInProgress = false;
                     room.community = [];
                     room.potData = [{amount: 0}];
+                    room.highestBet = 0;
+                    room.activeIdx = -1;
+                    room.dealerIdx = 0;
+                    room.showdownWinners = null;
                 }
                 io.to(room.id).emit('roomUpdate', serializeRoom(room));
             } else {
@@ -480,7 +489,6 @@ io.on('connection', (socket) => {
   let seatedUid = null;
   socket.on('getInitialData', () => socket.emit('initialDataResponse', { profiles, rooms: Object.values(rooms).map(serializeRoom) }));
   socket.on('playerLogin', ({ password }) => {
-    // LOGIN PASSWORD NOW CASE-INSENSITIVE
     const profile = profiles.find(p => p.password.toLowerCase() === password.toLowerCase());
     if (profile) {
       seatedUid = profile.uid;
@@ -580,7 +588,6 @@ io.on('connection', (socket) => {
   socket.on('adminNuclearReset', () => { rooms = {}; profiles = profiles.filter(p => p.role === 'admin'); io.emit('lobbyUpdate', []); io.emit('profilesUpdate', profiles); io.emit('roomUpdate', null); });
   socket.on('adminCreatePlayer', (p) => { profiles.push({ ...p, chips: Number(p.chips) }); io.emit('profilesUpdate', profiles); });
   
-  // ADMIN UPDATE PROFILE (Chips and Passwords)
   socket.on('adminUpdatePlayer', (data) => {
     const { uid, chips, password } = data;
     const p = profiles.find(x => x.uid === uid);
