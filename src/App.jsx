@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.49
+// VERSION: v1.0.50
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.49";
+const VERSION = "v1.0.50";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -239,7 +239,7 @@ const Seat = ({
                 {showActionOverlay && (
                     <div 
                       key={`action-overlay-${String(action.text)}`} 
-                      className={`absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
+                      className={`absolute inset-0 z-50 flex items-end justify-center bg-black/60 pb-3 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
                     >
                         <span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
                             {String(action.text)}
