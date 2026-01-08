@@ -7,14 +7,12 @@ const app = express();
 app.use(cors());
 const server = http.createServer(app);
 
-// Logic Upgrade: Increased ping timeouts to handle mobile background suspension gracefully
 const io = new Server(server, { 
   cors: { origin: "*" },
   pingTimeout: 60000, 
   pingInterval: 25000  
 });
 
-// VERSION: v1.0.26 (Internal Server)
 const VERSION = "v1.0.26";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
@@ -192,10 +190,19 @@ const processShowdown = (roomId) => {
     room.activeIdx = -1;
     room.gameInProgress = false;
     if (room.timer) clearInterval(room.timer);
+    
     const activePlayers = room.players.filter(p => p !== null && !p.waitingForNextHand);
     const variantId = room.activeVariant?.id || 'HOLDEM';
     const rawPotsWins = [];
-    const contributions = activePlayers.map(p => ({ uid: p.uid, amount: p.totalContribution, folded: p.isFolded, name: p.name, player: p })).sort((a, b) => a.amount - b.amount);
+    
+    const contributions = activePlayers.map(p => ({ 
+        uid: p.uid, 
+        amount: p.totalContribution, 
+        folded: p.isFolded, 
+        name: p.name, 
+        player: p 
+    })).sort((a, b) => a.amount - b.amount);
+    
     let lastLevel = 0;
     const pots = [];
     contributions.forEach((c, idx) => {
@@ -208,20 +215,24 @@ const processShowdown = (roomId) => {
                 if (!other.folded) eligible.push(other.uid);
             });
             if (eligible.length > 0) pots.push({ amount: segAmount, eligible });
-            else if (pots.length > 0) pots[pots.length-1].amount += segAmount;
             lastLevel = c.amount;
         }
     });
+
     const totalUnfolded = activePlayers.filter(p => !p.isFolded).length;
+    
     pots.forEach(pot => {
         const eligiblePlayers = room.players.filter(p => p && pot.eligible.includes(p.uid));
+        
         if (totalUnfolded === 1 && eligiblePlayers.length === 1) {
             const soleWinner = eligiblePlayers[0];
             soleWinner.chips += pot.amount;
             rawPotsWins.push({ name: soleWinner.name, uid: soleWinner.uid, rank: "!", hand: [], amount: pot.amount });
             return;
         }
+        
         const evals = eligiblePlayers.map(p => ({ player: p, res: getBestHand(p.hand, room.community, variantId) }));
+        
         if (variantId === 'HILOW') {
             const lowHalf = Math.floor((pot.amount * 100) / 2) / 100;
             const highHalf = ((pot.amount * 100) - (lowHalf * 100)) / 100;
@@ -229,21 +240,39 @@ const processShowdown = (roomId) => {
             if (eligibleLow.length > 0) {
                 const lowSorted = [...eligibleLow].sort((a, b) => a.res.low.power - b.res.low.power);
                 const winnersL = lowSorted.filter(e => e.res.low.power === lowSorted[0].res.low.power);
-                winnersL.forEach(w => { const share = lowHalf / winnersL.length; w.player.chips += share; rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share }); });
+                winnersL.forEach(w => { 
+                    const share = lowHalf / winnersL.length; 
+                    w.player.chips += share; 
+                    rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share }); 
+                });
+                
                 const highSorted = [...evals].sort((a, b) => b.res.high.power - a.res.high.power);
                 const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
-                winnersH.forEach(w => { const share = highHalf / winnersH.length; w.player.chips += share; rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share }); });
+                winnersH.forEach(w => { 
+                    const share = highHalf / winnersH.length; 
+                    w.player.chips += share; 
+                    rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share }); 
+                });
             } else {
                 const highSorted = [...evals].sort((a, b) => b.res.high.power - a.res.high.power);
                 const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
-                winnersH.forEach(w => { const share = pot.amount / winnersH.length; w.player.chips += share; rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: `SCOOP: ${w.res.high.name}`, hand: w.res.high.cards, amount: share }); });
+                winnersH.forEach(w => { 
+                    const share = pot.amount / winnersH.length; 
+                    w.player.chips += share; 
+                    rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: `SCOOP: ${w.res.high.name}`, hand: w.res.high.cards, amount: share }); 
+                });
             }
         } else {
             evals.sort((a, b) => variantId === 'MUFLIS' ? (a.res.high.power - b.res.high.power) : (b.res.high.power - a.res.high.power));
             const winners = evals.filter(e => e.res.high.power === evals[0].res.high.power);
-            winners.forEach(w => { const share = pot.amount / winners.length; w.player.chips += share; rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: w.res.high.name, hand: w.res.high.cards, amount: share }); });
+            winners.forEach(w => { 
+                const share = pot.amount / winners.length; 
+                w.player.chips += share; 
+                rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: w.res.high.name, hand: w.res.high.cards, amount: share }); 
+            });
         }
     });
+
     const aggregated = {};
     rawPotsWins.forEach(win => {
         if (!aggregated[win.uid]) aggregated[win.uid] = { ...win };
@@ -256,38 +285,183 @@ const processShowdown = (roomId) => {
             }
         }
     });
+
     room.showdownWinners = Object.values(aggregated);
     room.phase = PHASES.SHOWDOWN;
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
+    
     room.showdownWinners.forEach(w => {
       const cardStr = w.hand && w.hand.length > 0 ? ` (${w.hand.map(c => `${c.value}${c.suit}`).join(', ')})` : "";
-      io.to(roomId).emit('log', { name: w.name, action: w.rank === "!" ? `SCOOPED THE POT` : `WON TOTAL $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}${cardStr}`, type: 'win' });
+      io.to(roomId).emit('log', { 
+        name: w.name, 
+        action: w.rank === "!" ? `SCOOPED THE POT $${w.amount.toFixed(2)}` : `WON TOTAL $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}${cardStr}`, 
+        type: 'win' 
+      });
     });
+
     const isMuckWin = room.showdownWinners.some(w => w.rank === "!");
     let durationPerWinner = isMuckWin ? 2000 : 5000;
     const totalDelay = Math.max(durationPerWinner, room.showdownWinners.length * durationPerWinner);
+    
     setTimeout(() => {
         room.players.forEach(p => { 
           if (p) { 
-            p.waitingForNextHand = false; p.lastAction = null; 
-            if (p.isBot && p.chips < Number(room.bb)) { p.chips = Number(room.maxBuy); io.to(roomId).emit('log', { name: "SYSTEM", action: `${p.name.toUpperCase()} RE-BOUGHT FOR $${room.maxBuy}`, type: 'phase' }); }
+            p.waitingForNextHand = false; 
+            p.lastAction = null; 
+            if (p.isBot && p.chips < Number(room.bb)) { 
+                p.chips = Number(room.maxBuy); 
+                io.to(roomId).emit('log', { name: "SYSTEM", action: `${p.name.toUpperCase()} RE-BOUGHT FOR $${room.maxBuy}`, type: 'phase' }); 
+            }
           } 
         });
         const seated = room.players.map((p, i) => (p && p.chips > Number(room.bb)) ? i : null).filter(x => x !== null);
-        if (seated.length >= 2) { room.dealerIdx = seated[(seated.indexOf(room.dealerIdx) + 1) % seated.length]; runIgnition(roomId); } 
-        else { room.phase = PHASES.IDLE; io.to(roomId).emit('roomUpdate', serializeRoom(room)); }
+        if (seated.length >= 2) { 
+            room.dealerIdx = seated[(seated.indexOf(room.dealerIdx) + 1) % seated.length]; 
+            runIgnition(roomId); 
+        } else { 
+            room.phase = PHASES.IDLE; 
+            io.to(roomId).emit('roomUpdate', serializeRoom(room)); 
+        }
     }, totalDelay);
 };
 
-const getMuflisRisk = (board) => {
-    if (board.length < 3) return 0;
-    const suits = board.map(c => c.suit);
-    const suitCounts = suits.reduce((acc, s) => { acc[s] = (acc[s] || 0) + 1; return acc; }, {});
-    const maxSuit = Math.max(...Object.values(suitCounts));
-    const values = board.map(c => VM[c.value]).sort((a,b) => a-b);
-    let maxConn = 1; let currentConn = 1;
-    for (let i = 1; i < values.length; i++) { if (values[i] === values[i-1] + 1) currentConn++; else if (values[i] !== values[i-1]) currentConn = 1; maxConn = Math.max(maxConn, currentConn); }
-    let risk = 0; if (maxSuit >= 3) risk += 25; if (maxConn >= 3) risk += 20; return risk;
+const performAction = (roomId, type, amount) => {
+    const room = rooms[roomId]; if (!room || room.activeIdx === -1) return;
+    const player = room.players[room.activeIdx]; if (!player || player.isFolded) { moveToNextPlayer(roomId); return; }
+    
+    if (room.timer) clearInterval(room.timer);
+    player.actedThisStreet = true;
+    
+    if (type === 'FOLD') { 
+        player.isFolded = true; 
+        player.lastAction = "FOLD"; 
+        io.to(roomId).emit('log', { name: player.name, action: `FOLDED`, type: 'fold' }); 
+    } else if (type === 'CALL') { 
+        const diff = room.highestBet - player.currentBet; 
+        const actualCall = Math.min(diff, player.chips); 
+        player.chips -= actualCall; 
+        player.currentBet += actualCall; 
+        player.totalContribution += actualCall; 
+        player.lastAction = actualCall > 0 ? "CALL" : "CHECK"; 
+        io.to(roomId).emit('log', { name: player.name, action: actualCall > 0 ? `CALLED $${actualCall.toFixed(2)}` : `CHECKED`, type: 'bet' }); 
+    } else if (type === 'RAISE') { 
+        const minLegalRaise = room.highestBet + room.lastRaiseIncrement; 
+        const playerMax = player.chips + player.currentBet; 
+        const raiseVal = Math.max(amount, minLegalRaise); 
+        const cappedRaise = Math.min(raiseVal, playerMax); 
+        const diff = cappedRaise - player.currentBet; 
+        const increment = cappedRaise - room.highestBet; 
+        player.chips -= diff; 
+        player.currentBet = cappedRaise; 
+        player.totalContribution += diff; 
+        room.highestBet = cappedRaise; 
+        player.lastAction = "RAISE"; 
+        if (increment >= room.lastRaiseIncrement) { 
+            room.lastRaiseIncrement = increment; 
+            room.players.forEach(p => { if (p && p.uid !== player.uid) p.actedThisStreet = false; }); 
+        } 
+        io.to(roomId).emit('log', { name: player.name, action: `RAISED to $${cappedRaise.toFixed(2)}`, type: 'bet' }); 
+    }
+    moveToNextPlayer(roomId);
+};
+
+const moveToNextPlayer = (roomId) => {
+    const room = rooms[roomId]; if (!room) return;
+    updateRoomStrengths(roomId);
+    
+    const activePlayers = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
+    const allMatched = activePlayers.every(p => p.chips < 0.01 || p.currentBet === room.highestBet);
+    const allActed = activePlayers.every(p => p.chips < 0.01 || p.actedThisStreet);
+    
+    if (activePlayers.length <= 1) { 
+        room.activeIdx = -1; 
+        collectBets(room); 
+        io.to(roomId).emit('roomUpdate', serializeRoom(room)); 
+        setTimeout(() => processShowdown(roomId), 1000); 
+    } else if (allMatched && allActed) { 
+        room.activeIdx = -1; 
+        collectBets(room); 
+        io.to(roomId).emit('roomUpdate', serializeRoom(room)); 
+        setTimeout(() => nextPhase(roomId), 1200); 
+    } else { 
+        // Robust Rotation Logic: Find next active player seat index
+        let nextIdx = (room.activeIdx + 1) % TOTAL_SEATS;
+        let found = false;
+        for (let i = 0; i < TOTAL_SEATS; i++) {
+            const p = room.players[nextIdx];
+            if (p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected) {
+                room.activeIdx = nextIdx;
+                found = true;
+                break;
+            }
+            nextIdx = (nextIdx + 1) % TOTAL_SEATS;
+        }
+
+        if (found) {
+            if (room.players[room.activeIdx].chips < 0.01) {
+                setTimeout(() => performAction(room.id, 'CALL', 0), 800);
+            } else {
+                startTurnTimer(room.id); 
+                io.to(room.id).emit('roomUpdate', serializeRoom(room)); 
+                triggerBotTurn(room.id); 
+            }
+        }
+    }
+};
+
+const collectBets = (room) => { 
+    room.players.forEach(p => { 
+        if (p) { 
+            room.potData[0].amount += p.currentBet; 
+            p.currentBet = 0; 
+            p.actedThisStreet = false; 
+            p.lastAction = null; 
+        } 
+    }); 
+    room.highestBet = 0; 
+    room.lastRaiseIncrement = Number(room.bb); 
+};
+
+const nextPhase = (roomId) => {
+    const room = rooms[roomId]; if (!room) return;
+    room.players.forEach(p => { if(p) p.lastAction = null; });
+    const activeNonAllIn = room.players.filter(p => p && !p.isFolded && p.chips > 0.01 && !p.waitingForNextHand && !p.isDisconnected);
+    const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
+    
+    if (active.length <= 1 || (activeNonAllIn.length <= 1 && room.phase !== PHASES.RIVER)) {
+        if (room.phase === PHASES.PRE_FLOP) { room.phase = PHASES.FLOP; room.community = room.deck.splice(0, 3); }
+        else if (room.phase === PHASES.FLOP) { room.phase = PHASES.TURN; room.community.push(...room.deck.splice(0, 1)); }
+        else if (room.phase === PHASES.TURN) { room.phase = PHASES.RIVER; room.community.push(...room.deck.splice(0, 1)); }
+        else { processShowdown(roomId); return; }
+        io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.phase} DEALT`, type: 'phase' }); updateRoomStrengths(roomId); io.to(roomId).emit('roomUpdate', serializeRoom(room)); setTimeout(() => nextPhase(roomId), 1500); return;
+    }
+    
+    if (room.phase === PHASES.PRE_FLOP) { room.phase = PHASES.FLOP; room.community = room.deck.splice(0, 3); }
+    else if (room.phase === PHASES.FLOP) { room.phase = PHASES.TURN; room.community.push(...room.deck.splice(0, 1)); }
+    else if (room.phase === PHASES.TURN) { room.phase = PHASES.RIVER; room.community.push(...room.deck.splice(0, 1)); }
+    else { processShowdown(roomId); return; }
+    
+    io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.phase} DEALT - TOTAL POT $${room.potData[0].amount.toFixed(2)}`, type: 'phase' }); updateRoomStrengths(roomId);
+    
+    const seated = room.players.map((p, i) => (p && !p.isFolded && p.chips > 0.01 && !p.waitingForNextHand && !p.isDisconnected) ? i : null).filter(x => x !== null);
+    room.activeIdx = seated.length > 0 ? seated[0] : -1;
+    if (room.activeIdx !== -1) { startTurnTimer(roomId); io.to(roomId).emit('roomUpdate', serializeRoom(room)); triggerBotTurn(roomId); } else { setTimeout(() => nextPhase(roomId), 1500); }
+};
+
+const startTurnTimer = (roomId) => {
+    const room = rooms[roomId]; if (!room) return;
+    if (room.timer) clearInterval(room.timer);
+    room.timeRemaining = TURN_TIME_LIMIT;
+    room.timer = setInterval(() => {
+        room.timeRemaining--;
+        if (room.timeRemaining <= 0) { 
+            clearInterval(room.timer); 
+            const p = room.players[room.activeIdx]; 
+            if (p) performAction(roomId, (room.highestBet - p.currentBet) > 0 ? 'FOLD' : 'CALL', 0); 
+        } else { 
+            io.to(roomId).emit('roomUpdate', serializeRoom(room)); 
+        }
+    }, 1000);
 };
 
 const triggerBotTurn = (roomId) => {
@@ -324,63 +498,6 @@ const triggerBotTurn = (roomId) => {
         if (type === 'FOLD' && (currentRoom.highestBet - player.currentBet) <= 0.01) type = 'CALL';
         performAction(roomId, type, raiseAmt);
     }, 1500);
-};
-
-const performAction = (roomId, type, amount) => {
-    const room = rooms[roomId]; if (!room || room.activeIdx === -1) return;
-    if (room.timer) clearInterval(room.timer);
-    const player = room.players[room.activeIdx]; if (!player) { moveToNextPlayer(roomId); return; }
-    player.actedThisStreet = true;
-    if (type === 'FOLD') { player.isFolded = true; player.lastAction = "FOLD"; io.to(roomId).emit('log', { name: player.name, action: `FOLDED`, type: 'fold' }); } 
-    else if (type === 'CALL') { const diff = room.highestBet - player.currentBet; const actualCall = Math.min(diff, player.chips); player.chips -= actualCall; player.currentBet += actualCall; player.totalContribution += actualCall; player.lastAction = actualCall > 0 ? "CALL" : "CHECK"; io.to(roomId).emit('log', { name: player.name, action: actualCall > 0 ? `CALLED $${actualCall.toFixed(2)}` : `CHECKED`, type: 'bet' }); } 
-    else if (type === 'RAISE') { const minLegalRaise = room.highestBet + room.lastRaiseIncrement; const playerMax = player.chips + player.currentBet; const raiseVal = Math.max(amount, minLegalRaise); const cappedRaise = Math.min(raiseVal, playerMax); const diff = cappedRaise - player.currentBet; const increment = cappedRaise - room.highestBet; player.chips -= diff; player.currentBet = cappedRaise; player.totalContribution += diff; room.highestBet = cappedRaise; player.lastAction = "RAISE"; if (increment >= room.lastRaiseIncrement) { room.lastRaiseIncrement = increment; room.players.forEach(p => { if (p && p.uid !== player.uid) p.actedThisStreet = false; }); } io.to(roomId).emit('log', { name: player.name, action: `RAISED to $${cappedRaise.toFixed(2)}`, type: 'bet' }); }
-    moveToNextPlayer(roomId);
-};
-
-const moveToNextPlayer = (roomId) => {
-    const room = rooms[roomId]; if (!room) return;
-    updateRoomStrengths(roomId);
-    const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
-    const allMatched = active.every(p => p.chips < 0.01 || p.currentBet === room.highestBet);
-    const allActed = active.every(p => p.chips < 0.01 || p.actedThisStreet);
-    if (active.length <= 1) { room.activeIdx = -1; collectBets(room); io.to(roomId).emit('roomUpdate', serializeRoom(room)); setTimeout(() => processShowdown(roomId), 1000); } 
-    else if (allMatched && allActed) { room.activeIdx = -1; collectBets(room); io.to(roomId).emit('roomUpdate', serializeRoom(room)); setTimeout(() => nextPhase(roomId), 1200); } 
-    else { const seated = room.players.map((p, i) => (p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected) ? i : null).filter(x => x !== null); room.activeIdx = seated[(seated.indexOf(room.activeIdx) + 1) % seated.length]; if (room.players[room.activeIdx].chips < 0.01) setTimeout(() => performAction(room.id, 'CALL', 0), 800); else { startTurnTimer(room.id); io.to(room.id).emit('roomUpdate', serializeRoom(room)); triggerBotTurn(room.id); } }
-};
-
-const collectBets = (room) => { room.players.forEach(p => { if (p) { room.potData[0].amount += p.currentBet; p.currentBet = 0; p.actedThisStreet = false; p.lastAction = null; } }); room.highestBet = 0; room.lastRaiseIncrement = Number(room.bb); };
-
-const nextPhase = (roomId) => {
-    const room = rooms[roomId]; if (!room) return;
-    room.players.forEach(p => { if(p) p.lastAction = null; });
-    const activeNonAllIn = room.players.filter(p => p && !p.isFolded && p.chips > 0.01 && !p.waitingForNextHand && !p.isDisconnected);
-    const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
-    if (active.length <= 1 || (activeNonAllIn.length <= 1 && room.phase !== PHASES.RIVER)) {
-        if (room.phase === PHASES.PRE_FLOP) { room.phase = PHASES.FLOP; room.community = room.deck.splice(0, 3); }
-        else if (room.phase === PHASES.FLOP) { room.phase = PHASES.TURN; room.community.push(...room.deck.splice(0, 1)); }
-        else if (room.phase === PHASES.TURN) { room.phase = PHASES.RIVER; room.community.push(...room.deck.splice(0, 1)); }
-        else { processShowdown(roomId); return; }
-        io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.phase} DEALT`, type: 'phase' }); updateRoomStrengths(roomId); io.to(roomId).emit('roomUpdate', serializeRoom(room)); setTimeout(() => nextPhase(roomId), 1500); return;
-    }
-    if (room.phase === PHASES.PRE_FLOP) { room.phase = PHASES.FLOP; room.community = room.deck.splice(0, 3); }
-    else if (room.phase === PHASES.FLOP) { room.phase = PHASES.TURN; room.community.push(...room.deck.splice(0, 1)); }
-    else if (room.phase === PHASES.TURN) { room.phase = PHASES.RIVER; room.community.push(...room.deck.splice(0, 1)); }
-    else { processShowdown(roomId); return; }
-    io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.phase} DEALT - TOTAL POT $${room.potData[0].amount.toFixed(2)}`, type: 'phase' }); updateRoomStrengths(roomId);
-    const seated = room.players.map((p, i) => (p && !p.isFolded && p.chips > 0.01 && !p.waitingForNextHand && !p.isDisconnected) ? i : null).filter(x => x !== null);
-    room.activeIdx = seated.length > 0 ? seated[0] : -1;
-    if (room.activeIdx !== -1) { startTurnTimer(roomId); io.to(roomId).emit('roomUpdate', serializeRoom(room)); triggerBotTurn(roomId); } else { setTimeout(() => nextPhase(roomId), 1500); }
-};
-
-const startTurnTimer = (roomId) => {
-    const room = rooms[roomId]; if (!room) return;
-    if (room.timer) clearInterval(room.timer);
-    room.timeRemaining = TURN_TIME_LIMIT;
-    room.timer = setInterval(() => {
-        room.timeRemaining--;
-        if (room.timeRemaining <= 0) { clearInterval(room.timer); const p = room.players[room.activeIdx]; if (p) performAction(roomId, (room.highestBet - p.currentBet) > 0 ? 'FOLD' : 'CALL', 0); } 
-        else { io.to(roomId).emit('roomUpdate', serializeRoom(room)); }
-    }, 1000);
 };
 
 const runIgnition = (roomId) => {
