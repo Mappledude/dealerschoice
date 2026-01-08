@@ -5,12 +5,12 @@ import {
   ShieldCheck, UserPlus, Settings2, ChevronLeft, ChevronRight, X, UserMinus, Sparkles,
   Zap, Target, DollarSign, User, Lock, DoorOpen, LayoutGrid, ShieldAlert, PlusCircle,
   Users, Layers, Edit3, ScrollText, ArrowLeft, Key, Save, AlertTriangle, Monitor, Bot,
-  Timer, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3, Settings, Maximize, Minimize, Copy, Check, Activity, BookOpen, Terminal, ChevronRight as ChevronRightIcon, HelpCircle
+  Timer as TimerIcon, Bomb, Maximize2, Sliders, ChevronUp, ChevronDown, Plus, Minus, Eye, MessageSquare, Clock, BarChart3, Settings, Maximize, Minimize, Copy, Check, Activity, BookOpen, Terminal, ChevronRight as ChevronRightIcon, HelpCircle
 } from 'lucide-react';
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
+const RENDER_URL = "[https://poker-server-3vin.onrender.com](https://poker-server-3vin.onrender.com)"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
 const socket = io(SOCKET_URL, { 
@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.72";
+const VERSION = "v1.0.75";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -55,7 +55,7 @@ const getNeonNameColor = (name) => {
   if (!name || name === "SYSTEM") return "text-white";
   const palette = ['text-[#39FF14]', 'text-[#FF00FF]', 'text-[#00FFFF]', 'text-[#FF5F1F]', 'text-[#FFFF00]', 'text-[#B026FF]'];
   let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return palette[Math.abs(hash) % palette.length];
 };
 
@@ -86,7 +86,7 @@ const formatRank = (rank) => {
       const parts = cleanRank.split(' ');
       result = `Low ${parts[parts.length - 1]}`;
   }
-  return prefix + result;
+  return String(prefix + result);
 };
 
 const getContrastColor = (hex) => {
@@ -125,7 +125,7 @@ const ActivityFeedContent = ({ handHistory, toggleHand, expandedHands, setIntelE
             {isMobile && <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>}
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
-            {handHistory.length > 0 ? handHistory.map((hand) => (
+            {(handHistory || []).length > 0 ? handHistory.map((hand) => (
                 <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
                     <button onClick={() => toggleHand(hand.id)} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
                         <div className="flex items-center justify-between w-full">
@@ -139,7 +139,7 @@ const ActivityFeedContent = ({ handHistory, toggleHand, expandedHands, setIntelE
                     </button>
                     {expandedHands.has(hand.id) && (
                         <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
-                            {hand.events.map((ev, i) => {
+                            {(hand.events || []).map((ev, i) => {
                                 const dateObj = new Date(ev.timestamp);
                                 const timeStr = isNaN(dateObj.getTime()) ? "--:--:--" : dateObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
                                 return (
@@ -161,7 +161,7 @@ const Seat = ({
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, isDealer, potTransferring, timeRemaining, isHero, 
   relativeIdx, visuals, bigBlind, showdownWinners, currentWinnerHandIds
 }) => {
-    if (!player || !displayPos) return null;
+    if (!player || !displayPos || !visuals) return null;
     const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
     const vecX = 50 - displayPos.x;
     const vecY = 50 - displayPos.y;
@@ -170,15 +170,18 @@ const Seat = ({
 
     const getActionDisplay = () => {
         if (player.isFolded) return { text: "FOLDED", color: "text-red-500", glow: "shadow-[0_0_30px_rgba(239,68,68,0.8)]" };
+        
+        // Phase 4: Showdown Result in HUD
         if (phase === PHASES.SHOWDOWN && !player.waitingForNextHand && player.strength) {
-            return { text: formatRank(player.strength), color: "text-amber-400", glow: "shadow-[0_0_30px_rgba(251,191,36,0.5)]" };
+            return { text: formatRank(String(player.strength)), color: "text-amber-400", glow: "shadow-[0_0_30px_rgba(251,191,36,0.5)]" };
         }
-        if (phase === PHASES.PRE_FLOP && player.currentBet > 0 && !player.lastAction) {
+
+        if (phase === PHASES.PRE_FLOP && (player.currentBet || 0) > 0 && !player.lastAction) {
             if (player.currentBet === bigBlind) return { text: `BB $${player.currentBet}`, color: "text-indigo-400", glow: "shadow-[0_0_30px_rgba(129,140,248,0.8)]" };
             return { text: `SB $${player.currentBet}`, color: "text-purple-400", glow: "shadow-[0_0_30px_rgba(168,85,247,0.8)]" };
         }
         if (!player.lastAction) return null;
-        switch (player.lastAction) {
+        switch (String(player.lastAction)) {
             case 'RAISE': return { text: `RAISED $${player.currentBet}`, color: "text-emerald-400", glow: "shadow-[0_0_30px_rgba(16,185,129,0.8)]" };
             case 'CALL': return { text: `CALLED $${player.currentBet}`, color: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.8)]" };
             case 'CHECK': return { text: "CHECK", color: "text-cyan-400", glow: "shadow-[0_0_30_rgba(34,211,238,0.8)]" };
@@ -188,19 +191,19 @@ const Seat = ({
 
     const action = getActionDisplay();
     const showActionOverlay = action && player.isFolded; 
-    const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
+    const isMuckWin = phase === PHASES.SHOWDOWN && (showdownWinners || []).some(w => w.rank === "!");
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !isMuckWin);
     const cardZIndex = isHero ? 'z-[200]' : (phase === PHASES.SHOWDOWN ? 'z-[150]' : 'z-[40]');
-    const globalSyncDelay = -(Date.now() % 6000);
 
     return (
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-500 ${isHero ? 'z-[100]' : 'z-20'} ${player.isFolded ? 'opacity-30 grayscale scale-90' : 'opacity-100'} ${player.waitingForNextHand ? 'opacity-50' : ''}`}>
+            {player.waitingForNextHand && (<div className="absolute top-[-35px] bg-slate-900 text-cyan-400 text-[8px] px-2 py-0.5 rounded-full border border-cyan-500/50 uppercase font-bold tracking-[0.2em] z-[150] backdrop-blur-md">WAITING</div>)}
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div className={`absolute flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none ${cardZIndex}`} style={{ transform: isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw)` : `translate(${cardInwardX * 0.4}vh, calc(${cardInwardY * 0.4}vh - ${isHero ? '70px' : '0px'}))` }}>
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
                         const isRedSuit = c.suit === '♥' || c.suit === '♦';
-                        const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
+                        const rotation = isHero ? (offset * (visuals.holeCardFan || 35)) : 0;
                         const isWinnerCard = (currentWinnerHandIds || []).includes(c.id);
                         return (<div key={`${c.id || ci}-${ci}`} className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-500 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-slate-900 border-white/20'} ${phase === PHASES.SHOWDOWN && !isWinnerCard ? 'opacity-20 grayscale' : 'opacity-100'}`} style={{ transform: isMobile ? `translateX(${offset * (isHero ? 2 : 3.75)}vw) rotate(${rotation}deg) scale(${isHero ? 1.6 : 1.0})` : `translateX(${offset * (isHero ? 1.5 : 1.8)}vh) rotate(${rotation}deg) scale(${isHero ? 1.4 : 1.0})`, transformOrigin: 'bottom center', zIndex: 100 + ci }}>{shouldRevealCards && (<><span className={`text-[10px] lg:text-[1.4vh] font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span><span className={`text-[12px] lg:text-[2vh] leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span></>)}{phase === PHASES.SHOWDOWN && isWinnerCard && !isMuckWin && (<div className="absolute inset-0 ring-4 ring-yellow-400 rounded-lg animate-pulse" />)}</div>);
                     })}
@@ -212,18 +215,18 @@ const Seat = ({
                 <div className="flex flex-col items-center w-full relative z-10 py-1 overflow-hidden">
                     <div className="flex items-center gap-1 opacity-60 mb-1 shrink-0">{player.isBot && <Bot size={10} className="text-indigo-400" />}<span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span></div>
                     <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center">
-                        <div 
-                            className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${action && !player.isFolded && !isCollectingBets ? 'animate-fade-balance' : 'opacity-100'}`}
-                            style={action ? { animationDelay: `${globalSyncDelay}ms` } : {}}
-                        >
-                            <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                        </div>
-                        {action && !player.isFolded && !isCollectingBets && (
-                            <div 
-                                className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg animate-fade-action"
-                                style={{ animationDelay: `${globalSyncDelay}ms` }}
-                            >
-                                <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${action.color}`}>{String(action.text)}</span>
+                        {/* Phase 4 Logic: SHOW ACTION ONLY. No carousel. */}
+                        {action && !player.isFolded && !isCollectingBets ? (
+                            <div className="w-full h-full flex items-center justify-center bg-black/40 rounded-lg">
+                                <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${action.color}`}>
+                                    {String(action.text)}
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                                <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
+                                    ${Number(player.chips || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                </span>
                             </div>
                         )}
                     </div>
@@ -288,12 +291,17 @@ const App = () => {
   const turnInitializedRef = useRef(-1); 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
 
-  const visuals = { footerHeight: isMobile ? 150 : 250, tableZoom: 0.9, holeCardFan: 35 };
+  // Fix visuals ReferenceError by making it a stable memoized object
+  const visuals = useMemo(() => ({ 
+    footerHeight: isMobile ? 150 : 250, 
+    tableZoom: 0.9, 
+    holeCardFan: 35 
+  }), [isMobile]);
 
-  const heroIdx = userProfile ? players.findIndex(p => p && (p.uid === userProfile.uid || p.name === userProfile.name)) : -1;
-  const heroPlayerObj = heroIdx !== -1 ? players[heroIdx] : null;
-  const totalDisplayPot = Number(potAmount) + players.reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
-  const currentWinnerHandIds = (phase === PHASES.SHOWDOWN && showdownWinners) ? (showdownWinners[currentShowdownIdx]?.hand || []).map(c => c.id) : [];
+  const heroIdx = useMemo(() => (userProfile ? players.findIndex(p => p && (p.uid === userProfile.uid || p.name === userProfile.name)) : -1), [players, userProfile]);
+  const heroPlayerObj = useMemo(() => (heroIdx !== -1 ? players[heroIdx] : null), [players, heroIdx]);
+  const totalDisplayPot = useMemo(() => (Number(potAmount || 0) + players.reduce((acc, p) => acc + (Number(p?.currentBet || 0) || 0), 0)), [potAmount, players]);
+  const currentWinnerHandIds = useMemo(() => (phase === PHASES.SHOWDOWN && showdownWinners ? (showdownWinners[currentShowdownIdx]?.hand || []).map(c => c.id) : []), [phase, showdownWinners, currentShowdownIdx]);
 
   const handleForceSync = useCallback(() => {
     socket.disconnect().connect();
@@ -376,6 +384,7 @@ const App = () => {
         const currentHandKey = `${currentRoomId}-${currentHandId.current}`;
         const isPhaseTransition = d.phase !== phaseRef.current;
 
+        // Correct Variant Flash Trigger
         if (d.phase === PHASES.PRE_FLOP && lastAnnouncedHandId.current !== currentHandKey) {
             lastAnnouncedHandId.current = currentHandKey;
             setAnnouncement({ text: VARIANTS[d.activeVariant?.id || 'HOLDEM']?.name || "Poker", color: VARIANT_COLORS[d.activeVariant?.id || 'HOLDEM'] || '#fff' });
@@ -397,9 +406,9 @@ const App = () => {
         if (isShowdownTransition) {
             setPotTransferring(true); setCurrentShowdownIdx(0);
             const rawWinners = d.showdownWinners || []; setShowdownWinners(rawWinners);
-            let durationPerWinner = rawWinners.some(w => w.rank === "!") ? 2000 : 5000;
-            if (rawWinners.length > 1) { for (let i = 1; i < rawWinners.length; i++) { setTimeout(() => { if (phaseRef.current === PHASES.SHOWDOWN) setCurrentShowdownIdx(i); }, i * durationPerWinner); } }
-            setTimeout(() => setPotTransferring(false), Math.max(1, rawWinners.length) * durationPerWinner);
+            let durationPerWinner = (rawWinners || []).some(w => w.rank === "!") ? 2000 : 5000;
+            if (rawWinners && rawWinners.length > 1) { for (let i = 1; i < rawWinners.length; i++) { setTimeout(() => { if (phaseRef.current === PHASES.SHOWDOWN) setCurrentShowdownIdx(i); }, i * durationPerWinner); } }
+            setTimeout(() => setPotTransferring(false), Math.max(1, (rawWinners || []).length) * durationPerWinner);
         } else if (d.phase !== PHASES.SHOWDOWN) { setPotTransferring(false); setShowdownWinners(null); }
     };
 
@@ -408,8 +417,10 @@ const App = () => {
     socket.on('log', (l) => setLogs(prev => [{...l, handId: currentHandId.current, timestamp: Date.now(), uniqueKey: `${Date.now()}-${Math.random()}`}, ...prev].slice(0, 100)));
     socket.on('profilesUpdate', (list) => { setAllProfiles(list); setUserProfile(prev => prev ? (list.find(p => p.uid === prev.uid) ? { ...prev, chips: list.find(p => p.uid === prev.uid).chips } : prev) : null); });
     socket.on('initialDataResponse', ({ profiles: pList, rooms: rList }) => { setAllProfiles(pList); setActiveTables(rList); });
+    
     socket.on('loginSuccess', (payload) => { 
-        const profile = payload.profile || payload; setUserProfile(profile);
+        const profile = payload.profile || payload; 
+        setUserProfile(profile);
         if (isLoggingIn) {
           if (payload.activeRoomId) { setCurrentRoomId(payload.activeRoomId); socket.emit('joinRoom', { roomId: payload.activeRoomId, profile: profile, buyIn: 0 }, (res) => { if (res?.status === 'ok') setCurrentView(VIEWS.GAME); else setCurrentView(VIEWS.LOBBY); }); } 
           else setCurrentView(VIEWS.LOBBY);
@@ -417,6 +428,11 @@ const App = () => {
     });
     return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); };
   }, [isLoggingIn, currentRoomId]); 
+
+  useEffect(() => {
+    if (activeIdx === heroIdx && heroPlayerObj) { if (turnInitializedRef.current !== activeIdx) { turnInitializedRef.current = activeIdx; const minAllowed = minRaiseAmount || (highestBet + bigBlind); setRaiseInput(Math.min(minAllowed, Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))); if (preAction === 'FOLD') { handleAction('FOLD'); setPreAction(null); } else if (preAction === 'CHECK') { handleAction('CALL'); setPreAction(null); } } } 
+    else turnInitializedRef.current = -1;
+  }, [activeIdx, heroIdx, highestBet, bigBlind, minRaiseAmount, heroPlayerObj, preAction, handleAction]);
 
   // --- RENDERING ---
   if (!userProfile) {
@@ -480,26 +496,26 @@ const App = () => {
                 <div className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_60px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} style={{ backgroundColor: '#070a13', boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 50px #ff0000' : 'none') }} /><button onClick={handleForceSync} className="absolute bottom-6 right-6 z-[150] bg-black/60 border border-white/20 p-3 rounded-full text-white/40 hover:text-white hover:border-white/40 transition-all shadow-xl active:scale-95 group pointer-events-auto"><RefreshCcw size={20}/></button>
                 <div className="absolute inset-0 pointer-events-none z-20">{(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} bigBlind={bigBlind} showdownWinners={showdownWinners} currentWinnerHandIds={currentWinnerHandIds} formatRank={formatRank} />); })}</div>
                 <div className="absolute top-[calc(48%-50px)] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full">{!potTransferring && (<div className="flex flex-col items-center mb-6"><span className="text-white/20 text-[10px] tracking-[0.5em] mb-1 uppercase font-bold">Total Pot:</span><div className="text-[6vw] lg:text-[6vh] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div>)}{community.length > 0 && (<div className="flex gap-2 md:gap-4 mt-4 transition-transform" style={{ transform: isMobile ? `scale(${visuals.commCardScale})` : `scale(${visuals.commCardScale * 0.8})` }}>
-                    {(community || []).map((c, j) => { const isWinnerCard = (currentWinnerHandIds || []).includes(c.id); return (<div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] lg:w-[6vh] h-[11vw] lg:h-[9vh] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${isWinnerCard ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10 opacity-100'} ${phase === PHASES.SHOWDOWN && !isWinnerCard ? 'opacity-20 grayscale' : ''}`}><span className={`text-[12px] lg:text-[1.6vh] font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span><span className={`text-[14px] lg:text-[2.2vh] font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span></div>); })}
+                    {(community || []).map((c, j) => { const isWinnerCard = (currentWinnerHandIds || []).includes(c.id); return (<div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] lg:w-[6vh] h-[11vw] lg:h-[9vh] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${isWinnerCard ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10 opacity-100'} ${phase === PHASES.SHOWDOWN && !isWinnerCard ? 'opacity-20 grayscale' : ''}`}><span className={`text-[12px] lg:text-[1.6vh] font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span><span className={`text-[14px] lg:text-[2.2vh] font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span></div>); })}
                 </div>)}</div>
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (<div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto"><div className="flex-1 w-full relative flex items-center justify-center py-4"><input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} /></div><div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]"><span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span><div className="flex items-center justify-center w-full"><span className="text-emerald-500 font-mono text-lg md:text-2xl mr-0.5">$</span><input type="number" value={raiseInput} onChange={(e) => { const val = Number(e.target.value); const min = minRaiseAmount || (highestBet + bigBlind); setRaiseInput(Math.max(min, Math.min(val, Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)))); }} className="bg-transparent text-emerald-400 font-mono text-xl md:text-3xl font-black text-center outline-none w-full" /></div></div></div>)}
             </div>
         </main>
       </div>
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shadow-[0_-10px_50px_rgba(0,0,0,0.8)] shrink-0 font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]"><div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-6"> 
-          {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
+          {phase === PHASES.SHOWDOWN && showdownWinners && (showdownWinners || []).length > 0 ? (
             (() => {
                 const winner = showdownWinners[currentShowdownIdx]; if (!winner) return null;
-                const isHiLo = activeVariant?.id === 'HILOW'; const isLowWin = String(winner.rank).includes("LOW:"); const isMuckWin = winner.rank === "!";
+                const isHiLo = activeVariant?.id === 'HILOW'; const isLowWin = String(winner.rank || "").includes("LOW:"); const isMuckWin = winner.rank === "!";
                 const themeColor = isLowWin ? "text-emerald-400" : (isHiLo ? "text-amber-400" : "text-white");
                 const cardBorder = isLowWin ? "border-emerald-400/50" : (isHiLo ? "border-amber-400/50" : "border-white/20");
-                return (<div key={`winner-disp-${winner.name}-${currentShowdownIdx}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500"><div className={`flex items-center gap-3 ${isLowWin ? "bg-emerald-400/10" : (isHiLo ? "bg-amber-400/10" : "bg-white/5")} px-5 py-1 rounded-full border ${isLowWin ? "border-emerald-400/30" : (isHiLo ? "border-amber-400/30" : "border-white/10")} max-w-full overflow-hidden shadow-2xl`}><Trophy size={14} className={themeColor + " animate-bounce shrink-0"} /><div className="text-sm md:text-xl font-black tracking-tighter flex items-center gap-2 leading-none whitespace-nowrap"><span className={getNeonNameColor(winner.name)}>{String(winner.name).toUpperCase()}</span>{isMuckWin ? (<span className="text-white ml-2">SCOOPED THE POT</span>) : (<><span className="text-white/40">WON TOTAL</span><span className="text-emerald-400 font-mono ml-2">+${Number(winner.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></>)}</div></div>{!isMuckWin && (<><div className="text-[10px] md:text-sm font-black text-white/60 tracking-widest uppercase">HOLDING <span className={themeColor}>{String(formatRank(winner.rank))}</span></div><div className="flex gap-1 justify-center mt-1">{(winner.hand || []).map((c, ci) => (<div key={`winner-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}><span className={`text-[11px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.value)}</span><span className={`text-[13px] md:text-xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span><div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" /></div>))}</div></>)}</div>);
+                return (<div key={`winner-disp-${winner.name}-${currentShowdownIdx}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500"><div className={`flex items-center gap-3 ${isLowWin ? "bg-emerald-400/10" : (isHiLo ? "bg-amber-400/10" : "bg-white/5")} px-5 py-1 rounded-full border ${isLowWin ? "border-emerald-400/30" : (isHiLo ? "border-amber-400/30" : "border-white/10")} max-w-full overflow-hidden shadow-2xl`}><Trophy size={14} className={themeColor + " animate-bounce shrink-0"} /><div className="text-sm md:text-xl font-black tracking-tighter flex items-center gap-2 leading-none whitespace-nowrap"><span className={getNeonNameColor(winner.name)}>{String(winner.name || "").toUpperCase()}</span>{isMuckWin ? (<span className="text-white ml-2">SCOOPED THE POT</span>) : (<><span className="text-white/40">WON TOTAL</span><span className="text-emerald-400 font-mono ml-2">+${Number(winner.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></>)}</div></div>{!isMuckWin && (<><div className="text-[10px] md:text-sm font-black text-white/60 tracking-widest uppercase">HOLDING <span className={themeColor}>{formatRank(String(winner.rank || ""))}</span></div><div className="flex gap-1 justify-center mt-1">{(winner.hand || []).map((c, ci) => (<div key={`winner-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}><span className={`text-[11px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.value)}</span><span className={`text-[13px] md:text-xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span><div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" /></div>))}</div></>)}</div>);
             })()
           ) : (
             <div className={`flex flex-col gap-4 items-center w-full transition-all duration-500`}>{heroPlayerObj && heroPlayerObj.chips >= 0.01 && phase !== PHASES.IDLE ? (<><div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase"><button onClick={() => { if (activeIdx !== heroIdx) return; handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5)); }} className={`flex-1 h-9 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>1/2 POT</button><button onClick={() => { if (activeIdx !== heroIdx) return; handleAction('RAISE', highestBet + totalDisplayPot); }} className={`flex-1 h-9 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>POT</button><button onClick={handleAllIn} className={`flex-1 h-9 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>ALL-IN</button></div><div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-14"><button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={20} className="text-emerald-400" />} FOLD</button><button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/5 opacity-60'}`}>{preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK')}</button><div className={`flex-[1.5] flex bg-black/40 border border-white/10 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}><button onClick={()=> { if(activeIdx === heroIdx) handleAction('RAISE', raiseInput); }} className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase transition-all active:scale-95"><Zap size={20} className="mr-1"/> RAISE</button></div></div></>) : (<div className="flex flex-col items-center gap-1 py-10"><span className="text-white/10 tracking-[0.8em] text-sm font-black italic animate-pulse">ARENA OBSERVATION</span></div>)}</div>
           )}
         </div></footer>
-      {showVisualControls && (<div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm p-6" onClick={() => setShowVisualControls(false)}><div className="w-full max-w-[400px] bg-black/60 border border-white/20 rounded-3xl p-8 flex flex-col gap-6 shadow-2xl" onClick={e => e.stopPropagation()}><div className="flex justify-between items-center border-b border-white/10 pb-4"><h3 className="text-lg text-cyan-400 font-black flex items-center gap-2 uppercase"><Settings2 size={20}/> Configuration</h3><X size={24} className="cursor-pointer text-white/40 hover:text-white" onClick={() => setShowVisualControls(false)}/></div><div className="space-y-6"><button onClick={() => { if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); }} className="w-full py-4 bg-white/5 border border-white/10 text-white font-black rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/10 transition-all"><Bot size={18}/> Add Arena Bot</button><div className="flex flex-col gap-4 pt-4 border-t border-white/5"><div className="flex flex-col gap-2"><label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Table Zoom <span>{Math.round(visuals.tableZoom * 100)}%</span></label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div><div className="flex flex-col gap-2"><label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">HUD Action Height <span>{visuals.footerHeight}px</span></label><input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div></div></div><button onClick={() => setShowVisualControls(false)} className="w-full py-4 bg-cyan-600 text-black font-black rounded-xl uppercase hover:brightness-110">Save & Apply</button></div></div>)}
+      {showVisualControls && (<div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm p-6" onClick={() => setShowVisualControls(false)}><div className="w-full max-w-[400px] bg-black/60 border border-white/20 rounded-3xl p-8 flex flex-col gap-6 shadow-2xl" onClick={e => e.stopPropagation()}><div className="flex justify-between items-center border-b border-white/10 pb-4"><h3 className="text-lg text-cyan-400 font-black flex items-center gap-2 uppercase"><Settings2 size={20}/> Configuration</h3><X size={24} className="cursor-pointer text-white/40 hover:text-white" onClick={() => setShowVisualControls(false)}/></div><div className="space-y-6"><button onClick={() => { if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); }} className="w-full py-4 bg-white/5 border border-white/10 text-white font-black rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/10 transition-all"><Bot size={18}/> Add Arena Bot</button><div className="flex flex-col gap-4 pt-4 border-t border-white/5"><div className="flex flex-col gap-2"><label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Table Zoom <span>{Math.round(visuals.tableZoom * 100)}%</span></label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => { const val = Number(e.target.value); socket.emit('updateLocalVisuals', { tableZoom: val }); }} className="accent-cyan-400 cursor-pointer" /></div><div className="flex flex-col gap-2"><label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">HUD Action Height <span>{visuals.footerHeight}px</span></label><input type="range" min="150" max="350" step="10" value={visuals.footerHeight} className="accent-indigo-400 cursor-pointer" /></div></div></div><button onClick={() => setShowVisualControls(false)} className="w-full py-4 bg-cyan-600 text-black font-black rounded-xl uppercase hover:brightness-110">Save & Apply</button></div></div>)}
       <style>{`
           @keyframes announcement-pop { 0% { transform: scale(0.5); opacity: 0; filter: blur(10px); } 30% { transform: scale(1.1); opacity: 1; filter: blur(0px); } 70% { transform: scale(1); opacity: 1; filter: blur(0px); } 100% { transform: scale(1.3); opacity: 0; filter: blur(20px); } }
           .animate-announcement-pop { animation: announcement-pop 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
@@ -510,10 +526,6 @@ const App = () => {
           .animate-deal-trigger { animation: attention-trigger 1s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
           @keyframes bounce-subtle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
           .animate-bounce-subtle { animation: bounce-subtle 1.5s infinite ease-in-out; }
-          @keyframes fade-balance { 0%, 50% { opacity: 1; } 55%, 95% { opacity: 0; } 100% { opacity: 1; } }
-          @keyframes fade-action { 0%, 50% { opacity: 0; } 55%, 95% { opacity: 1; } 100% { opacity: 0; } }
-          .animate-fade-balance { animation: fade-balance 6s infinite cubic-bezier(0.4, 0, 0.2, 1); }
-          .animate-fade-action { animation: fade-action 6s infinite cubic-bezier(0.4, 0, 0.2, 1); }
           @keyframes muflis-glow { 0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; } 50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; } }
           .animate-muflis-glow { animation: muflis-glow 4s infinite ease-in-out; }
           @keyframes omaha-swirl { 0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } 25% { box-shadow: 0 0 35px #a855f744, inset -20px 20px 50px #a855f722; border-color: #a855f755; } 50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; } 75% { box-shadow: 0 0 35px #a855f744, inset 20px -20px 50px #a855f722; border-color: #a855f755; } 100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } }
@@ -535,7 +547,7 @@ const App = () => {
           <div className="w-full max-w-[500px] p-8 bg-slate-900 border border-cyan-500/30 rounded-3xl shadow-2xl flex flex-col gap-6 relative">
             <button onClick={()=>setShowRulesModal(false)} className="absolute top-4 right-4 text-white/40 hover:text-white"><X/></button>
             <h3 className="text-2xl font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><BookOpen size={24}/> {activeVariant?.name} Rules</h3>
-            <div className="space-y-4 overflow-y-auto max-h-[60vh] pr-2 font-black">{activeVariant?.rules?.map((rule, ri) => (<div key={`rule-${ri}`} className="flex gap-3 text-sm text-white/80 leading-relaxed uppercase"><span className="text-cyan-500 shrink-0">•</span><span>{String(rule)}</span></div>))}</div>
+            <div className="space-y-4 overflow-y-auto max-h-[60vh] pr-2 font-black">{(activeVariant?.rules || []).map((rule, ri) => (<div key={`rule-${ri}`} className="flex gap-3 text-sm text-white/80 leading-relaxed uppercase"><span className="text-cyan-500 shrink-0">•</span><span>{String(rule)}</span></div>))}</div>
             <button onClick={()=>setShowRulesModal(false)} className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase tracking-widest hover:brightness-110">Understood</button>
           </div>
         </div>
