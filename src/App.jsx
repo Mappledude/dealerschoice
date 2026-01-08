@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.68
+// VERSION: v1.0.69
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.68";
+const VERSION = "v1.0.69";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -141,7 +141,6 @@ const Seat = ({
 
     if (!player || !displayPos) return null;
 
-    // Fixed: Define isMuckWin correctly in scope
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !isMuckWin);
     const cardZIndex = isHero ? 'z-[200]' : (phase === PHASES.SHOWDOWN ? 'z-[150]' : 'z-[40]');
@@ -407,7 +406,9 @@ const App = () => {
             setLogs(prev => [{ name: "SYSTEM", action: `${d.phase} DEALT [ ${cardString} ]`, type: 'phase', handId: currentHandId.current, timestamp: Date.now(), uniqueKey: `board-${Date.now()}` }, ...prev]);
             setHandAttention(true);
             setTimeout(() => { setHandAttention(false); setDealAttention(true); setTimeout(() => setDealAttention(false), 1000); }, 3000);
-            if (d.phase === PHASES.FLOP) {
+            
+            // Feature 2: Moved variation announcement to TURN phase
+            if (d.phase === PHASES.TURN) {
                 const vId = d.activeVariant?.id || 'HOLDEM';
                 setTimeout(() => { setAnnouncement({ text: VARIANTS[vId]?.name || "Poker", color: VARIANT_COLORS[vId] || '#fff' }); setTimeout(() => setAnnouncement(null), 1500); }, 3000); 
             }
@@ -592,7 +593,12 @@ const App = () => {
     <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
       {announcement && (<div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none"><div className="relative"><div className="absolute inset-0 blur-[40px] opacity-50 bg-current scale-150 animate-pulse" style={{ color: announcement.color }} /><h1 className="text-[10vw] font-black uppercase italic animate-announcement-pop drop-shadow-[0_0_50px_rgba(0,0,0,1)] text-center px-10 relative z-10" style={{ color: announcement.color }}>{String(announcement.text)}</h1></div></div>)}
       {showRebuyModal && (<div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6"><div className="w-full max-w-[400px] p-8 bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col gap-10"><h3 className="text-3xl text-center text-indigo-400 uppercase font-black">ARENA TOP-UP</h3><div className="space-y-4 font-black text-center uppercase"><div className="flex justify-between items-center text-[10px] text-white/40 tracking-[0.2em] font-black"><span>CREDIT AMOUNT</span><span className="text-indigo-400 text-2xl font-mono">${Math.min(rebuyAmount, userProfile?.chips || 0).toLocaleString()}</span></div><input type="range" min={1} max={userProfile?.chips || 100} step={1} value={rebuyAmount} onChange={(e) => setRebuyAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" /></div><div className="flex gap-4"><button onClick={()=>setShowRebuyModal(false)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl font-black text-xs uppercase">CANCEL</button><button onClick={handleRebuy} className="flex-2 p-4 bg-indigo-600 rounded-xl shadow-lg transition-all text-xs font-black uppercase">INJECT FUNDS</button></div></div></div>)}
-      {showRulesModal && (<div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6"><div className="w-full max-w-[500px] p-8 bg-slate-900 border border-cyan-500/30 rounded-3xl shadow-2xl flex flex-col gap-6 relative"><button onClick={()=>setShowRulesModal(false)} className="absolute top-4 right-4 text-white/40 hover:text-white"><X/></button><h3 className="text-2xl font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><BookOpen size={24}/> {activeVariant?.name} Rules</h3><div className="space-y-4 overflow-y-auto max-h-[60vh] pr-2 font-black">{activeVariant?.rules?.map((rule, ri) => (<div key={`rule-${ri}`} className="flex gap-3 text-sm text-white/80 leading-relaxed uppercase"><span className="text-cyan-500 shrink-0">•</span><span>{String(rule)}</span></div>))}</div><button onClick={()=>setShowRulesModal(false)} className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase tracking-widest hover:brightness-110">Understood</button></div></div>)}
+      {showRulesModal && (<div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6"><div className="w-full max-w-[500px] p-8 bg-slate-900 border border-cyan-500/30 rounded-3xl shadow-2xl flex flex-col gap-6 relative"><button onClick={()=>setShowRulesModal(false)} className="absolute top-4 right-4 text-white/40 hover:text-white"><X/></button><h3 className="text-2xl font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><BookOpen size={24}/> {activeVariant?.name} Rules</h3><div className="space-y-4 overflow-y-auto max-h-[60vh] pr-2 font-black">{activeVariant?.rules?.map((rule, ri) => (
+                    <div key={`rule-${ri}`} className="flex gap-3 text-sm text-white/80 leading-relaxed uppercase">
+                        <span className="text-cyan-500 shrink-0">•</span>
+                        <span>{String(rule)}</span>
+                    </div>
+                ))}</div><button onClick={()=>setShowRulesModal(false)} className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase tracking-widest hover:brightness-110">Understood</button></div></div>)}
       <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[45px] md:h-[55px]">
         <div className="flex-1 flex items-center"><button onClick={()=>setShowRulesModal(true)} style={{ backgroundColor: VARIANT_COLORS[activeVariant?.id || 'HOLDEM'] || '#1e293b' }} className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'}`}><span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-black flex items-center gap-1 opacity-70">This Hand: <HelpCircle size={8}/></span><span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-xs md:text-sm font-black truncate drop-shadow-sm">{String(activeVariant?.name)}</span></button></div>
         <div className="flex-1 flex items-center justify-center gap-2 md:gap-4"><button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button><button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button><button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button></div>
