@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.57
+// VERSION: v1.0.58
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.57";
+const VERSION = "v1.0.58";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -363,6 +363,7 @@ const App = () => {
     heroCardScale: 2.0, heroCardY: 20, oppCardScale: 1.0, oppCardY: -10,
     commCardScale: 1.5, commCardY: 0, betScale: 1.5, betY: 0,
     badgeY: 0, 
+    // Default to 150 on mobile for cleaner look
     footerHeight: typeof window !== 'undefined' && window.innerWidth < 1024 ? 150 : 250, 
     tableZoom: 0.9, 
     holeCardFan: 35
@@ -585,6 +586,14 @@ const App = () => {
         });
         
         const isPhaseTransition = d.phase !== phaseRef.current;
+        
+        // Trigger announcement at the start of each hand (Hand Start Animation)
+        if (isPhaseTransition && d.phase === PHASES.PRE_FLOP) {
+            const vId = d.activeVariant?.id || 'HOLDEM';
+            setAnnouncement({ text: VARIANTS[vId]?.name || "Poker", color: VARIANT_COLORS[vId] || '#fff' });
+            setTimeout(() => setAnnouncement(null), 1500);
+        }
+
         if (isPhaseTransition && [PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(d.phase)) {
             setHandAttention(true);
             setTimeout(() => {
@@ -961,13 +970,13 @@ const App = () => {
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
                 <div 
-                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_60px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
+                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_50px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
                   style={{ 
                     backgroundColor: '#070a13',
                     boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `
                       0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, 
                       inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66
-                    ` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 60px #ff0000, inset 0 0 40px #ff000044' : 'none') 
+                    ` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 50px #ff0000' : 'none') 
                   }} 
                 />
                 
