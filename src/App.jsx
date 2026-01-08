@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.58
+// VERSION: v1.0.59
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.58";
+const VERSION = "v1.0.59";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -185,13 +185,15 @@ const Seat = ({
     };
 
     const action = getActionDisplay();
-    // Action overlay is now only used for persistent states like FOLDED
     const showActionOverlay = action && player.isFolded; 
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !isMuckWin);
     
     const cardZIndex = isHero ? 'z-[200]' : (phase === PHASES.SHOWDOWN ? 'z-[150]' : 'z-[40]');
+
+    // Sync animation to global timestamp (6000ms loop)
+    const globalSyncDelay = -(Date.now() % 6000);
 
     return (
         <div 
@@ -252,7 +254,6 @@ const Seat = ({
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}
             >
-                {/* Traditional overlay for persistent states like FOLDED */}
                 {showActionOverlay && (
                     <div 
                       key={`action-overlay-${String(action.text)}`} 
@@ -277,17 +278,23 @@ const Seat = ({
                       <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
                     </div>
 
-                    {/* BOTTOM ROW: Subtle Fade Carousel (Stationary) */}
+                    {/* BOTTOM ROW: Synchronized Fade Carousel (Stationary) */}
                     <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center">
-                        {/* Slide 1: Balance (Subtle Fade) */}
-                        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${action && !player.isFolded && !isCollectingBets ? 'animate-fade-balance' : 'opacity-100'}`}>
+                        {/* Slide 1: Balance (3s Sync Fade) */}
+                        <div 
+                            className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${action && !player.isFolded && !isCollectingBets ? 'animate-fade-balance' : 'opacity-100'}`}
+                            style={action ? { animationDelay: `${globalSyncDelay}ms` } : {}}
+                        >
                             <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
                                 ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
                             </span>
                         </div>
-                        {/* Slide 2: Action (Subtle Fade) */}
+                        {/* Slide 2: Action (3s Sync Fade) */}
                         {action && !player.isFolded && !isCollectingBets && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg animate-fade-action">
+                            <div 
+                                className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg animate-fade-action"
+                                style={{ animationDelay: `${globalSyncDelay}ms` }}
+                            >
                                 <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${action.color}`}>
                                     {String(action.text)}
                                 </span>
@@ -363,7 +370,6 @@ const App = () => {
     heroCardScale: 2.0, heroCardY: 20, oppCardScale: 1.0, oppCardY: -10,
     commCardScale: 1.5, commCardY: 0, betScale: 1.5, betY: 0,
     badgeY: 0, 
-    // Default to 150 on mobile for cleaner look
     footerHeight: typeof window !== 'undefined' && window.innerWidth < 1024 ? 150 : 250, 
     tableZoom: 0.9, 
     holeCardFan: 35
@@ -970,13 +976,13 @@ const App = () => {
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
                 <div 
-                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_50px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
+                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_60px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
                   style={{ 
                     backgroundColor: '#070a13',
                     boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `
                       0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, 
                       inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66
-                    ` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 50px #ff0000' : 'none') 
+                    ` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 60px #ff0000, inset 0 0 40px #ff000044' : 'none') 
                   }} 
                 />
                 
@@ -1242,17 +1248,17 @@ const App = () => {
           .animate-bounce-subtle { animation: bounce-subtle 1.5s infinite ease-in-out; }
 
           @keyframes fade-balance {
-            0%, 33.3% { opacity: 1; }      /* 1.5s visible */
-            40%, 93.3% { opacity: 0; }     /* 3s invisible */
-            100% { opacity: 1; }           /* fade back in */
+            0%, 50% { opacity: 1; }      /* 3s visible */
+            55%, 95% { opacity: 0; }     /* 3s invisible */
+            100% { opacity: 1; }           
           }
           @keyframes fade-action {
-            0%, 33.3% { opacity: 0; }      /* 1.5s invisible */
-            40%, 93.3% { opacity: 1; }     /* 3s visible */
-            100% { opacity: 0; }           /* fade out */
+            0%, 50% { opacity: 0; }      /* 3s invisible */
+            55%, 95% { opacity: 1; }     /* 3s visible */
+            100% { opacity: 0; }           
           }
-          .animate-fade-balance { animation: fade-balance 4.5s infinite cubic-bezier(0.4, 0, 0.2, 1); }
-          .animate-fade-action { animation: fade-action 4.5s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+          .animate-fade-balance { animation: fade-balance 6s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+          .animate-fade-action { animation: fade-action 6s infinite cubic-bezier(0.4, 0, 0.2, 1); }
 
           @keyframes muflis-glow {
             0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; }
