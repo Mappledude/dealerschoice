@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.48
+// VERSION: v1.0.49
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.48";
+const VERSION = "v1.0.49";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -168,7 +168,8 @@ const Seat = ({
     };
 
     const action = getActionDisplay();
-    const showActionOverlay = action && !isCollectingBets;
+    // Action overlay is now only used for FOLDED or special states, others use carousel
+    const showActionOverlay = action && player.isFolded; 
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !isMuckWin);
@@ -234,10 +235,11 @@ const Seat = ({
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}
             >
+                {/* Traditional overlay for persistent states like FOLDED */}
                 {showActionOverlay && (
                     <div 
-                      key={`action-${String(action.text)}`} 
-                      className={`absolute inset-0 z-50 flex items-end justify-center bg-black/60 pb-3 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
+                      key={`action-overlay-${String(action.text)}`} 
+                      className={`absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
                     >
                         <span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
                             {String(action.text)}
@@ -251,14 +253,33 @@ const Seat = ({
                   </div>
                 )}
 
-                <div className="flex flex-col items-center w-full relative z-10 py-1">
-                    <div className="flex items-center gap-1 opacity-60 mb-0.5">
+                <div className="flex flex-col items-center w-full relative z-10 py-1 overflow-hidden">
+                    {/* TOP ROW: Name stays fixed */}
+                    <div className="flex items-center gap-1 opacity-60 mb-1 shrink-0">
                       {player.isBot && <Bot size={10} className="text-indigo-400" />}
                       <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
                     </div>
-                    <span className={`text-[20px] lg:text-[3vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
-                      ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                    </span>
+
+                    {/* BOTTOM ROW: Carousel Container */}
+                    <div className="w-full h-[24px] lg:h-[3.5vh] relative overflow-hidden flex flex-col items-center justify-center">
+                        <div className={`w-full h-full flex flex-col transition-all duration-500 ${action && !player.isFolded && !isCollectingBets ? 'animate-hud-carousel' : ''}`}>
+                            {/* Slide 1: Balance (1.5s visible) */}
+                            <div className="w-full h-full flex items-center justify-center shrink-0">
+                                <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
+                                    ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                </span>
+                            </div>
+                            {/* Slide 2: Action (3s visible) */}
+                            {action && !player.isFolded && !isCollectingBets && (
+                                <div className="w-full h-full flex items-center justify-center shrink-0 bg-black/60 rounded-lg">
+                                    <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${action.color}`}>
+                                        {String(action.text)}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
                 </div>
 
@@ -1193,6 +1214,13 @@ const App = () => {
             50% { transform: translateY(3px); }
           }
           .animate-bounce-subtle { animation: bounce-subtle 1.5s infinite ease-in-out; }
+
+          @keyframes hud-carousel {
+            0%, 33.3% { transform: translateY(0%); }      /* Balance (1.5s) */
+            40%, 93.3% { transform: translateY(-50%); }   /* Action (3s) */
+            100% { transform: translateY(0%); }           /* Loop back */
+          }
+          .animate-hud-carousel { animation: hud-carousel 4.5s infinite cubic-bezier(0.65, 0, 0.35, 1); }
 
           .roulette-border {
             border: 4px solid transparent;
