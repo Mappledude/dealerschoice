@@ -14,8 +14,8 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-// VERSION: v1.0.20 (Internal Server)
-const VERSION = "v1.0.20";
+// VERSION: v1.0.21 (Internal Server)
+const VERSION = "v1.0.21";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -258,7 +258,6 @@ const processShowdown = (roomId) => {
       io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
     });
 
-    // IMPROVEMENT: Revised Server-Side Delay logic (8s standard, 5s split per winner, 2s muck)
     const isMuckWin = room.showdownWinners.some(w => w.rank === "!");
     let durationPerWinner = 8000;
     if (isMuckWin) {
@@ -359,7 +358,14 @@ const moveToNextPlayer = (roomId) => {
 };
 
 const collectBets = (room) => {
-    room.players.forEach(p => { if (p) { room.potData[0].amount += p.currentBet; p.currentBet = 0; p.actedThisStreet = false; } });
+    room.players.forEach(p => { 
+        if (p) { 
+            room.potData[0].amount += p.currentBet; 
+            p.currentBet = 0; 
+            p.actedThisStreet = false; 
+            p.lastAction = null; // Fix: Reset action on collect to prevent confusing "$0" labels
+        } 
+    });
     room.highestBet = 0;
     room.lastRaiseIncrement = Number(room.bb);
 };
