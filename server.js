@@ -14,8 +14,8 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-// VERSION: v1.0.16 (Internal Server)
-const VERSION = "v1.0.16";
+// VERSION: v1.0.18 (Internal Server)
+const VERSION = "v1.0.18";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -56,34 +56,34 @@ const combinations = (array, k) => {
   return result;
 };
 
-const rankHand = (cards, isAceLow = false, isLowHand = false) => {
+const rankHand = (cards, isAceLow = false) => {
   if (!cards || cards.length < 5) return { power: 0, name: "Pre-flop", cards: [] };
   const getVal = (v) => (isAceLow && v === 'A') ? 1 : VM[v];
   const sorted = [...cards].sort((a, b) => getVal(b.value) - getVal(a.value));
   const ranks = sorted.map(c => getVal(c.value));
   
-  if (isLowHand) {
-      const lowRanks = [...new Set(ranks)].filter(r => r <= 8);
-      if (lowRanks.length < 5) return { power: Infinity, name: "No Qualifier", cards: [] };
-  }
-
   const counts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {});
   const groups = Object.entries(counts).map(([rank, count]) => ({ r: parseInt(rank), c: count })).sort((a, b) => b.c - a.c || b.r - a.r);
   let compArr = [];
   groups.forEach(g => { for (let i = 0; i < g.c; i++) compArr.push(g.r); });
   const vc = groups.map(x => x.c);
-  const isFlush = isLowHand ? false : new Set(sorted.map(c => c.suit)).size === 1;
+  
+  // IMPROVEMENT: Straights and flushes now always count against low hands
+  const isFlush = new Set(sorted.map(c => c.suit)).size === 1;
   const uniqueRanks = [...new Set(ranks)].sort((a, b) => b - a);
   let isStraight = false;
   let straightHigh = 0;
-  if (!isLowHand && uniqueRanks.length >= 5) {
+
+  if (uniqueRanks.length >= 5) {
     for (let i = 0; i <= uniqueRanks.length - 5; i++) {
         if (uniqueRanks[i] === uniqueRanks[i + 4] + 4) { isStraight = true; straightHigh = uniqueRanks[i]; break; }
     }
+    // Handle low straight A-2-3-4-5 when Ace is high (14) or explicitly low (1)
     if (!isStraight && !isAceLow && uniqueRanks.includes(14) && [5,4,3,2].every(r => uniqueRanks.includes(r))) {
         isStraight = true; straightHigh = 5; compArr = [5, 4, 3, 2, 1]; 
     }
   }
+
   let score = 0, name = `High Card ${V_LABEL[compArr[0]] || compArr[0]}`;
   if (vc[0] === 5) { score = 9; name = `Five of a Kind ${V_LABEL[groups[0].r]}s`; }
   else if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
@@ -116,12 +116,12 @@ const getBestHand = (hole, comm, variantId) => {
     });});
   } else if (variantId === 'HILOW') {
     holePairs.forEach(h => { boardCombos.forEach(b => {
-            const resH = rankHand([...h, ...b], false, false);
+            const resH = rankHand([...h, ...b], false);
             if (resH.power > bestHigh.power) bestHigh = resH;
-            const resL = rankHand([...h, ...b], true, true);
-            if (resL.power !== Infinity) {
-                if (!bestLow || resL.power < bestLow.power) { bestLow = { ...resL, name: resL.name.replace('High Card', 'Low') }; }
-            }
+            
+            // IMPROVEMENT: Ace-Low worst poker hand logic (no qualifier)
+            const resL = rankHand([...h, ...b], true);
+            if (!bestLow || resL.power < bestLow.power) { bestLow = { ...resL, name: resL.name.replace('High Card', 'Low') }; }
     });});
   } else if (variantId === 'REDSBLACKS') {
       const reds = hole.filter(c => c.suit === '♥' || c.suit === '♦');
@@ -175,6 +175,7 @@ const updateRoomStrengths = (roomId) => {
                     p.lowWinProbability = Math.min(100, Math.max(5, rawLowProb * 1.5));
                 } else { 
                     p.lowWinProbability = 0; 
+                    p.lowStrength = null;
                 }
             }
         }
@@ -227,21 +228,16 @@ const processShowdown = (roomId) => {
         const evals = eligiblePlayers.map(p => ({ player: p, res: getBestHand(p.hand, room.community, variantId) }));
 
         if (variantId === 'HILOW') {
-            const qualifiedLows = evals.filter(e => e.res.low !== null);
-            let lowHalf = 0;
-            let highHalf = pot.amount;
+            // IMPROVEMENT: All hands are valid for Low Split
+            const lowHalf = Math.floor((pot.amount * 100) / 2) / 100;
+            const highHalf = ((pot.amount * 100) - (lowHalf * 100)) / 100;
 
-            if (qualifiedLows.length > 0) {
-                lowHalf = Math.floor((pot.amount * 100) / 2) / 100;
-                highHalf = ((pot.amount * 100) - (lowHalf * 100)) / 100;
-
-                const lowSorted = [...qualifiedLows].sort((a, b) => a.res.low.power - b.res.low.power);
-                const winnersL = lowSorted.filter(e => e.res.low.power === lowSorted[0].res.low.power);
-                winnersL.forEach(w => {
-                    const share = lowHalf / winnersL.length; w.player.chips += share;
-                    room.showdownWinners.push({ name: w.player.name, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share });
-                });
-            }
+            const lowSorted = [...evals].sort((a, b) => a.res.low.power - b.res.low.power);
+            const winnersL = lowSorted.filter(e => e.res.low.power === lowSorted[0].res.low.power);
+            winnersL.forEach(w => {
+                const share = lowHalf / winnersL.length; w.player.chips += share;
+                room.showdownWinners.push({ name: w.player.name, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share });
+            });
             
             const highSorted = [...evals].sort((a, b) => b.res.high.power - a.res.high.power);
             const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
