@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.65
+// VERSION: v1.0.68
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.65";
+const VERSION = "v1.0.68";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -29,21 +29,21 @@ const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN',
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
 const VARIANT_COLORS = {
-  HOLDEM: '#22d3ee',      // Cyan
-  OMAHA: '#a855f7',       // Purple
-  PINEAPPLE: '#eab308',   // Yellow
-  MUFLIS: '#39FF14',      // Toxic Emerald
-  HILOW: '#6366f1',       // Electric Indigo
-  REDSBLACKS: '#ff0000'   // Striking Red
+  HOLDEM: '#22d3ee',
+  OMAHA: '#a855f7',
+  PINEAPPLE: '#eab308',
+  MUFLIS: '#39FF14',
+  HILOW: '#6366f1',
+  REDSBLACKS: '#ff0000'
 };
 
 const VARIANT_FELT_COLORS = {
-  HOLDEM: '#070a13',
-  OMAHA: '#070a13',
-  PINEAPPLE: '#070a13',
-  MUFLIS: '#070a13',
-  HILOW: '#070a13',
-  REDSBLACKS: '#070a13'
+  HOLDEM: '#1a472a',      // Forest Green
+  OMAHA: '#0f172a',       // Midnight Blue
+  PINEAPPLE: '#3d2b1f',   // Dark Wood/Earth
+  MUFLIS: '#050505',      // Deep Black
+  HILOW: '#171717',       // Charcoal
+  REDSBLACKS: '#450a0a'   // Deep Burgundy
 };
 
 const getContrastColor = (hex) => {
@@ -145,6 +145,7 @@ const Seat = ({
 
     if (!player || !displayPos) return null;
 
+    // Fixed: Compute isMuckWin within component to avoid ReferenceError
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !isMuckWin);
     const cardZIndex = isHero ? 'z-[200]' : (phase === PHASES.SHOWDOWN ? 'z-[150]' : 'z-[40]');
@@ -193,7 +194,11 @@ const Seat = ({
                     </div>
                     {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
                 </div>
-                {isDealer && <div className="absolute bottom-[6px] left-1/2 -translate-x-1/2 w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full shadow-[0_0_15px_#ef4444] animate-pulse z-[60]" />}
+                {isDealer && (
+                  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-6 h-6 bg-white border-b-4 border-gray-400 rounded-full flex items-center justify-center shadow-lg z-[150] animate-in zoom-in duration-300">
+                    <span className="text-[10px] text-black font-black">D</span>
+                  </div>
+                )}
             </div>
         </div>
     );
@@ -613,12 +618,35 @@ const App = () => {
                   <span className="text-[14px] lg:text-[2.5vh] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
                   <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500 ${heroPlayerObj?.winProbability > 80 ? 'animate-high-prob text-yellow-300' : 'text-[#fbbf24]'}`}>{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
                 </div></>)}
+            {/* Redesigned 3D Poker Table */}
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
-                <div className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''}`} style={{ backgroundColor: '#070a13', boxShadow: `0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66` }} />
+                
+                {/* 1. Leather Rail (Outer Ring) */}
+                <div className="absolute inset-[-20px] rounded-[50%] border-[24px] border-[#0a0a0a] shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_2px_10px_rgba(255,255,255,0.1)] z-0" />
+
+                {/* 2. Wooden Racetrack */}
+                <div className="absolute inset-0 rounded-[50%] border-[40px] border-[#1a110a] shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] z-0 bg-[#2b1d12]" />
+
+                {/* 3. Casino Felt Surface */}
+                <div 
+                  className={`absolute inset-[35px] rounded-[50%] transition-all duration-700 overflow-hidden ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''}`} 
+                  style={{ 
+                    backgroundColor: VARIANT_FELT_COLORS[activeVariant?.id || 'HOLDEM'],
+                    backgroundImage: `radial-gradient(circle at center, rgba(255,255,255,0.15) 0%, transparent 70%)`,
+                    boxShadow: `inset 0 0 100px rgba(0,0,0,0.6)`
+                  }} 
+                >
+                    {/* Noise texture for felt feel */}
+                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} />
+                </div>
+
+                {/* 4. Betting Line */}
+                <div className="absolute inset-[15%] rounded-[50%] border border-white/10 pointer-events-none z-10" />
+
                 <button onClick={handleForceSync} className="absolute bottom-6 right-6 z-[150] bg-black/60 border border-white/20 p-3 rounded-full text-white/40 hover:text-white transition-all shadow-xl active:scale-95 group pointer-events-auto" title="Force Sync State"><RefreshCcw size={20} className="group-active:animate-spin" /></button>
                 <div className="absolute inset-0 pointer-events-none z-20">{(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} visuals={visuals} bigBlind={bigBlind} showdownWinners={showdownWinners} isCollectingBets={potTransferring} timeRemaining={timeRemaining} />); })}</div>
                 <div className="absolute top-[calc(48%-50px)] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full">
-                {!potTransferring && (<div className="flex flex-col items-center mb-3"><span className="text-white/20 text-[10px] tracking-[0.5em] mb-1 uppercase font-bold">Total Pot:</span><div className="text-[6vw] lg:text-[6vh] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div>)}
+                {!potTransferring && (<div className="flex flex-col items-center mb-3 transition-all"><span className="text-white/20 text-[10px] tracking-[0.5em] mb-1 uppercase font-bold">Total Pot:</span><div className="text-[6vw] lg:text-[6vh] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div>)}
                 {community.length > 0 && (<div className="flex gap-2 md:gap-4 mt-4 transition-transform" style={{ transform: isMobile ? `scale(${visuals.commCardScale})` : `scale(${visuals.commCardScale * 0.8})` }}>{(community || []).map((c, j) => { const isRed = c.suit === '♥' || c.suit === '♦'; return (<div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] lg:w-[6vh] h-[11vw] lg:h-[9vh] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10'}`}><span className={`text-[12px] lg:text-[1.6vh] font-black leading-tight ${isRed ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span><span className={`text-[14px] lg:text-[2.2vh] font-black leading-tight ${isRed ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span></div>);})}</div>)}</div>
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (<div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto"><div className="flex-1 w-full relative flex items-center justify-center py-4"><input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} /></div><div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]"><span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span><div className="flex items-center justify-center w-full"><span className="text-emerald-500 font-mono text-lg md:text-2xl mr-0.5">$</span><input type="number" value={raiseInput} onChange={(e) => { const val = Number(e.target.value); const min = minRaiseAmount || (highestBet + bigBlind); const max = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet); setRaiseInput(Math.max(min, Math.min(val, max))); }} className="bg-transparent text-emerald-400 font-mono text-xl md:text-3xl font-black text-center outline-none w-full" /></div></div></div>)}
             </div>
@@ -666,7 +694,7 @@ const App = () => {
           .animate-deal-trigger { animation: attention-trigger 1s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
           @keyframes high-prob-pulse {
             0%, 100% { transform: scale(1); filter: brightness(1); text-shadow: 0 0 5px rgba(251, 191, 36, 0.5); }
-            50% { transform: scale(1.15); filter: brightness(1.5); text-shadow: 0 0 20px rgba(251, 191, 36, 1); }
+            50% { transform: scale(1.1); filter: brightness(1.5); text-shadow: 0 0 20px rgba(251, 191, 36, 1); }
           }
           .animate-high-prob { animation: high-prob-pulse 1s infinite ease-in-out; }
           @keyframes muflis-glow { 0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; } 50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; } }
