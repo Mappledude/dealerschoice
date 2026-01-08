@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.40
+// VERSION: v1.0.44
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.40";
+const VERSION = "v1.0.44";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -30,18 +30,18 @@ const VARIANT_COLORS = {
   HOLDEM: '#22d3ee',      // Cyan
   OMAHA: '#a855f7',       // Purple
   PINEAPPLE: '#eab308',   // Yellow
-  MUFLIS: '#ef4444',      // Red
+  MUFLIS: '#991b1b',      // Deep Blood Red
   HILOW: '#6366f1',       // Electric Indigo
-  REDSBLACKS: '#f43f5e'   // Rose
+  REDSBLACKS: '#ff0000'   // Striking Red
 };
 
 const VARIANT_FELT_COLORS = {
-  HOLDEM: '#060b13',      // Deep Cyan-Black
-  OMAHA: '#0b0613',       // Deep Purple-Black
-  PINEAPPLE: '#06130b',   // Deep Emerald-Black
-  MUFLIS: '#130606',      // Deep Red-Black
-  HILOW: '#130b06',       // Deep Amber-Black
-  REDSBLACKS: '#13060b'   // Deep Rose-Black
+  HOLDEM: '#070a13',
+  OMAHA: '#070a13',
+  PINEAPPLE: '#070a13',
+  MUFLIS: '#070a13',
+  HILOW: '#070a13',
+  REDSBLACKS: '#070a13'
 };
 
 // Helper for HUD Contrast
@@ -270,7 +270,6 @@ const Seat = ({
 
 const App = () => {
   // --- STATE ---
-  // Mandatory: Declare all state variables at the top of the component scope to avoid hoisting issues
   const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
   const [adminTab, setAdminTab] = useState(ADMIN_TABS.PLAYERS);
   const [userProfile, setUserProfile] = useState(null);
@@ -395,7 +394,7 @@ const App = () => {
     if (!newPlayer.name.trim()) return;
     const playerUid = 'p_' + Math.random().toString(36).slice(2, 7);
     socket.emit('adminCreatePlayer', { ...newPlayer, uid: playerUid });
-    setNewPlayer({ name: '', chips: 1000, password: '' });
+    setNewPlayer({ ...newPlayer, name: '', password: '' });
   }, [newPlayer]);
 
   const handleSpawnArena = useCallback(() => {
@@ -406,7 +405,7 @@ const App = () => {
         minBuy: Number(newTable.minBuy), maxBuy: Number(newTable.maxBuy)
     };
     socket.emit('adminCreateRoom', roomData);
-    setNewTable({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'HOLDEM' });
+    setNewTable({ ...newTable, name: '' });
   }, [newTable]);
 
   const formatRank = (rank) => {
@@ -452,7 +451,7 @@ const App = () => {
                     currentHand.winner = log.name;
                     currentHand.amount = match[1];
                     currentHand.rank = match[2];
-                } else if (String(log.action).includes("BY DEFAULT")) {
+                } else if (String(log.action).includes("SCOOPED")) {
                     currentHand.winner = log.name;
                     currentHand.rank = "Muck/Default";
                 }
@@ -506,6 +505,16 @@ const App = () => {
 
   // --- EFFECTS ---
   useEffect(() => {
+    setPreAction(null);
+  }, [phase]);
+
+  useEffect(() => {
+    if (preAction === 'CHECK' && highestBet > (heroPlayerObj?.currentBet || 0) + 0.005) {
+      setPreAction(null);
+    }
+  }, [highestBet, heroPlayerObj?.currentBet, preAction]);
+
+  useEffect(() => {
     const handleRoomUpdate = (d) => {
         if (!d) return;
         setPlayers(() => { 
@@ -558,7 +567,16 @@ const App = () => {
             const rawWinners = d.showdownWinners || [];
             setShowdownWinners(rawWinners);
             setWinning5Ids(d.winning5Ids || []);
-            const durationPerWinner = 4000;
+            
+            // IMPROVEMENT: Revised Showdown Timings (8s standard, 5s split, 2s muck)
+            const isMuckWin = rawWinners.some(w => w.rank === "!");
+            let durationPerWinner = 8000;
+            if (isMuckWin) {
+                durationPerWinner = 2000;
+            } else if (rawWinners.length > 1) {
+                durationPerWinner = 5000;
+            }
+            
             if (rawWinners.length > 1) {
                 for (let i = 1; i < rawWinners.length; i++) {
                     setTimeout(() => {
@@ -615,6 +633,27 @@ const App = () => {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentRoomId, userProfile, handleForceSync]); 
+
+  useEffect(() => {
+    if (activeIdx === heroIdx && heroPlayerObj) { 
+        if (turnInitializedRef.current !== activeIdx) {
+          turnInitializedRef.current = activeIdx;
+          const minAllowed = minRaiseAmount || (highestBet + bigBlind);
+          const maxAllowed = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
+          setRaiseInput(Math.min(minAllowed, maxAllowed)); 
+
+          if (preAction === 'FOLD') {
+            handleAction('FOLD');
+            setPreAction(null);
+          } else if (preAction === 'CHECK') {
+            handleAction('CALL');
+            setPreAction(null);
+          }
+        }
+    } else {
+        turnInitializedRef.current = -1;
+    }
+  }, [activeIdx, heroIdx, highestBet, bigBlind, minRaiseAmount, heroPlayerObj, preAction, handleAction]);
 
   // --- VIEWS ---
   if (currentView === VIEWS.LOGIN) return (
@@ -793,7 +832,6 @@ const App = () => {
 
       <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[45px] md:h-[55px]">
         <div className="flex-1 flex items-center">
-            {/* IMPROVEMENT: Dynamically colored variant indicator with street-change animation */}
             <button 
                 onClick={()=>setShowRulesModal(true)}
                 style={{ backgroundColor: VARIANT_COLORS[activeVariant?.id || 'HOLDEM'] || '#1e293b' }}
@@ -862,13 +900,11 @@ const App = () => {
             )}
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
-                {/* IMPROVEMENT: Unified Border with dynamic inner circumference lighting glow */}
                 <div 
-                  className={`absolute inset-0 rounded-[50%] border-[4px] border-slate-800 transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'animate-red-black-glow' : ''}`} 
+                  className={`absolute inset-0 rounded-[50%] border-[4px] border-slate-800 transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'animate-red-black-glow' : ''} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
                   style={{ 
                     backgroundColor: '#070a13',
-                    // Default Circumference glow logic for non-animated variants
-                    boxShadow: activeVariant?.id !== 'REDSBLACKS' ? `
+                    boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `
                       0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, 
                       inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66
                     ` : 'none' 
@@ -958,6 +994,10 @@ const App = () => {
                 if (!winner) return null;
                 const isHiLo = activeVariant?.id === 'HILOW';
                 const isLowWin = String(winner.rank).includes("LOW:");
+                
+                // IMPROVEMENT: Scoop Logic text change
+                const isMuckWin = winner.rank === "!";
+                
                 const themeColor = isLowWin ? "text-emerald-400" : (isHiLo ? "text-amber-400" : "text-white");
                 const bgColor = isLowWin ? "bg-emerald-400/10" : (isHiLo ? "bg-amber-400/10" : "bg-white/5");
                 const borderColor = isLowWin ? "border-emerald-400/30" : (isHiLo ? "border-amber-400/30" : "border-white/10");
@@ -971,23 +1011,34 @@ const App = () => {
                             <Trophy size={14} className={themeColor + " animate-bounce shrink-0"} />
                             <div className="text-sm md:text-xl font-black tracking-tighter flex items-center gap-2 leading-none whitespace-nowrap">
                                 <span className={getNeonNameColor(winner.name)}>{String(winner.name).toUpperCase()}</span>
-                                <span className="text-white/40">WON</span>
-                                <span className={themeColor}>{String(winTypeLabel)}</span>
+                                {isMuckWin ? (
+                                  <span className="text-white ml-2">SCOOPED THE POT</span>
+                                ) : (
+                                  <>
+                                    <span className="text-white/40">WON</span>
+                                    <span className={themeColor}>{String(winTypeLabel)}</span>
+                                  </>
+                                )}
                                 <span className="text-emerald-400 font-mono ml-2">+${Number(winner.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                             </div>
                         </div>
-                        <div className="text-[10px] md:text-sm font-black text-white/60 tracking-widest uppercase">
-                          HOLDING <span className={themeColor}>{winner.rank === "!" ? "THE BEST HAND" : String(displayRank)}</span>
-                        </div>
-                        <div className="flex gap-1 justify-center mt-1">
-                            {(winner.hand || []).map((c, ci) => (
-                                <div key={`winner-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
-                                    <span className={`text-[11px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.value)}</span>
-                                    <span className={`text-[13px] md:text-xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
-                                    <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
-                                </div>
-                            ))}
-                        </div>
+                        
+                        {!isMuckWin && (
+                          <>
+                            <div className="text-[10px] md:text-sm font-black text-white/60 tracking-widest uppercase">
+                              HOLDING <span className={themeColor}>{String(displayRank)}</span>
+                            </div>
+                            <div className="flex gap-1 justify-center mt-1">
+                                {(winner.hand || []).map((c, ci) => (
+                                    <div key={`winner-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
+                                        <span className={`text-[11px] md:text-sm font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.value)}</span>
+                                        <span className={`text-[13px] md:text-xl leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-black'}`}>{String(c.suit)}</span>
+                                        <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
+                                    </div>
+                                ))}
+                            </div>
+                          </>
+                        )}
                     </div>
                 );
             })()
@@ -1004,12 +1055,20 @@ const App = () => {
                 ) : heroPlayerObj && heroPlayerObj.chips >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
                         <button 
-                            onClick={()=>handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5))} 
+                            onClick={() => {
+                                if (activeIdx !== heroIdx) return;
+                                const amt = highestBet + Math.floor(totalDisplayPot * 0.5);
+                                handleAction('RAISE', amt);
+                            }} 
                             className={`flex-1 h-9 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>
                             1/2 POT
                         </button>
                         <button 
-                            onClick={()=>handleAction('RAISE', highestBet + totalDisplayPot)} 
+                            onClick={() => {
+                                if (activeIdx !== heroIdx) return;
+                                const amt = highestBet + totalDisplayPot;
+                                handleAction('RAISE', amt);
+                            }} 
                             className={`flex-1 h-9 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/10'}`}>
                             POT
                         </button>
@@ -1034,7 +1093,14 @@ const App = () => {
                                 else setPreAction(preAction === 'CHECK' ? null : 'CHECK');
                             }} 
                             className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/5 opacity-60'}`}>
-                            {preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}
+                            {preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} 
+                            {activeIdx === heroIdx 
+                                ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 
+                                    ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` 
+                                    : 'CHECK') 
+                                : (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005
+                                    ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` 
+                                    : 'CHECK')}
                         </button>
                         <div className={`flex-[1.5] flex bg-black/40 border border-white/10 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
                             <button 
@@ -1101,10 +1167,38 @@ const App = () => {
           .animate-bounce-subtle { animation: bounce-subtle 1.5s infinite ease-in-out; }
 
           @keyframes red-black-glow {
-            0%, 100% { box-shadow: 0 0 20px #ef444444, inset 0 0 40px #ef444422; border-color: #ef444466; }
-            50% { box-shadow: 0 0 40px #00000088, inset 0 0 60px #000000aa; border-color: #ffffff11; }
+            0%, 100% { box-shadow: 0 0 30px #ff000044, inset 0 0 50px #ff000066; border-color: #ff000066; }
+            50% { box-shadow: 0 0 40px #ffffff44, inset 0 0 60px #ffffff44; border-color: #ffffff44; }
           }
-          .animate-red-black-glow { animation: red-black-glow 3s infinite ease-in-out; }
+          .animate-red-black-glow { animation: red-black-glow 2s infinite ease-in-out; }
+
+          @keyframes muflis-glow {
+            0%, 100% { box-shadow: 0 0 20px #991b1b44, inset 0 0 40px #991b1b66; border-color: #991b1b66; }
+            50% { box-shadow: 0 0 40px #450a0a99, inset 0 0 60px #450a0a99; border-color: #450a0a66; }
+          }
+          .animate-muflis-glow { animation: muflis-glow 4s infinite ease-in-out; }
+
+          @keyframes omaha-swirl {
+             0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; }
+             25% { box-shadow: 0 0 35px #a855f744, inset -20px 20px 50px #a855f722; border-color: #a855f755; }
+             50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; }
+             75% { box-shadow: 0 0 35px #a855f744, inset 20px -20px 50px #a855f722; border-color: #a855f755; }
+             100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; }
+          }
+          .animate-omaha-swirl { animation: omaha-swirl 8s infinite linear; }
+
+          @keyframes hilow-split {
+             0%, 100% { box-shadow: 0 0 30px #6366f144, inset 40px 0 60px #6366f133, inset -40px 0 60px #22d3ee33; border-color: #6366f144; }
+             50% { box-shadow: 0 0 40px #6366f155, inset 60px 0 80px #6366f144, inset -60px 0 80px #22d3ee44; border-color: #6366f155; }
+          }
+          .animate-hilow-split { animation: hilow-split 5s infinite ease-in-out; }
+
+          @keyframes pineapple-spark {
+             0%, 100% { box-shadow: 0 0 20px #eab30833, inset 0 0 40px #eab30844; border-color: #eab30844; }
+             10% { box-shadow: 0 0 25px #eab30855, inset 0 0 45px #eab30855; border-color: #eab30866; }
+             20% { box-shadow: 0 0 20px #eab30833, inset 0 0 40px #eab30844; border-color: #eab30844; }
+          }
+          .animate-pineapple-spark { animation: pineapple-spark 4s infinite linear; }
 
           html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #000; }
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
