@@ -14,8 +14,8 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-// VERSION: v1.0.22 (Internal Server)
-const VERSION = "v1.0.22";
+// VERSION: v1.0.23 (Internal Server)
+const VERSION = "v1.0.23";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -272,7 +272,6 @@ const processShowdown = (roomId) => {
       io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
     });
 
-    // IMPROVEMENT: Revised Server-Side Delay logic (8s standard, 5s split per winner, 2s muck)
     const isMuckWin = room.showdownWinners.some(w => w.rank === "!");
     let durationPerWinner = 8000;
     if (isMuckWin) {
@@ -495,7 +494,8 @@ const runIgnition = (roomId) => {
   const sbAmt = Math.min(Number(room.sb), room.players[sbIdx].chips);
   room.players[sbIdx].chips -= sbAmt; room.players[sbIdx].currentBet = sbAmt; room.players[sbIdx].totalContribution = sbAmt;
   const bbAmt = Math.min(Number(room.bb), room.players[bbIdx].chips);
-  room.players[bbAmt].chips -= bbAmt; room.players[bbIdx].currentBet = bbAmt; room.players[bbIdx].totalContribution = bbAmt;
+  // FIX: corrected indexing from bbAmt to bbIdx
+  room.players[bbIdx].chips -= bbAmt; room.players[bbIdx].currentBet = bbAmt; room.players[bbIdx].totalContribution = bbAmt;
   io.to(roomId).emit('log', { name: "SYSTEM", action: `${dealerSeat.name.toUpperCase()} IS DEALING ${room.activeVariant.name.toUpperCase()}`, type: 'phase' });
   updateRoomStrengths(roomId);
   room.activeIdx = seated[(seated.indexOf(bbIdx) + 1) % seated.length];
