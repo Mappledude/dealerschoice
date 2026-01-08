@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.54
+// VERSION: v1.0.57
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.54";
+const VERSION = "v1.0.57";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -119,21 +119,38 @@ const DISPLAY_POSITIONS = [
 ];
 
 const DashTimer = ({ timeRemaining }) => {
-  const segments = Math.ceil(timeRemaining / 3);
+  // Use 24 as the base for the limit. 
+  // Calculate percentage smoothly.
+  const percentage = Math.max(0, (timeRemaining / 24) * 100);
   const color = timeRemaining < 6 ? '#ef4444' : timeRemaining < 12 ? '#f59e0b' : '#22d3ee';
   
   return (
-    <div className="flex gap-1 items-center justify-center mt-1">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div 
-          key={`timer-seg-${i}`} 
-          className={`h-1 w-3 md:w-5 rounded-full transition-all duration-500 ${i < segments ? 'opacity-100 shadow-[0_0_8px]' : 'opacity-10'}`}
-          style={{ 
-            backgroundColor: color, 
-            boxShadow: i < segments ? `0 0 10px ${color}` : 'none' 
-          }}
-        />
-      ))}
+    <div className="w-24 md:w-32 h-1.5 bg-white/10 rounded-full relative mt-1 overflow-hidden">
+      {/* Background Dim Segments */}
+      <div className="absolute inset-0 flex gap-1 items-center px-1">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={`bg-seg-${i}`} className="h-1 flex-1 bg-white/5 rounded-full" />
+        ))}
+      </div>
+      
+      {/* Foreground Active Segments with Clipping and Smooth Transition */}
+      <div 
+        className="absolute inset-0 overflow-hidden transition-all duration-1000 linear"
+        style={{ width: `${percentage}%` }}
+      >
+        <div className="w-24 md:w-32 h-full flex gap-1 items-center px-1">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div 
+              key={`timer-seg-${i}`} 
+              className="h-1 flex-1 rounded-full"
+              style={{ 
+                backgroundColor: color, 
+                boxShadow: `0 0 10px ${color}` 
+              }}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
@@ -168,7 +185,7 @@ const Seat = ({
     };
 
     const action = getActionDisplay();
-    // Action overlay is now only used for FOLDED or special states, others use carousel
+    // Action overlay is now only used for persistent states like FOLDED
     const showActionOverlay = action && player.isFolded; 
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
@@ -239,7 +256,7 @@ const Seat = ({
                 {showActionOverlay && (
                     <div 
                       key={`action-overlay-${String(action.text)}`} 
-                      className={`absolute inset-0 z-50 flex items-end justify-center bg-black/60 pb-3 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
+                      className={`absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
                     >
                         <span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
                             {String(action.text)}
@@ -254,26 +271,28 @@ const Seat = ({
                 )}
 
                 <div className="flex flex-col items-center w-full relative z-10 py-1 overflow-hidden">
+                    {/* TOP ROW: Fixed Player Name */}
                     <div className="flex items-center gap-1 opacity-60 mb-1 shrink-0">
                       {player.isBot && <Bot size={10} className="text-indigo-400" />}
                       <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
                     </div>
 
-                    <div className="w-full h-[24px] lg:h-[3.5vh] relative overflow-hidden flex items-center justify-start">
-                        <div className={`flex w-full h-full transition-all duration-500 ${action && !player.isFolded && !isCollectingBets ? 'animate-hud-carousel' : ''}`}>
-                            <div className="min-w-full h-full flex items-center justify-center shrink-0">
-                                <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
-                                    ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                    {/* BOTTOM ROW: Subtle Fade Carousel (Stationary) */}
+                    <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center">
+                        {/* Slide 1: Balance (Subtle Fade) */}
+                        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${action && !player.isFolded && !isCollectingBets ? 'animate-fade-balance' : 'opacity-100'}`}>
+                            <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
+                                ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            </span>
+                        </div>
+                        {/* Slide 2: Action (Subtle Fade) */}
+                        {action && !player.isFolded && !isCollectingBets && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg animate-fade-action">
+                                <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${action.color}`}>
+                                    {String(action.text)}
                                 </span>
                             </div>
-                            {action && !player.isFolded && !isCollectingBets && (
-                                <div className="min-w-full h-full flex items-center justify-center shrink-0 bg-black/40 rounded-lg">
-                                    <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${action.color}`}>
-                                        {String(action.text)}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
+                        )}
                     </div>
 
                     {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
@@ -344,7 +363,6 @@ const App = () => {
     heroCardScale: 2.0, heroCardY: 20, oppCardScale: 1.0, oppCardY: -10,
     commCardScale: 1.5, commCardY: 0, betScale: 1.5, betY: 0,
     badgeY: 0, 
-    // MODIFICATION: Default to 150 on mobile for cleaner look
     footerHeight: typeof window !== 'undefined' && window.innerWidth < 1024 ? 150 : 250, 
     tableZoom: 0.9, 
     holeCardFan: 35
@@ -943,13 +961,13 @@ const App = () => {
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
                 <div 
-                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'roulette-border' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
+                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_60px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
                   style={{ 
                     backgroundColor: '#070a13',
                     boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `
                       0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, 
                       inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66
-                    ` : 'none' 
+                    ` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 60px #ff0000, inset 0 0 40px #ff000044' : 'none') 
                   }} 
                 />
                 
@@ -1001,7 +1019,7 @@ const App = () => {
                         step={1} 
                         value={raiseInput} 
                         onChange={(e) => setRaiseInput(Number(e.target.value))}
-                        className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer border-2 border-white/20"
+                        className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer"
                         style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }}
                     />
                     </div>
@@ -1214,12 +1232,18 @@ const App = () => {
           }
           .animate-bounce-subtle { animation: bounce-subtle 1.5s infinite ease-in-out; }
 
-          @keyframes hud-carousel {
-            0%, 33.3% { transform: translateX(0%); }      /* Balance (1.5s) */
-            40%, 93.3% { transform: translateX(-100%); }  /* Action (3s) */
-            100% { transform: translateX(0%); }           /* Loop back */
+          @keyframes fade-balance {
+            0%, 33.3% { opacity: 1; }      /* 1.5s visible */
+            40%, 93.3% { opacity: 0; }     /* 3s invisible */
+            100% { opacity: 1; }           /* fade back in */
           }
-          .animate-hud-carousel { animation: hud-carousel 4.5s infinite cubic-bezier(0.65, 0, 0.35, 1); }
+          @keyframes fade-action {
+            0%, 33.3% { opacity: 0; }      /* 1.5s invisible */
+            40%, 93.3% { opacity: 1; }     /* 3s visible */
+            100% { opacity: 0; }           /* fade out */
+          }
+          .animate-fade-balance { animation: fade-balance 4.5s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+          .animate-fade-action { animation: fade-action 4.5s infinite cubic-bezier(0.4, 0, 0.2, 1); }
 
           @keyframes muflis-glow {
             0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; }
