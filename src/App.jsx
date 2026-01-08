@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.44
+// VERSION: v1.0.48
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.44";
+const VERSION = "v1.0.48";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -237,7 +237,7 @@ const Seat = ({
                 {showActionOverlay && (
                     <div 
                       key={`action-${String(action.text)}`} 
-                      className={`absolute inset-0 z-50 flex items-center justify-center bg-black animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
+                      className={`absolute inset-0 z-50 flex items-end justify-center bg-black/60 pb-3 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
                     >
                         <span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
                             {String(action.text)}
@@ -434,7 +434,7 @@ const App = () => {
   const handHistory = useMemo(() => {
     const hands = [];
     let currentHand = null;
-    [...logs].reverse().forEach(log => {
+    ([...logs].reverse()).forEach(log => {
         if (String(log.action).includes("IS DEALING") || String(log.action).includes("PRE_FLOP DEALT")) {
             if (currentHand) hands.push(currentHand);
             currentHand = { 
@@ -505,6 +505,17 @@ const App = () => {
 
   // --- EFFECTS ---
   useEffect(() => {
+    // 1. Version Sentinel: Hard refresh on version mismatch to clear browser cache for all users
+    const lastSeenVersion = localStorage.getItem('last_known_version');
+    if (lastSeenVersion && lastSeenVersion !== VERSION) {
+      localStorage.setItem('last_known_version', VERSION);
+      window.location.reload();
+    } else {
+      localStorage.setItem('last_known_version', VERSION);
+    }
+  }, []);
+
+  useEffect(() => {
     setPreAction(null);
   }, [phase]);
 
@@ -513,6 +524,17 @@ const App = () => {
       setPreAction(null);
     }
   }, [highestBet, heroPlayerObj?.currentBet, preAction]);
+
+  useEffect(() => {
+    // 2. Dynamic Viewport Fix for Mobile (prevents header/footer being cut off by address bars)
+    const updateVh = () => {
+      let vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    updateVh();
+    window.addEventListener('resize', updateVh);
+    return () => window.removeEventListener('resize', updateVh);
+  }, []);
 
   useEffect(() => {
     const handleRoomUpdate = (d) => {
@@ -568,7 +590,6 @@ const App = () => {
             setShowdownWinners(rawWinners);
             setWinning5Ids(d.winning5Ids || []);
             
-            // IMPROVEMENT: Revised Showdown Timings (8s standard, 5s split, 2s muck)
             const isMuckWin = rawWinners.some(w => w.rank === "!");
             let durationPerWinner = 8000;
             if (isMuckWin) {
@@ -657,7 +678,7 @@ const App = () => {
 
   // --- VIEWS ---
   if (currentView === VIEWS.LOGIN) return (
-    <div className="h-screen bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
+    <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
         <div className="w-full max-w-[400px] p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8">
             <div className="flex items-center gap-4">
               <Lock size={32} className="text-[#fbbf24] animate-pulse" />
@@ -670,7 +691,7 @@ const App = () => {
   );
 
   if (currentView === VIEWS.ADMIN) return (
-    <div className="h-screen bg-[#06080c] flex flex-col md:flex-row text-white uppercase font-black overflow-hidden pt-[env(safe-area-inset-top)]">
+    <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] flex flex-col md:flex-row text-white uppercase font-black overflow-hidden pt-[env(safe-area-inset-top)]">
         <aside className="w-full md:w-64 border-b md:border-r border-white/10 p-4 md:p-8 flex flex-row md:flex-col gap-2 md:gap-4 bg-black/20 shrink-0">
             <h2 className="hidden md:flex text-[#fbbf24] items-center gap-2 mb-4 font-black"><ShieldCheck size={20}/> ADMIN</h2>
             <button onClick={()=>setAdminTab(ADMIN_TABS.PLAYERS)} className={`flex-1 md:flex-none p-3 rounded-xl text-[9px] md:text-xs font-black ${adminTab === ADMIN_TABS.PLAYERS ? 'bg-[#fbbf24] text-black' : 'bg-white/5'}`}>PLAYERS</button>
@@ -733,7 +754,7 @@ const App = () => {
   );
 
   if (currentView === VIEWS.LOBBY) return (
-    <div className="h-screen bg-[#000] flex flex-col text-white font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]">
+    <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#000] flex flex-col text-white font-black uppercase overflow-hidden pb-[env(safe-area-inset-bottom)]">
         {selectedTableForJoin && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6">
               <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-emerald-500/30 rounded-3xl shadow-[0_0_50px_rgba(16,185,129,0.2)] flex flex-col gap-10">
@@ -786,7 +807,7 @@ const App = () => {
   );
 
   return (
-    <div className="h-screen bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
+    <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
       {announcement && (
           <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
               <div className="relative">
@@ -886,22 +907,22 @@ const App = () => {
             <>
                 {activeVariant?.id === 'HILOW' && (
                 <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
-                    <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                    <span className="text-[12px] lg:text-[2.5vh] text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
-                    <span className="text-[#fbbf24] text-[9px] lg:text-[1.5vh] font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
+                    <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
+                    <span className="text-[14px] lg:text-[2.5vh] text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
+                    <span className="text-[#fbbf24] text-[11px] lg:text-[1.5vh] font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
                 </div>
                 )}
                 <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
-                <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-                <span className="text-[12px] lg:text-[2.5vh] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-                <span className="text-[#fbbf24] text-[9px] lg:text-[1.5vh] font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
+                <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
+                <span className="text-[14px] lg:text-[2.5vh] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
+                <span className="text-[#fbbf24] text-[11px] lg:text-[1.5vh] font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
                 </div>
             </>
             )}
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
                 <div 
-                  className={`absolute inset-0 rounded-[50%] border-[4px] border-slate-800 transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'animate-red-black-glow' : ''} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
+                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'roulette-border' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
                   style={{ 
                     backgroundColor: '#070a13',
                     boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `
@@ -995,7 +1016,6 @@ const App = () => {
                 const isHiLo = activeVariant?.id === 'HILOW';
                 const isLowWin = String(winner.rank).includes("LOW:");
                 
-                // IMPROVEMENT: Scoop Logic text change
                 const isMuckWin = winner.rank === "!";
                 
                 const themeColor = isLowWin ? "text-emerald-400" : (isHiLo ? "text-amber-400" : "text-white");
@@ -1045,12 +1065,14 @@ const App = () => {
           ) : (
             <div className={`flex flex-col gap-4 items-center w-full transition-all duration-500`}>
                 {heroPlayerObj && heroPlayerObj.chips < bigBlind && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN || heroPlayerObj.isFolded || heroPlayerObj.waitingForNextHand) ? (
-                    <div className="flex flex-col items-center gap-4 py-6">
-                        <div className="flex flex-col items-center gap-1">
-                            <span className="text-white/40 tracking-[0.2em] text-xs font-black italic uppercase">Broke in Arena • Funds Available in Wallet</span>
-                            <span className="text-indigo-400/60 text-[10px] uppercase font-black tracking-widest">Your Wallet: ${userProfile?.chips.toLocaleString()}</span>
+                    <div className="flex flex-row items-center justify-between w-full max-w-[420px] p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl lg:flex-col lg:bg-transparent lg:border-0 lg:p-0 lg:gap-4 lg:py-6 my-2 lg:my-0">
+                        <div className="flex flex-col items-start lg:items-center gap-0.5">
+                            <span className="text-white/40 tracking-wider lg:tracking-[0.2em] text-[10px] lg:text-xs font-black italic uppercase text-left lg:text-center">Broke in Arena</span>
+                            <span className="text-indigo-400 text-[12px] lg:text-[10px] uppercase font-black tracking-widest font-mono">Wallet: ${userProfile?.chips.toLocaleString()}</span>
                         </div>
-                        <button onClick={()=>{ setRebuyAmount(100); setShowRebuyModal(true); }} className="px-12 py-5 bg-indigo-600 border-2 border-indigo-400 rounded-2xl font-black text-xl hover:scale-105 transition-transform flex items-center gap-3 shadow-[0_0_40px_rgba(79,70,229,0.4)] uppercase"><Coins size={24}/> Re-buy & Continue</button>
+                        <button onClick={()=>{ setRebuyAmount(100); setShowRebuyModal(true); }} className="px-5 py-3 bg-indigo-600 border border-indigo-400 rounded-xl lg:px-12 lg:py-5 lg:rounded-2xl font-black text-xs lg:text-xl hover:scale-105 transition-transform flex items-center gap-2 shadow-[0_0_20px_rgba(79,70,229,0.3)] uppercase shrink-0">
+                            <Coins size={16} className="lg:w-6 lg:h-6"/> Re-buy
+                        </button>
                     </div>
                 ) : heroPlayerObj && heroPlayerObj.chips >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (<>
                     <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
@@ -1127,9 +1149,15 @@ const App = () => {
                 </div>
                 <div className="space-y-6">
                     <button onClick={addBot} className="w-full py-4 bg-white/5 border border-white/10 text-white font-black rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/10 transition-all"><Bot size={18}/> Add Arena Bot</button>
-                    <div className="flex flex-col gap-2 pt-4 border-t border-white/5">
-                        <label className="text-[10px] text-white/60 uppercase tracking-widest font-black">Table Zoom</label>
-                        <input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" />
+                    <div className="flex flex-col gap-4 pt-4 border-t border-white/5">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Table Zoom <span>{Math.round(visuals.tableZoom * 100)}%</span></label>
+                            <input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">HUD Action Height <span>{visuals.footerHeight}px</span></label>
+                            <input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" />
+                        </div>
                     </div>
                 </div>
                 <button onClick={() => setShowVisualControls(false)} className="w-full py-4 bg-cyan-600 text-black font-black rounded-xl uppercase hover:brightness-110">Save & Apply</button>
@@ -1166,11 +1194,14 @@ const App = () => {
           }
           .animate-bounce-subtle { animation: bounce-subtle 1.5s infinite ease-in-out; }
 
-          @keyframes red-black-glow {
-            0%, 100% { box-shadow: 0 0 30px #ff000044, inset 0 0 50px #ff000066; border-color: #ff000066; }
-            50% { box-shadow: 0 0 40px #ffffff44, inset 0 0 60px #ffffff44; border-color: #ffffff44; }
+          .roulette-border {
+            border: 4px solid transparent;
+            background-image: linear-gradient(#070a13, #070a13), 
+                              repeating-conic-gradient(#ff0000 0% 5%, #000 5% 10%);
+            background-origin: border-box;
+            background-clip: content-box, border-box;
+            box-shadow: 0 0 40px #ff000066, inset 0 0 50px #ff000044;
           }
-          .animate-red-black-glow { animation: red-black-glow 2s infinite ease-in-out; }
 
           @keyframes muflis-glow {
             0%, 100% { box-shadow: 0 0 20px #991b1b44, inset 0 0 40px #991b1b66; border-color: #991b1b66; }
