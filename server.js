@@ -14,8 +14,8 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-// VERSION: v1.0.21 (Internal Server)
-const VERSION = "v1.0.21";
+// VERSION: v1.0.22 (Internal Server)
+const VERSION = "v1.0.22";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -226,19 +226,33 @@ const processShowdown = (roomId) => {
             const lowHalf = Math.floor((pot.amount * 100) / 2) / 100;
             const highHalf = ((pot.amount * 100) - (lowHalf * 100)) / 100;
 
-            const lowSorted = [...evals].sort((a, b) => a.res.low.power - b.res.low.power);
-            const winnersL = lowSorted.filter(e => e.res.low.power === lowSorted[0].res.low.power);
-            winnersL.forEach(w => {
-                const share = lowHalf / winnersL.length; w.player.chips += share;
-                room.showdownWinners.push({ name: w.player.name, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share });
-            });
-            
-            const highSorted = [...evals].sort((a, b) => b.res.high.power - a.res.high.power);
-            const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
-            winnersH.forEach(w => {
-                const share = highHalf / winnersH.length; w.player.chips += share;
-                room.showdownWinners.push({ name: w.player.name, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share });
-            });
+            const eligibleLow = evals.filter(e => e.res && e.res.low);
+
+            if (eligibleLow.length > 0) {
+                // Award Low Half
+                const lowSorted = [...eligibleLow].sort((a, b) => a.res.low.power - b.res.low.power);
+                const winnersL = lowSorted.filter(e => e.res.low.power === lowSorted[0].res.low.power);
+                winnersL.forEach(w => {
+                    const share = lowHalf / winnersL.length; w.player.chips += share;
+                    room.showdownWinners.push({ name: w.player.name, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share });
+                });
+                
+                // Award High Half
+                const highSorted = [...evals].sort((a, b) => b.res.high.power - a.res.high.power);
+                const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
+                winnersH.forEach(w => {
+                    const share = highHalf / winnersH.length; w.player.chips += share;
+                    room.showdownWinners.push({ name: w.player.name, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share });
+                });
+            } else {
+                // SCOOP: High takes it all because no one qualified/formed a Low
+                const highSorted = [...evals].sort((a, b) => b.res.high.power - a.res.high.power);
+                const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
+                winnersH.forEach(w => {
+                    const share = pot.amount / winnersH.length; w.player.chips += share;
+                    room.showdownWinners.push({ name: w.player.name, rank: `SCOOP: ${w.res.high.name}`, hand: w.res.high.cards, amount: share });
+                });
+            }
         } else {
             evals.sort((a, b) => variantId === 'MUFLIS' ? (a.res.high.power - b.res.high.power) : (b.res.high.power - a.res.high.power));
             const winners = evals.filter(e => e.res.high.power === evals[0].res.high.power);
@@ -258,6 +272,7 @@ const processShowdown = (roomId) => {
       io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
     });
 
+    // IMPROVEMENT: Revised Server-Side Delay logic (8s standard, 5s split per winner, 2s muck)
     const isMuckWin = room.showdownWinners.some(w => w.rank === "!");
     let durationPerWinner = 8000;
     if (isMuckWin) {
@@ -363,7 +378,7 @@ const collectBets = (room) => {
             room.potData[0].amount += p.currentBet; 
             p.currentBet = 0; 
             p.actedThisStreet = false; 
-            p.lastAction = null; // Fix: Reset action on collect to prevent confusing "$0" labels
+            p.lastAction = null; 
         } 
     });
     room.highestBet = 0;
