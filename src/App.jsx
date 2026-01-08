@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.39
+// VERSION: v1.0.40
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.39";
+const VERSION = "v1.0.40";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -31,8 +31,17 @@ const VARIANT_COLORS = {
   OMAHA: '#a855f7',       // Purple
   PINEAPPLE: '#eab308',   // Yellow
   MUFLIS: '#ef4444',      // Red
-  HILOW: '#6366f1',       // Electric Indigo (Changed from Amber to distinguish from Pineapple)
+  HILOW: '#6366f1',       // Electric Indigo
   REDSBLACKS: '#f43f5e'   // Rose
+};
+
+const VARIANT_FELT_COLORS = {
+  HOLDEM: '#060b13',      // Deep Cyan-Black
+  OMAHA: '#0b0613',       // Deep Purple-Black
+  PINEAPPLE: '#06130b',   // Deep Emerald-Black
+  MUFLIS: '#130606',      // Deep Red-Black
+  HILOW: '#130b06',       // Deep Amber-Black
+  REDSBLACKS: '#13060b'   // Deep Rose-Black
 };
 
 // Helper for HUD Contrast
@@ -261,6 +270,7 @@ const Seat = ({
 
 const App = () => {
   // --- STATE ---
+  // Mandatory: Declare all state variables at the top of the component scope to avoid hoisting issues
   const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
   const [adminTab, setAdminTab] = useState(ADMIN_TABS.PLAYERS);
   const [userProfile, setUserProfile] = useState(null);
@@ -302,15 +312,14 @@ const App = () => {
   const [handAttention, setHandAttention] = useState(false);
   const [dealAttention, setDealAttention] = useState(false);
   const [idleAlternator, setIdleAlternator] = useState(true);
+  const [newPlayer, setNewPlayer] = useState({ name: '', chips: 1000, password: '' });
+  const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'HOLDEM' });
 
   // --- REFS ---
   const joinLock = useRef(false);
   const phaseRef = useRef(PHASES.IDLE); 
   const currentHandId = useRef(Date.now());
   const turnInitializedRef = useRef(-1); 
-  
-  const [newPlayer, setNewPlayer] = useState({ name: '', chips: 1000, password: '' });
-  const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'HOLDEM' });
 
   // --- DERIVED ---
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
@@ -494,6 +503,118 @@ const App = () => {
         </div>
     </div>
   );
+
+  // --- EFFECTS ---
+  useEffect(() => {
+    const handleRoomUpdate = (d) => {
+        if (!d) return;
+        setPlayers(() => { 
+          const next = Array(TOTAL_SEATS).fill(null); 
+          (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); 
+          return next; 
+        });
+        
+        const isPhaseTransition = d.phase !== phaseRef.current;
+        if (isPhaseTransition && [PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(d.phase)) {
+            setHandAttention(true);
+            setTimeout(() => {
+                setHandAttention(false);
+                setDealAttention(true);
+                setTimeout(() => setDealAttention(false), 1000);
+            }, 3000);
+            
+            if (d.phase === PHASES.FLOP) {
+                const vId = d.activeVariant?.id || 'HOLDEM';
+                setTimeout(() => {
+                    setAnnouncement({ text: VARIANTS[vId]?.name || "Poker", color: VARIANT_COLORS[vId] || '#fff' });
+                    setTimeout(() => setAnnouncement(null), 1500);
+                }, 3000); 
+            }
+        }
+
+        if (d.phase === PHASES.PRE_FLOP && phaseRef.current !== PHASES.PRE_FLOP) {
+            currentHandId.current = Date.now();
+        }
+        
+        const isShowdownTransition = d.phase === PHASES.SHOWDOWN && phaseRef.current !== PHASES.SHOWDOWN;
+        phaseRef.current = d.phase;
+        setPhase(d.phase);
+        setCommunity(d.community || []);
+        setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
+        setActiveIdx(d.activeIdx ?? -1);
+        setHighestBet(d.highestBet || 0);
+        if (d.bb) setBigBlind(d.bb);
+        if (d.minRaiseAmount !== undefined) setMinRaiseAmount(d.minRaiseAmount);
+        setDealerIdx(d.dealerIdx ?? -1);
+        setTimeRemaining(d.timeRemaining || 0);
+        if (d.activeVariant) {
+            const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
+            setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId, rules: [] });
+        }
+        
+        if (isShowdownTransition) {
+            setPotTransferring(true);
+            setCurrentShowdownIdx(0);
+            const rawWinners = d.showdownWinners || [];
+            setShowdownWinners(rawWinners);
+            setWinning5Ids(d.winning5Ids || []);
+            const durationPerWinner = 4000;
+            if (rawWinners.length > 1) {
+                for (let i = 1; i < rawWinners.length; i++) {
+                    setTimeout(() => {
+                      if (phaseRef.current === PHASES.SHOWDOWN) setCurrentShowdownIdx(i);
+                    }, i * durationPerWinner);
+                }
+            }
+            setTimeout(() => setPotTransferring(false), Math.max(1, rawWinners.length) * durationPerWinner);
+        } else if (d.phase !== PHASES.SHOWDOWN) {
+            setPotTransferring(false);
+            setShowdownWinners(null);
+        }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleForceSync();
+      }
+    };
+
+    socket.on('connect', () => { setIsConnected(true); socket.emit('getInitialData'); });
+    socket.on('roomUpdate', handleRoomUpdate);
+    socket.on('lobbyUpdate', setActiveTables);
+    socket.on('log', (l) => setLogs(prev => [
+      {...l, handId: currentHandId.current, timestamp: Date.now(), uniqueKey: `${Date.now()}-${Math.random()}`}, 
+      ...prev
+    ].slice(0, 100)));
+
+    socket.on('profilesUpdate', (list) => { 
+        setAllProfiles(list); 
+        setUserProfile(prev => {
+            if (!prev) return null;
+            const updated = list.find(p => p.uid === prev.uid);
+            return updated ? { ...prev, chips: updated.chips } : prev;
+        });
+    });
+    socket.on('initialDataResponse', ({ profiles: pList, rooms: rList }) => { setAllProfiles(pList); setActiveTables(rList); });
+    socket.on('loginSuccess', (payload) => { 
+        const profile = payload.profile || payload;
+        setUserProfile(profile); setPendingVariantId(profile.pendingVariant || 'HOLDEM'); 
+        socket.emit('getInitialData'); 
+        if (payload.activeRoomId) {
+            setCurrentRoomId(payload.activeRoomId);
+            socket.emit('joinRoom', { roomId: payload.activeRoomId, profile: profile, buyIn: 0 }, (res) => {
+                if (res?.status === 'ok') setCurrentView(VIEWS.GAME); else setCurrentView(VIEWS.LOBBY);
+            });
+        } else { setCurrentView(VIEWS.LOBBY); }
+    });
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => { 
+        socket.off('connect'); socket.off('roomUpdate'); socket.off('lobbyUpdate'); 
+        socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log');
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [currentRoomId, userProfile, handleForceSync]); 
 
   // --- VIEWS ---
   if (currentView === VIEWS.LOGIN) return (
@@ -741,7 +862,7 @@ const App = () => {
             )}
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
-                {/* IMPROVEMENT: Constant Border color for all variants, with dynamic variation-coded inner lighting glow */}
+                {/* IMPROVEMENT: Unified Border with dynamic inner circumference lighting glow */}
                 <div 
                   className={`absolute inset-0 rounded-[50%] border-[4px] border-slate-800 transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'animate-red-black-glow' : ''}`} 
                   style={{ 
