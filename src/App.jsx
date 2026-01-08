@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.32
+// VERSION: v1.0.39
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.32";
+const VERSION = "v1.0.39";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -29,9 +29,9 @@ const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN',
 const VARIANT_COLORS = {
   HOLDEM: '#22d3ee',      // Cyan
   OMAHA: '#a855f7',       // Purple
-  PINEAPPLE: '#10b981',   // Emerald
+  PINEAPPLE: '#eab308',   // Yellow
   MUFLIS: '#ef4444',      // Red
-  HILOW: '#f59e0b',       // Amber
+  HILOW: '#6366f1',       // Electric Indigo (Changed from Amber to distinguish from Pineapple)
   REDSBLACKS: '#f43f5e'   // Rose
 };
 
@@ -85,7 +85,7 @@ const VARIANTS = {
   HILOW: { 
     id: 'HILOW', 
     name: 'Hi-Low Split', 
-    rules: ["Pot is split 50/50 between the High hand and the Low hand.", "4 hole cards dealt.", "Must use 2 hole + 3 board cards for both halves.", "Low hand must be 8-or-better (Ace to 8) to qualify."] 
+    rules: ["Pot is split 50/50 between the High hand and the Low hand.", "4 hole cards dealt.", "Must use 2 hole + 3 board cards for both halves.", "All hands qualify for the low half; straights and flushes count against you."] 
   }, 
   REDSBLACKS: { 
     id: 'REDSBLACKS', 
@@ -136,7 +136,7 @@ const Seat = ({
 }) => {
     if (!player || !displayPos) return null;
 
-    const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
     const vecX = 50 - displayPos.x;
     const vecY = 50 - displayPos.y;
     
@@ -181,7 +181,11 @@ const Seat = ({
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div 
                   className={`absolute flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none ${cardZIndex}`}
-                  style={{ transform: isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw)` : `translate(${cardInwardX * 0.4}vh, ${cardInwardY * 0.4}vh)` }}
+                  style={{ 
+                    transform: isMobile 
+                      ? `translate(${cardInwardX}vw, ${cardInwardY}vw)` 
+                      : `translate(${cardInwardX * 0.4}vh, calc(${cardInwardY * 0.4}vh - ${isHero ? '70px' : '0px'}))` 
+                  }}
                 >
                     {player.hand.map((c, ci) => {
                         const mid = (player.hand.length - 1) / 2;
@@ -397,7 +401,7 @@ const App = () => {
   }, [newTable]);
 
   const formatRank = (rank) => {
-    if (!rank || typeof rank !== 'string') return "";
+    if (!rank || typeof rank !== 'string' || rank === "null" || rank === "No Qualifier") return rank || "";
     const lower = rank.toLowerCase();
     if (lower.includes("five of a kind")) return "5 of a KIND";
     if (lower.includes("straight flush")) return "STRAIGHT FLUSH";
@@ -455,142 +459,6 @@ const App = () => {
     if (next.has(id)) next.delete(id); else next.add(id);
     setExpandedHands(next);
   };
-
-  // --- EFFECTS ---
-  useEffect(() => {
-    const interval = setInterval(() => setIdleAlternator(p => !p), 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const handleRoomUpdate = (d) => {
-        if (!d) return;
-        setPlayers(() => { 
-          const next = Array(TOTAL_SEATS).fill(null); 
-          (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); 
-          return next; 
-        });
-        
-        const isPhaseTransition = d.phase !== phaseRef.current;
-        if (isPhaseTransition && [PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(d.phase)) {
-            setHandAttention(true);
-            setTimeout(() => {
-                setHandAttention(false);
-                setDealAttention(true);
-                setTimeout(() => setDealAttention(false), 1000);
-            }, 3000);
-            
-            if (d.phase === PHASES.FLOP) {
-                const vId = d.activeVariant?.id || 'HOLDEM';
-                setTimeout(() => {
-                    setAnnouncement({ text: VARIANTS[vId]?.name || "Poker", color: VARIANT_COLORS[vId] || '#fff' });
-                    setTimeout(() => setAnnouncement(null), 1500);
-                }, 3000); 
-            }
-        }
-
-        if (d.phase === PHASES.PRE_FLOP && phaseRef.current !== PHASES.PRE_FLOP) {
-            currentHandId.current = Date.now();
-        }
-        
-        const isShowdownTransition = d.phase === PHASES.SHOWDOWN && phaseRef.current !== PHASES.SHOWDOWN;
-        phaseRef.current = d.phase;
-        setPhase(d.phase);
-        setCommunity(d.community || []);
-        setPotAmount(d.potAmount || d.potData?.[0]?.amount || 0);
-        setActiveIdx(d.activeIdx ?? -1);
-        setHighestBet(d.highestBet || 0);
-        if (d.bb) setBigBlind(d.bb);
-        if (d.minRaiseAmount !== undefined) setMinRaiseAmount(d.minRaiseAmount);
-        setDealerIdx(d.dealerIdx ?? -1);
-        setTimeRemaining(d.timeRemaining || 0);
-        if (d.activeVariant) {
-            const vId = typeof d.activeVariant === 'string' ? d.activeVariant : d.activeVariant.id;
-            setActiveVariant(VARIANTS[vId] || { id: vId, name: d.activeVariant.name || vId, rules: [] });
-        }
-        
-        if (isShowdownTransition) {
-            setPotTransferring(true);
-            setCurrentShowdownIdx(0);
-            const rawWinners = d.showdownWinners || [];
-            setShowdownWinners(rawWinners);
-            setWinning5Ids(d.winning5Ids || []);
-            const durationPerWinner = 4000;
-            if (rawWinners.length > 1) {
-                for (let i = 1; i < rawWinners.length; i++) {
-                    setTimeout(() => {
-                      if (phaseRef.current === PHASES.SHOWDOWN) setCurrentShowdownIdx(i);
-                    }, i * durationPerWinner);
-                }
-            }
-            setTimeout(() => setPotTransferring(false), Math.max(1, rawWinners.length) * durationPerWinner);
-        } else if (d.phase !== PHASES.SHOWDOWN) {
-            setPotTransferring(false);
-            setShowdownWinners(null);
-        }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        handleForceSync();
-      }
-    };
-
-    socket.on('connect', () => { setIsConnected(true); socket.emit('getInitialData'); });
-    socket.on('roomUpdate', handleRoomUpdate);
-    socket.on('lobbyUpdate', setActiveTables);
-    socket.on('log', (l) => setLogs(prev => [
-      {...l, handId: currentHandId.current, timestamp: Date.now(), uniqueKey: `${Date.now()}-${Math.random()}`}, 
-      ...prev
-    ].slice(0, 100)));
-
-    socket.on('profilesUpdate', (list) => { 
-        setAllProfiles(list); 
-        setUserProfile(prev => {
-            if (!prev) return null;
-            const updated = list.find(p => p.uid === prev.uid);
-            return updated ? { ...prev, chips: updated.chips } : prev;
-        });
-    });
-    socket.on('initialDataResponse', ({ profiles: pList, rooms: rList }) => { setAllProfiles(pList); setActiveTables(rList); });
-    socket.on('loginSuccess', (payload) => { 
-        const profile = payload.profile || payload;
-        setUserProfile(profile); setPendingVariantId(profile.pendingVariant || 'HOLDEM'); 
-        socket.emit('getInitialData'); 
-        if (payload.activeRoomId) {
-            setCurrentRoomId(payload.activeRoomId);
-            socket.emit('joinRoom', { roomId: payload.activeRoomId, profile: profile, buyIn: 0 }, (res) => {
-                if (res?.status === 'ok') setCurrentView(VIEWS.GAME); else setCurrentView(VIEWS.LOBBY);
-            });
-        } else { setCurrentView(VIEWS.LOBBY); }
-    });
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => { 
-        socket.off('connect'); socket.off('roomUpdate'); socket.off('lobbyUpdate'); 
-        socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log');
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [currentRoomId, userProfile, handleForceSync]); 
-
-  useEffect(() => {
-    if (activeIdx === heroIdx && heroPlayerObj) { 
-        if (turnInitializedRef.current !== activeIdx) {
-          turnInitializedRef.current = activeIdx;
-          const minAllowed = minRaiseAmount || (highestBet + bigBlind);
-          const maxAllowed = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet);
-          setRaiseInput(Math.min(minAllowed, maxAllowed)); 
-        }
-        
-        if (preAction) {
-            if (preAction === 'FOLD') handleAction('FOLD');
-            else if (preAction === 'CHECK') handleAction('CALL'); 
-            setPreAction(null);
-        }
-    } else {
-        turnInitializedRef.current = -1;
-    }
-  }, [activeIdx, heroIdx, highestBet, bigBlind, minRaiseAmount, heroPlayerObj, preAction, handleAction]);
 
   const ActivityFeedContent = () => (
     <div className="flex-1 flex flex-col h-full overflow-hidden p-4">
@@ -860,7 +728,7 @@ const App = () => {
                 {activeVariant?.id === 'HILOW' && (
                 <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
                     <span className="text-[7px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                    <span className="text-[12px] lg:text-[2.5vh] text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
+                    <span className="text-[12px] lg:text-[2.5vh] text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
                     <span className="text-[#fbbf24] text-[9px] lg:text-[1.5vh] font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
                 </div>
                 )}
@@ -873,7 +741,18 @@ const App = () => {
             )}
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
-                <div className="absolute inset-0 bg-[#06080c] rounded-[50%] border-[2px] border-cyan-500/20 shadow-[inset_0_0_100px_rgba(34,211,238,0.1)]" />
+                {/* IMPROVEMENT: Constant Border color for all variants, with dynamic variation-coded inner lighting glow */}
+                <div 
+                  className={`absolute inset-0 rounded-[50%] border-[4px] border-slate-800 transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'animate-red-black-glow' : ''}`} 
+                  style={{ 
+                    backgroundColor: '#070a13',
+                    // Default Circumference glow logic for non-animated variants
+                    boxShadow: activeVariant?.id !== 'REDSBLACKS' ? `
+                      0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, 
+                      inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66
+                    ` : 'none' 
+                  }} 
+                />
                 
                 <button 
                 onClick={handleForceSync}
@@ -1100,11 +979,18 @@ const App = () => {
           }
           .animate-bounce-subtle { animation: bounce-subtle 1.5s infinite ease-in-out; }
 
+          @keyframes red-black-glow {
+            0%, 100% { box-shadow: 0 0 20px #ef444444, inset 0 0 40px #ef444422; border-color: #ef444466; }
+            50% { box-shadow: 0 0 40px #00000088, inset 0 0 60px #000000aa; border-color: #ffffff11; }
+          }
+          .animate-red-black-glow { animation: red-black-glow 3s infinite ease-in-out; }
+
           html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #000; }
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
           .scrollbar-hide::-webkit-scrollbar { display: none; }
           .vertical-range { -webkit-appearance: slider-vertical; width: 32px; height: 100%; background: rgba(255, 255, 255, 0.1); outline: none; border-radius: 999px; }
           .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
+          .vertical-range::-webkit-slider-thumb:hover { background: rgba(16, 185, 129, 0.8); }
           .vertical-range::-moz-range-thumb { width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
       `}</style>
     </div>
