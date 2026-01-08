@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.50
+// VERSION: v1.0.51
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.50";
+const VERSION = "v1.0.51";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -168,7 +168,6 @@ const Seat = ({
     };
 
     const action = getActionDisplay();
-    // Action overlay is now only used for FOLDED or special states, others use carousel
     const showActionOverlay = action && player.isFolded; 
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
@@ -235,11 +234,10 @@ const Seat = ({
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}
             >
-                {/* Traditional overlay for persistent states like FOLDED */}
                 {showActionOverlay && (
                     <div 
                       key={`action-overlay-${String(action.text)}`} 
-                      className={`absolute inset-0 z-50 flex items-end justify-center bg-black/60 pb-3 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
+                      className={`absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
                     >
                         <span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
                             {String(action.text)}
@@ -254,24 +252,20 @@ const Seat = ({
                 )}
 
                 <div className="flex flex-col items-center w-full relative z-10 py-1 overflow-hidden">
-                    {/* TOP ROW: Name stays fixed */}
                     <div className="flex items-center gap-1 opacity-60 mb-1 shrink-0">
                       {player.isBot && <Bot size={10} className="text-indigo-400" />}
                       <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
                     </div>
 
-                    {/* BOTTOM ROW: Carousel Container */}
-                    <div className="w-full h-[24px] lg:h-[3.5vh] relative overflow-hidden flex flex-col items-center justify-center">
-                        <div className={`w-full h-full flex flex-col transition-all duration-500 ${action && !player.isFolded && !isCollectingBets ? 'animate-hud-carousel' : ''}`}>
-                            {/* Slide 1: Balance (1.5s visible) */}
-                            <div className="w-full h-full flex items-center justify-center shrink-0">
+                    <div className="w-full h-[24px] lg:h-[3.5vh] relative overflow-hidden flex items-center justify-start">
+                        <div className={`flex w-full h-full transition-all duration-500 ${action && !player.isFolded && !isCollectingBets ? 'animate-hud-carousel' : ''}`}>
+                            <div className="min-w-full h-full flex items-center justify-center shrink-0">
                                 <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
                                     ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </span>
                             </div>
-                            {/* Slide 2: Action (3s visible) */}
                             {action && !player.isFolded && !isCollectingBets && (
-                                <div className="w-full h-full flex items-center justify-center shrink-0 bg-black/60 rounded-lg">
+                                <div className="min-w-full h-full flex items-center justify-center shrink-0 bg-black/40 rounded-lg">
                                     <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${action.color}`}>
                                         {String(action.text)}
                                     </span>
@@ -943,13 +937,13 @@ const App = () => {
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
                 <div 
-                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'roulette-border' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
+                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_50px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
                   style={{ 
                     backgroundColor: '#070a13',
                     boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `
                       0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, 
                       inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66
-                    ` : 'none' 
+                    ` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 50px #ff0000' : 'none') 
                   }} 
                 />
                 
@@ -1216,20 +1210,11 @@ const App = () => {
           .animate-bounce-subtle { animation: bounce-subtle 1.5s infinite ease-in-out; }
 
           @keyframes hud-carousel {
-            0%, 33.3% { transform: translateY(0%); }      /* Balance (1.5s) */
-            40%, 93.3% { transform: translateY(-50%); }   /* Action (3s) */
-            100% { transform: translateY(0%); }           /* Loop back */
+            0%, 33.3% { transform: translateX(0%); }      /* Balance (1.5s) */
+            40%, 93.3% { transform: translateX(-100%); }  /* Action (3s) */
+            100% { transform: translateX(0%); }           /* Loop back */
           }
           .animate-hud-carousel { animation: hud-carousel 4.5s infinite cubic-bezier(0.65, 0, 0.35, 1); }
-
-          .roulette-border {
-            border: 4px solid transparent;
-            background-image: linear-gradient(#070a13, #070a13), 
-                              repeating-conic-gradient(#ff0000 0% 5%, #000 5% 10%);
-            background-origin: border-box;
-            background-clip: content-box, border-box;
-            box-shadow: 0 0 40px #ff000066, inset 0 0 50px #ff000044;
-          }
 
           @keyframes muflis-glow {
             0%, 100% { box-shadow: 0 0 20px #991b1b44, inset 0 0 40px #991b1b66; border-color: #991b1b66; }
