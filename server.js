@@ -14,8 +14,8 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-// VERSION: v1.0.18 (Internal Server)
-const VERSION = "v1.0.18";
+// VERSION: v1.0.20 (Internal Server)
+const VERSION = "v1.0.20";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -67,8 +67,6 @@ const rankHand = (cards, isAceLow = false) => {
   let compArr = [];
   groups.forEach(g => { for (let i = 0; i < g.c; i++) compArr.push(g.r); });
   const vc = groups.map(x => x.c);
-  
-  // IMPROVEMENT: Straights and flushes now always count against low hands
   const isFlush = new Set(sorted.map(c => c.suit)).size === 1;
   const uniqueRanks = [...new Set(ranks)].sort((a, b) => b - a);
   let isStraight = false;
@@ -78,7 +76,6 @@ const rankHand = (cards, isAceLow = false) => {
     for (let i = 0; i <= uniqueRanks.length - 5; i++) {
         if (uniqueRanks[i] === uniqueRanks[i + 4] + 4) { isStraight = true; straightHigh = uniqueRanks[i]; break; }
     }
-    // Handle low straight A-2-3-4-5 when Ace is high (14) or explicitly low (1)
     if (!isStraight && !isAceLow && uniqueRanks.includes(14) && [5,4,3,2].every(r => uniqueRanks.includes(r))) {
         isStraight = true; straightHigh = 5; compArr = [5, 4, 3, 2, 1]; 
     }
@@ -118,8 +115,6 @@ const getBestHand = (hole, comm, variantId) => {
     holePairs.forEach(h => { boardCombos.forEach(b => {
             const resH = rankHand([...h, ...b], false);
             if (resH.power > bestHigh.power) bestHigh = resH;
-            
-            // IMPROVEMENT: Ace-Low worst poker hand logic (no qualifier)
             const resL = rankHand([...h, ...b], true);
             if (!bestLow || resL.power < bestLow.power) { bestLow = { ...resL, name: resL.name.replace('High Card', 'Low') }; }
     });});
@@ -175,7 +170,7 @@ const updateRoomStrengths = (roomId) => {
                     p.lowWinProbability = Math.min(100, Math.max(5, rawLowProb * 1.5));
                 } else { 
                     p.lowWinProbability = 0; 
-                    p.lowStrength = null;
+                    p.lowStrength = variantId === 'HILOW' ? "No Qualifier" : null;
                 }
             }
         }
@@ -228,7 +223,6 @@ const processShowdown = (roomId) => {
         const evals = eligiblePlayers.map(p => ({ player: p, res: getBestHand(p.hand, room.community, variantId) }));
 
         if (variantId === 'HILOW') {
-            // IMPROVEMENT: All hands are valid for Low Split
             const lowHalf = Math.floor((pot.amount * 100) / 2) / 100;
             const highHalf = ((pot.amount * 100) - (lowHalf * 100)) / 100;
 
@@ -257,11 +251,22 @@ const processShowdown = (roomId) => {
 
     room.phase = PHASES.SHOWDOWN;
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
+    
     room.showdownWinners.forEach(w => {
       const cardStr = w.hand && w.hand.length > 0 ? ` (${w.hand.map(c => `${c.value}${c.suit}`).join(', ')})` : "";
-      const actionStr = w.rank === "!" ? `WON $${w.amount.toFixed(2)} BY DEFAULT` : `WON $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}${cardStr}`;
+      const actionStr = w.rank === "!" ? `SCOOPED THE POT` : `WON $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}${cardStr}`;
       io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
     });
+
+    // IMPROVEMENT: Revised Server-Side Delay logic (8s standard, 5s split per winner, 2s muck)
+    const isMuckWin = room.showdownWinners.some(w => w.rank === "!");
+    let durationPerWinner = 8000;
+    if (isMuckWin) {
+        durationPerWinner = 2000;
+    } else if (room.showdownWinners.length > 1) {
+        durationPerWinner = 5000;
+    }
+    const totalDelay = Math.max(durationPerWinner, room.showdownWinners.length * durationPerWinner);
 
     setTimeout(() => {
         room.players.forEach(p => { 
@@ -284,7 +289,7 @@ const processShowdown = (roomId) => {
             room.phase = PHASES.IDLE; 
             io.to(roomId).emit('roomUpdate', serializeRoom(room));
         }
-    }, Math.max(4000, room.showdownWinners.length * 4000));
+    }, totalDelay);
 };
 
 const performAction = (roomId, type, amount) => {
