@@ -14,7 +14,7 @@ const io = new Server(server, {
 });
 
 // Sync version with App.jsx
-const VERSION = "v1.0.63";
+const VERSION = "v1.0.65";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -386,7 +386,15 @@ const runIgnition = (roomId) => {
   if (seated.length < 2) { room.phase = PHASES.IDLE; io.to(roomId).emit('roomUpdate', serializeRoom(room)); return; }
   room.gameInProgress = true;
   if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
-  const variantId = room.players[room.dealerIdx].pendingVariant || 'HOLDEM';
+  
+  // Feature: Bot Dealer chooses random variation
+  const dealerSeat = room.players[room.dealerIdx];
+  if (dealerSeat.isBot) {
+      const vIds = Object.keys(variantNames);
+      dealerSeat.pendingVariant = vIds[Math.floor(Math.random() * vIds.length)];
+  }
+
+  const variantId = dealerSeat.pendingVariant || 'HOLDEM';
   room.activeVariant = { id: variantId, name: variantNames[variantId], holeCards: holeCardsMap[variantId] };
   room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
   room.community = []; room.potData = [{ amount: 0 }]; room.highestBet = Number(room.bb); room.lastRaiseIncrement = Number(room.bb);
