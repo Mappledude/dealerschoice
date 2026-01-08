@@ -10,7 +10,6 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.70
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,11 +19,13 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.70";
+const VERSION = "v1.0.72";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
+
+const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
 const VARIANT_COLORS = {
   HOLDEM: '#22d3ee',      // Cyan
@@ -35,47 +36,92 @@ const VARIANT_COLORS = {
   REDSBLACKS: '#ff0000'   // Striking Red
 };
 
+const VARIANTS = { 
+  HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', rules: ["Each player gets 2 hole cards.", "Standard high hand rankings apply.", "Best 5-card combination from 2 hole + 5 community cards wins."] }, 
+  OMAHA: { id: 'OMAHA', name: 'Omaha', rules: ["Each player gets 4 hole cards.", "You MUST use EXACTLY 2 hole cards and 3 community cards.", "Standard high hand rankings apply."] }, 
+  PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', rules: ["Each player gets 3 hole cards.", "Standard high hand rankings.", "Similar to Hold'em but with an extra card for better drawing potential."] }, 
+  MUFLIS: { id: 'MUFLIS', name: 'Muflis', rules: ["Worst hand wins the pot.", "Ace is the lowest card (value 1).", "The 'best' hand is the one that would normally be the weakest.", "You MUST use BOTH hole cards and 3 board cards."] }, 
+  HILOW: { id: 'HILOW', name: 'Hi-Low Split', rules: ["Pot is split 50/50 between the High hand and the Low hand.", "4 hole cards dealt.", "Must use 2 hole + 3 board cards for both halves.", "All hands qualify for the low half; straights and flushes count against you."] }, 
+  REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', rules: ["4 hole cards dealt.", "Special Joker mechanic: If your hand contains color combinations, you may play with enhanced strength.", "Dynamic wildcards based on suit parity."] }
+};
+
+const DISPLAY_POSITIONS = [
+  { x: 50, y: 92 }, { x: 25, y: 84 }, { x: 10, y: 62 }, { x: 10, y: 38 }, { x: 25, y: 16 }, 
+  { x: 50, y: 8  }, { x: 75, y: 16 }, { x: 90, y: 38 }, { x: 90, y: 62 }, { x: 75, y: 84 }
+];
+
 // --- GLOBAL UTILS ---
 const getNeonNameColor = (name) => {
   if (!name || name === "SYSTEM") return "text-white";
-  const palette = [
-    'text-[#39FF14]', 'text-[#FF00FF]', 'text-[#00FFFF]', 'text-[#FF5F1F]', 'text-[#FFFF00]', 'text-[#B026FF]',
-  ];
+  const palette = ['text-[#39FF14]', 'text-[#FF00FF]', 'text-[#00FFFF]', 'text-[#FF5F1F]', 'text-[#FFFF00]', 'text-[#B026FF]'];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return palette[Math.abs(hash) % palette.length];
 };
 
 const formatRank = (rank) => {
-    if (!rank || typeof rank !== 'string' || rank === "null" || rank === "No Qualifier") return rank || "";
-    if (rank.includes(" & ")) return rank.split(" & ").map(r => formatRank(r)).join(" & ");
-    const lower = rank.toLowerCase();
-    let prefix = ""; 
-    if (lower.startsWith("high: ")) prefix = "HIGH: "; 
-    else if (lower.startsWith("low: ")) prefix = "LOW: "; 
-    else if (lower.startsWith("scoop: ")) prefix = "SCOOP: ";
-    const cleanRank = rank.replace(/^(high|low|scoop): /i, "");
-    const cleanLower = cleanRank.toLowerCase();
-    let result = cleanRank;
-    if (cleanLower.includes("five of a kind")) result = "5 of a KIND"; 
-    else if (cleanLower.includes("straight flush")) result = "STRAIGHT FLUSH"; 
-    else if (cleanLower.includes("four of a kind")) result = "4 of a KIND"; 
-    else if (cleanLower.includes("full house")) result = "FULL HOUSE"; 
-    else if (cleanLower.includes("flush")) result = "FLUSH"; 
-    else if (cleanLower.includes("straight")) result = "STRAIGHT"; 
-    else if (cleanLower.includes("three of a kind")) result = "3 of a KIND"; 
-    else if (cleanLower.includes("two pair")) result = "Two Pair"; 
-    else if (cleanLower.includes("pair")) result = "Pair"; 
-    else if (cleanLower.includes("high card")) result = `High ${cleanRank.split(' ').pop()}`; 
-    else if (cleanLower.includes("low")) result = `Low ${cleanRank.split(' ').pop()}`;
-    return prefix + result;
+  if (!rank || typeof rank !== 'string' || rank === "null" || rank === "No Qualifier") return String(rank || "");
+  if (rank.includes(" & ")) return rank.split(" & ").map(r => formatRank(r)).join(" & ");
+  const lower = rank.toLowerCase();
+  let prefix = ""; 
+  if (lower.startsWith("high: ")) prefix = "HIGH: "; 
+  else if (lower.startsWith("low: ")) prefix = "LOW: "; 
+  else if (lower.startsWith("scoop: ")) prefix = "SCOOP: ";
+  const cleanRank = rank.replace(/^(high|low|scoop): /i, "");
+  const cleanLower = cleanRank.toLowerCase();
+  let result = cleanRank;
+  if (cleanLower.includes("five of a kind")) result = "5 of a KIND"; 
+  else if (cleanLower.includes("straight flush")) result = "STRAIGHT FLUSH"; 
+  else if (cleanLower.includes("four of a kind")) result = "4 of a KIND"; 
+  else if (cleanLower.includes("full house")) result = "FULL HOUSE"; 
+  else if (cleanLower.includes("flush")) result = "FLUSH"; 
+  else if (cleanLower.includes("straight")) result = "STRAIGHT"; 
+  else if (cleanLower.includes("three of a kind")) result = "3 of a KIND"; 
+  else if (cleanLower.includes("two pair")) result = "Two Pair"; 
+  else if (cleanLower.includes("pair")) result = "Pair"; 
+  else if (cleanLower.includes("high card")) {
+      const parts = cleanRank.split(' ');
+      result = `High ${parts[parts.length - 1]}`;
+  } else if (cleanLower.includes("low")) {
+      const parts = cleanRank.split(' ');
+      result = `Low ${parts[parts.length - 1]}`;
+  }
+  return prefix + result;
+};
+
+const getContrastColor = (hex) => {
+  if (!hex) return 'white';
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  return (yiq >= 128) ? 'black' : 'white';
 };
 
 // --- SUB-COMPONENTS ---
+const DashTimer = ({ timeRemaining }) => {
+  const percentage = Math.max(0, (timeRemaining / 24) * 100);
+  const color = timeRemaining < 6 ? '#ef4444' : timeRemaining < 12 ? '#f59e0b' : '#22d3ee';
+  return (
+    <div className="w-24 md:w-32 h-1.5 bg-white/10 rounded-full relative mt-1 overflow-hidden">
+      <div className="absolute inset-0 flex gap-1 items-center px-1">
+        {Array.from({ length: 8 }).map((_, i) => (<div key={`bg-seg-${i}`} className="h-1 flex-1 bg-white/5 rounded-full" />))}
+      </div>
+      <div className="absolute inset-0 overflow-hidden transition-all duration-1000 linear" style={{ width: `${percentage}%` }}>
+        <div className="w-24 md:w-32 h-full flex gap-1 items-center px-1">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={`timer-seg-${i}`} className="h-1 flex-1 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ActivityFeedContent = ({ handHistory, toggleHand, expandedHands, setIntelExpanded, isMobile }) => (
     <div className="flex-1 flex flex-col h-full overflow-hidden p-4">
         <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2 font-black tracking-[0.2em] uppercase">
-            <div className="flex items-center gap-2"><Terminal size={14}/> Activity</div>
+            <div className="flex items-center gap-2"><Terminal size={14}/> Activity Feed</div>
             {isMobile && <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>}
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
@@ -110,19 +156,6 @@ const ActivityFeedContent = ({ handHistory, toggleHand, expandedHands, setIntelE
         </div>
     </div>
 );
-
-const DashTimer = ({ timeRemaining }) => {
-  const percentage = Math.max(0, (timeRemaining / 24) * 100);
-  const color = timeRemaining < 6 ? '#ef4444' : timeRemaining < 12 ? '#f59e0b' : '#22d3ee';
-  return (
-    <div className="w-24 md:w-32 h-1.5 bg-white/10 rounded-full relative mt-1 overflow-hidden">
-      <div className="absolute inset-0 flex gap-1 items-center px-1">{Array.from({ length: 8 }).map((_, i) => (<div key={`bg-seg-${i}`} className="h-1 flex-1 bg-white/5 rounded-full" />))}</div>
-      <div className="absolute inset-0 overflow-hidden transition-all duration-1000 linear" style={{ width: `${percentage}%` }}>
-        <div className="w-24 md:w-32 h-full flex gap-1 items-center px-1">{Array.from({ length: 8 }).map((_, i) => (<div key={`timer-seg-${i}`} className="h-1 flex-1 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }} />))}</div>
-      </div>
-    </div>
-  );
-};
 
 const Seat = ({ 
   player, displayPos, phase, winning5Ids, isCollectingBets, isActiveTurn, isDealer, potTransferring, timeRemaining, isHero, 
@@ -162,7 +195,6 @@ const Seat = ({
 
     return (
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-500 ${isHero ? 'z-[100]' : 'z-20'} ${player.isFolded ? 'opacity-30 grayscale scale-90' : 'opacity-100'} ${player.waitingForNextHand ? 'opacity-50' : ''}`}>
-            {player.waitingForNextHand && (<div className="absolute top-[-35px] bg-slate-900 text-cyan-400 text-[8px] px-2 py-0.5 rounded-full border border-cyan-500/50 uppercase font-bold tracking-[0.2em] z-[150] backdrop-blur-md">WAITING</div>)}
             {player.hand && Array.isArray(player.hand) && !player.isFolded && !player.waitingForNextHand && (
                 <div className={`absolute flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none ${cardZIndex}`} style={{ transform: isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw)` : `translate(${cardInwardX * 0.4}vh, calc(${cardInwardY * 0.4}vh - ${isHero ? '70px' : '0px'}))` }}>
                     {player.hand.map((c, ci) => {
@@ -203,8 +235,8 @@ const Seat = ({
     );
 };
 
+// --- MAIN APP ---
 const App = () => {
-  // --- STATE ---
   const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
   const [userProfile, setUserProfile] = useState(null);
   const [passwordInput, setPasswordInput] = useState('');
@@ -247,27 +279,22 @@ const App = () => {
   const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'HOLDEM' });
   const [adminTab, setAdminTab] = useState(ADMIN_TABS.PLAYERS);
   const [isJoining, setIsJoining] = useState(false);
-
-  // Gating navigation
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // --- REFS ---
   const phaseRef = useRef(PHASES.IDLE); 
   const currentHandId = useRef(Date.now());
   const lastAnnouncedHandId = useRef(null); 
   const joinLock = useRef(false);
   const turnInitializedRef = useRef(-1); 
-
-  // --- DERIVED ---
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
-  const visuals = { heroCardScale: 2.0, heroCardY: 20, oppCardScale: 1.0, oppCardY: -10, commCardScale: 1.5, commCardY: 0, betScale: 1.5, betY: 0, badgeY: 0, footerHeight: isMobile ? 150 : 250, tableZoom: 0.9, holeCardFan: 35 };
+
+  const visuals = { footerHeight: isMobile ? 150 : 250, tableZoom: 0.9, holeCardFan: 35 };
 
   const heroIdx = userProfile ? players.findIndex(p => p && (p.uid === userProfile.uid || p.name === userProfile.name)) : -1;
   const heroPlayerObj = heroIdx !== -1 ? players[heroIdx] : null;
   const totalDisplayPot = Number(potAmount) + players.reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
   const currentWinnerHandIds = (phase === PHASES.SHOWDOWN && showdownWinners) ? (showdownWinners[currentShowdownIdx]?.hand || []).map(c => c.id) : [];
 
-  // --- ACTIONS ---
   const handleForceSync = useCallback(() => {
     socket.disconnect().connect();
     socket.emit('getInitialData');
@@ -288,13 +315,11 @@ const App = () => {
     if (currentRoomId && userProfile) socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: rebuyAmount });
     setShowRebuyModal(false);
   }, [currentRoomId, userProfile, rebuyAmount]);
-
+  
   const handleLogin = useCallback(() => { 
     setIsLoggingIn(true);
     if (passwordInput.toLowerCase().trim() === 'pass') { 
-        setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin' }); 
-        setCurrentView(VIEWS.ADMIN); 
-        socket.emit('getInitialData'); 
+        setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin' }); setCurrentView(VIEWS.ADMIN); socket.emit('getInitialData'); 
     } else {
         socket.emit('playerLogin', { password: passwordInput.toLowerCase().trim() }); 
     }
@@ -336,19 +361,20 @@ const App = () => {
     return hands.reverse();
   }, [logs]);
 
-  // --- EFFECTS ---
   useEffect(() => {
-    const updateVh = () => { let vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh}px`); };
-    updateVh(); window.addEventListener('resize', updateVh); return () => window.removeEventListener('resize', updateVh);
+    const lastSeenVersion = localStorage.getItem('last_known_version');
+    if (lastSeenVersion && lastSeenVersion !== VERSION) {
+      localStorage.setItem('last_known_version', VERSION);
+      window.location.reload();
+    } else localStorage.setItem('last_known_version', VERSION);
   }, []);
 
   useEffect(() => {
     const handleRoomUpdate = (d) => {
         if (!d) return;
         setPlayers(() => { const next = Array(TOTAL_SEATS).fill(null); (d.players || []).forEach((p, i) => { if (p) next[i] = { ...p, seatIdx: i }; }); return next; });
-        
-        const isPhaseTransition = d.phase !== phaseRef.current;
         const currentHandKey = `${currentRoomId}-${currentHandId.current}`;
+        const isPhaseTransition = d.phase !== phaseRef.current;
 
         if (d.phase === PHASES.PRE_FLOP && lastAnnouncedHandId.current !== currentHandKey) {
             lastAnnouncedHandId.current = currentHandKey;
@@ -377,7 +403,6 @@ const App = () => {
         } else if (d.phase !== PHASES.SHOWDOWN) { setPotTransferring(false); setShowdownWinners(null); }
     };
 
-    socket.on('connect', () => { socket.emit('getInitialData'); });
     socket.on('roomUpdate', handleRoomUpdate);
     socket.on('lobbyUpdate', setActiveTables);
     socket.on('log', (l) => setLogs(prev => [{...l, handId: currentHandId.current, timestamp: Date.now(), uniqueKey: `${Date.now()}-${Math.random()}`}, ...prev].slice(0, 100)));
@@ -390,15 +415,10 @@ const App = () => {
           else setCurrentView(VIEWS.LOBBY);
         }
     });
-    return () => { socket.off('connect'); socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); };
+    return () => { socket.off('roomUpdate'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); };
   }, [isLoggingIn, currentRoomId]); 
 
-  useEffect(() => {
-    if (activeIdx === heroIdx && heroPlayerObj) { if (turnInitializedRef.current !== activeIdx) { turnInitializedRef.current = activeIdx; const minAllowed = minRaiseAmount || (highestBet + bigBlind); setRaiseInput(Math.min(minAllowed, Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))); if (preAction === 'FOLD') { handleAction('FOLD'); setPreAction(null); } else if (preAction === 'CHECK') { handleAction('CALL'); setPreAction(null); } } } 
-    else turnInitializedRef.current = -1;
-  }, [activeIdx, heroIdx, highestBet, bigBlind, minRaiseAmount, heroPlayerObj, preAction, handleAction]);
-
-  // --- STRICT LOGIN GUARD ---
+  // --- RENDERING ---
   if (!userProfile) {
     return (
       <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
@@ -455,12 +475,12 @@ const App = () => {
             </aside>
         )}
         <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-slate-900 to-black overflow-hidden font-black uppercase text-center">
-            {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (<><div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700"><span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span><span className="text-[14px] lg:text-[2.5vh] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span><span className="text-[#fbbf24] text-[11px] lg:text-[1.5vh] font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span></div></>)}
+            {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (<div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700"><span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span><span className="text-[14px] lg:text-[2.5vh] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span><span className="text-[#fbbf24] text-[11px] lg:text-[1.5vh] font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span></div>)}
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
-                <div className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_50px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} style={{ backgroundColor: '#070a13', boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 50px #ff0000' : 'none') }} /><button onClick={handleForceSync} className="absolute bottom-6 right-6 z-[150] bg-black/60 border border-white/20 p-3 rounded-full text-white/40 hover:text-white hover:border-white/40 transition-all shadow-xl active:scale-95 group pointer-events-auto"><RefreshCcw size={20}/></button>
+                <div className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_60px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} style={{ backgroundColor: '#070a13', boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 50px #ff0000' : 'none') }} /><button onClick={handleForceSync} className="absolute bottom-6 right-6 z-[150] bg-black/60 border border-white/20 p-3 rounded-full text-white/40 hover:text-white hover:border-white/40 transition-all shadow-xl active:scale-95 group pointer-events-auto"><RefreshCcw size={20}/></button>
                 <div className="absolute inset-0 pointer-events-none z-20">{(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} seatIdx={i} visuals={visuals} timeRemaining={timeRemaining} isCollectingBets={potTransferring} bigBlind={bigBlind} showdownWinners={showdownWinners} currentWinnerHandIds={currentWinnerHandIds} formatRank={formatRank} />); })}</div>
                 <div className="absolute top-[calc(48%-50px)] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full">{!potTransferring && (<div className="flex flex-col items-center mb-6"><span className="text-white/20 text-[10px] tracking-[0.5em] mb-1 uppercase font-bold">Total Pot:</span><div className="text-[6vw] lg:text-[6vh] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div></div>)}{community.length > 0 && (<div className="flex gap-2 md:gap-4 mt-4 transition-transform" style={{ transform: isMobile ? `scale(${visuals.commCardScale})` : `scale(${visuals.commCardScale * 0.8})` }}>
-                    {(community || []).map((c, j) => { const isWinnerCard = (currentWinnerHandIds || []).includes(c.id); return (<div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] lg:w-[6vh] h-[11vw] lg:h-[9vh] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${isWinnerCard ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10 opacity-100'} ${phase === PHASES.SHOWDOWN && !isWinnerCard ? 'opacity-20 grayscale' : ''}`}><span className={`text-[12px] lg:text-[1.6vh] font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span><span className={`text-[14px] lg:text-[2.2vh] font-black leading-tight ${isRedSuit ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span></div>); })}
+                    {(community || []).map((c, j) => { const isWinnerCard = (currentWinnerHandIds || []).includes(c.id); return (<div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] lg:w-[6vh] h-[11vw] lg:h-[9vh] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 animate-in slide-in-from-bottom-4 ${isWinnerCard ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-white/10 opacity-100'} ${phase === PHASES.SHOWDOWN && !isWinnerCard ? 'opacity-20 grayscale' : ''}`}><span className={`text-[12px] lg:text-[1.6vh] font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span><span className={`text-[14px] lg:text-[2.2vh] font-black leading-tight ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span></div>); })}
                 </div>)}</div>
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (<div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto"><div className="flex-1 w-full relative flex items-center justify-center py-4"><input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} /></div><div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]"><span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span><div className="flex items-center justify-center w-full"><span className="text-emerald-500 font-mono text-lg md:text-2xl mr-0.5">$</span><input type="number" value={raiseInput} onChange={(e) => { const val = Number(e.target.value); const min = minRaiseAmount || (highestBet + bigBlind); setRaiseInput(Math.max(min, Math.min(val, Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)))); }} className="bg-transparent text-emerald-400 font-mono text-xl md:text-3xl font-black text-center outline-none w-full" /></div></div></div>)}
             </div>
@@ -523,4 +543,5 @@ const App = () => {
     </div>
   );
 };
+
 export default App;
