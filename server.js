@@ -14,8 +14,8 @@ const io = new Server(server, {
   pingInterval: 25000  // 25 seconds
 });
 
-// VERSION: v1.0.23 (Internal Server)
-const VERSION = "v1.0.23";
+// VERSION: v1.0.24 (Internal Server)
+const VERSION = "v1.0.24";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -140,9 +140,13 @@ const getBestHand = (hole, comm, variantId) => {
           });});
       }
   } else if (variantId === 'MUFLIS') {
-      combinations([...hole, ...comm], 5).forEach(c => {
-          const res = rankHand(c, true); 
-          if (bestHigh.power === -1 || res.power < bestHigh.power) bestHigh = res;
+      // FIX: Force Muflis to use exactly 2 cards from hand (holePairs) and 3 from board
+      holePairs.forEach(h => { 
+          boardCombos.forEach(b => {
+              const res = rankHand([...h, ...b], true); // true for isAceLow ranking
+              // In Muflis, the best hand is the one with the lowest power
+              if (bestHigh.power === -1 || res.power < bestHigh.power) bestHigh = res;
+          });
       });
   }
   return { high: bestHigh, low: bestLow };
@@ -265,7 +269,6 @@ const processShowdown = (roomId) => {
         }
     });
 
-    // SOLUTION 1: TOTALIZED ROLLUP
     // Aggregating side-pot wins by player to avoid long, redundant animations
     const aggregated = {};
     rawPotsWins.forEach(win => {
@@ -273,10 +276,8 @@ const processShowdown = (roomId) => {
             aggregated[win.uid] = { ...win };
         } else {
             aggregated[win.uid].amount += win.amount;
-            // For Hi-Low or mixed results, combine the rank strings
             if (win.rank !== "!" && aggregated[win.uid].rank !== "!" && !aggregated[win.uid].rank.includes(win.rank)) {
                 aggregated[win.uid].rank = `${aggregated[win.uid].rank} & ${win.rank}`;
-                // Keep the 'hand' as the cards for the most recently processed part (usually fine)
                 aggregated[win.uid].hand = win.hand; 
             }
         }
@@ -292,7 +293,6 @@ const processShowdown = (roomId) => {
       io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
     });
 
-    // Revised Server-Side Delay logic (8s standard, 5s split per unique winner, 2s muck)
     const isMuckWin = room.showdownWinners.some(w => w.rank === "!");
     let durationPerWinner = 8000;
     if (isMuckWin) {
