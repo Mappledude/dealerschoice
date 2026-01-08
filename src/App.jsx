@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.59
+// VERSION: v1.0.60
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.59";
+const VERSION = "v1.0.60";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -185,6 +185,7 @@ const Seat = ({
     };
 
     const action = getActionDisplay();
+    // Action overlay is now only used for persistent states like FOLDED
     const showActionOverlay = action && player.isFolded; 
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
@@ -254,6 +255,7 @@ const Seat = ({
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}
             >
+                {/* Traditional overlay for persistent states like FOLDED */}
                 {showActionOverlay && (
                     <div 
                       key={`action-overlay-${String(action.text)}`} 
@@ -456,25 +458,43 @@ const App = () => {
 
   const formatRank = (rank) => {
     if (!rank || typeof rank !== 'string' || rank === "null" || rank === "No Qualifier") return rank || "";
+
+    // Handle combined ranks from Hi-Low totalized showdowns
+    if (rank.includes(" & ")) {
+      return rank.split(" & ").map(r => formatRank(r)).join(" & ");
+    }
+
     const lower = rank.toLowerCase();
-    if (lower.includes("five of a kind")) return "5 of a KIND";
-    if (lower.includes("straight flush")) return "STRAIGHT FLUSH";
-    if (lower.includes("four of a kind")) return "4 of a KIND";
-    if (lower.includes("full house")) return "FULL HOUSE";
-    if (lower.includes("flush")) return "FLUSH";
-    if (lower.includes("straight")) return "STRAIGHT";
-    if (lower.includes("three of a kind")) return "3 of a KIND";
-    if (lower.includes("two pair")) return "Two Pair";
-    if (lower.includes("pair")) return "Pair";
-    if (lower.includes("high card")) {
-      const parts = rank.split(' ');
-      return `High ${parts[parts.length - 1]}`;
+    
+    // Preserve prefix tags for Hi-Low
+    let prefix = "";
+    if (lower.startsWith("high: ")) prefix = "HIGH: ";
+    else if (lower.startsWith("low: ")) prefix = "LOW: ";
+    else if (lower.startsWith("scoop: ")) prefix = "SCOOP: ";
+    
+    const cleanRank = rank.replace(/^(high|low|scoop): /i, "");
+    const cleanLower = cleanRank.toLowerCase();
+    
+    let result = cleanRank;
+    if (cleanLower.includes("five of a kind")) result = "5 of a KIND";
+    else if (cleanLower.includes("straight flush")) result = "STRAIGHT FLUSH";
+    else if (cleanLower.includes("four of a kind")) result = "4 of a KIND";
+    else if (cleanLower.includes("full house")) result = "FULL HOUSE";
+    else if (cleanLower.includes("flush")) result = "FLUSH";
+    else if (cleanLower.includes("straight")) result = "STRAIGHT";
+    else if (cleanLower.includes("three of a kind")) result = "3 of a KIND";
+    else if (cleanLower.includes("two pair")) result = "Two Pair";
+    else if (cleanLower.includes("pair")) result = "Pair";
+    else if (cleanLower.includes("high card")) {
+      const parts = cleanRank.split(' ');
+      result = `High ${parts[parts.length - 1]}`;
     }
-    if (lower.includes("low")) {
-      const parts = rank.split(' ');
-      return `Low ${parts[parts.length - 1]}`;
+    else if (cleanLower.includes("low")) {
+      const parts = cleanRank.split(' ');
+      result = `Low ${parts[parts.length - 1]}`;
     }
-    return rank.split(',')[0].split(' of ')[0];
+    
+    return prefix + result;
   };
 
   const handHistory = useMemo(() => {
@@ -592,14 +612,14 @@ const App = () => {
         });
         
         const isPhaseTransition = d.phase !== phaseRef.current;
-        
-        // Trigger announcement at the start of each hand (Hand Start Animation)
+
+        // Restore Variation Flash Animation before the hand is dealt
         if (isPhaseTransition && d.phase === PHASES.PRE_FLOP) {
             const vId = d.activeVariant?.id || 'HOLDEM';
             setAnnouncement({ text: VARIANTS[vId]?.name || "Poker", color: VARIANT_COLORS[vId] || '#fff' });
             setTimeout(() => setAnnouncement(null), 1500);
         }
-
+        
         if (isPhaseTransition && [PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(d.phase)) {
             setHandAttention(true);
             setTimeout(() => {
@@ -1076,8 +1096,7 @@ const App = () => {
                 const bgColor = isLowWin ? "bg-emerald-400/10" : (isHiLo ? "bg-amber-400/10" : "bg-white/5");
                 const borderColor = isLowWin ? "border-emerald-400/30" : (isHiLo ? "border-amber-400/30" : "border-white/10");
                 const cardBorder = isLowWin ? "border-emerald-400/50" : (isHiLo ? "border-amber-400/50" : "border-white/20");
-                const winTypeLabel = isHiLo ? (isLowWin ? "THE LOW SIDE" : "THE HIGH SIDE") : "THE POT";
-                const displayRank = formatRank(String(winner.rank).replace("LOW: ", "").replace("HIGH: ", ""));
+                const displayRank = formatRank(winner.rank);
                 
                 return (
                     <div key={`winner-disp-${winner.name}-${currentShowdownIdx}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
