@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.51
+// VERSION: v1.0.54
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.51";
+const VERSION = "v1.0.54";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -30,7 +30,7 @@ const VARIANT_COLORS = {
   HOLDEM: '#22d3ee',      // Cyan
   OMAHA: '#a855f7',       // Purple
   PINEAPPLE: '#eab308',   // Yellow
-  MUFLIS: '#991b1b',      // Deep Blood Red
+  MUFLIS: '#39FF14',      // Toxic Emerald
   HILOW: '#6366f1',       // Electric Indigo
   REDSBLACKS: '#ff0000'   // Striking Red
 };
@@ -168,6 +168,7 @@ const Seat = ({
     };
 
     const action = getActionDisplay();
+    // Action overlay is now only used for FOLDED or special states, others use carousel
     const showActionOverlay = action && player.isFolded; 
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
@@ -234,10 +235,11 @@ const Seat = ({
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}
             >
+                {/* Traditional overlay for persistent states like FOLDED */}
                 {showActionOverlay && (
                     <div 
                       key={`action-overlay-${String(action.text)}`} 
-                      className={`absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
+                      className={`absolute inset-0 z-50 flex items-end justify-center bg-black/60 pb-3 animate-action-flash-once border-2 rounded-xl border-white/40 ${action.glow}`}
                     >
                         <span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${action.color}`}>
                             {String(action.text)}
@@ -341,7 +343,11 @@ const App = () => {
   const [visuals, setVisuals] = useState({
     heroCardScale: 2.0, heroCardY: 20, oppCardScale: 1.0, oppCardY: -10,
     commCardScale: 1.5, commCardY: 0, betScale: 1.5, betY: 0,
-    badgeY: 0, footerHeight: 250, tableZoom: 0.9, holeCardFan: 35
+    badgeY: 0, 
+    // MODIFICATION: Default to 150 on mobile for cleaner look
+    footerHeight: typeof window !== 'undefined' && window.innerWidth < 1024 ? 150 : 250, 
+    tableZoom: 0.9, 
+    holeCardFan: 35
   });
 
   const heroIdx = useMemo(() => {
@@ -937,13 +943,13 @@ const App = () => {
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
                 <div 
-                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_50px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
+                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'roulette-border' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
                   style={{ 
                     backgroundColor: '#070a13',
                     boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `
                       0 0 30px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}44, 
                       inset 0 0 50px ${VARIANT_COLORS[activeVariant?.id || 'HOLDEM']}66
-                    ` : (activeVariant?.id === 'REDSBLACKS' ? '0 0 50px #ff0000' : 'none') 
+                    ` : 'none' 
                   }} 
                 />
                 
@@ -999,7 +1005,7 @@ const App = () => {
                         style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }}
                     />
                     </div>
-                    <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl shadow-[0_0_40px_rgba(52,211,153,0.6)] animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]">
+                    <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]">
                     <span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span>
                     <div className="flex items-center justify-center w-full">
                         <span className="text-emerald-500 font-mono text-lg md:text-2xl mr-0.5">$</span>
@@ -1050,11 +1056,10 @@ const App = () => {
                                   <span className="text-white ml-2">SCOOPED THE POT</span>
                                 ) : (
                                   <>
-                                    <span className="text-white/40">WON</span>
-                                    <span className={themeColor}>{String(winTypeLabel)}</span>
+                                    <span className="text-white/40">WON TOTAL</span>
+                                    <span className="text-emerald-400 font-mono ml-2">+${Number(winner.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                                   </>
                                 )}
-                                <span className="text-emerald-400 font-mono ml-2">+${Number(winner.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                             </div>
                         </div>
                         
@@ -1217,8 +1222,8 @@ const App = () => {
           .animate-hud-carousel { animation: hud-carousel 4.5s infinite cubic-bezier(0.65, 0, 0.35, 1); }
 
           @keyframes muflis-glow {
-            0%, 100% { box-shadow: 0 0 20px #991b1b44, inset 0 0 40px #991b1b66; border-color: #991b1b66; }
-            50% { box-shadow: 0 0 40px #450a0a99, inset 0 0 60px #450a0a99; border-color: #450a0a66; }
+            0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; }
+            50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; }
           }
           .animate-muflis-glow { animation: muflis-glow 4s infinite ease-in-out; }
 
@@ -1248,9 +1253,9 @@ const App = () => {
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
           .scrollbar-hide::-webkit-scrollbar { display: none; }
           .vertical-range { -webkit-appearance: slider-vertical; width: 32px; height: 100%; background: rgba(255, 255, 255, 0.1); outline: none; border-radius: 999px; }
-          .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
+          .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; cursor: pointer; }
           .vertical-range::-webkit-slider-thumb:hover { background: rgba(16, 185, 129, 0.8); }
-          .vertical-range::-moz-range-thumb { width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; box-shadow: 0 0 35px rgba(16, 185, 129, 1), 0 0 10px #fff; cursor: pointer; backdrop-filter: blur(4px); }
+          .vertical-range::-moz-range-thumb { width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; cursor: pointer; }
       `}</style>
     </div>
   );
