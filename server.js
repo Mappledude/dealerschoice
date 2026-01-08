@@ -34,7 +34,7 @@ const variantNames = {
   MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks"
 };
 
-const BOT_NAMES = ["Marshall", "Eleanor", "Cassidy", "Silas", "Julian", "Beatrix", "Gideon", "Clara", "Desmond", "Fiona", "Arthur", "Sloane"];
+const BOT_NAMES = ["Baabu Shona", "Laddoo", "Chikku", "Guddu", "Kalia", "Chinky", "Bunty", "Babli", "Chhotu", "Motu", "Jadiya", "Piddi"];
 
 let profiles = []; 
 let rooms = {};
