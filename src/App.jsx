@@ -33,18 +33,14 @@ const VARIANT_COLORS = {
   OMAHA: '#a855f7',
   PINEAPPLE: '#eab308',
   MUFLIS: '#39FF14',
-  HILOW: '#6366f1',
+  HILOW: '#ff007f', // Updated: Neon Pink for Hi-Low
   REDSBLACKS: '#ff0000'
 };
 
-const VARIANT_FELT_COLORS = {
-  HOLDEM: '#1a472a',      // Forest Green
-  OMAHA: '#0f172a',       // Midnight Blue
-  PINEAPPLE: '#3d2b1f',   // Dark Wood/Earth
-  MUFLIS: '#050505',      // Deep Black
-  HILOW: '#171717',       // Charcoal
-  REDSBLACKS: '#450a0a'   // Deep Burgundy
-};
+const HILOW_SECONDARY_COLOR = '#bfff00'; // Acid Green for Hi-Low contrast
+
+// Feature: Standardized Felt Color for all variants in v1.0.68
+const TABLE_FELT_COLOR = '#0f172a'; 
 
 const getContrastColor = (hex) => {
   if (!hex) return 'white';
@@ -145,7 +141,7 @@ const Seat = ({
 
     if (!player || !displayPos) return null;
 
-    // Fixed: Compute isMuckWin within component to avoid ReferenceError
+    // Fixed: Define isMuckWin correctly in scope
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !isMuckWin);
     const cardZIndex = isHero ? 'z-[200]' : (phase === PHASES.SHOWDOWN ? 'z-[150]' : 'z-[40]');
@@ -618,25 +614,36 @@ const App = () => {
                   <span className="text-[14px] lg:text-[2.5vh] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
                   <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500 ${heroPlayerObj?.winProbability > 80 ? 'animate-high-prob text-yellow-300' : 'text-[#fbbf24]'}`}>{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
                 </div></>)}
-            {/* Redesigned 3D Poker Table */}
+            {/* Redesigned 3D Poker Table with Variant Lighting */}
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
                 
-                {/* 1. Leather Rail (Outer Ring) */}
-                <div className="absolute inset-[-20px] rounded-[50%] border-[24px] border-[#0a0a0a] shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_2px_10px_rgba(255,255,255,0.1)] z-0" />
+                {/* 1. Leather Rail (Outer Ring) with Glow Layer */}
+                <div className="absolute inset-[-20px] rounded-[50%] z-0">
+                    <div 
+                        className="absolute inset-0 rounded-[50%] blur-[20px] opacity-40 animate-pulse"
+                        style={{
+                            background: activeVariant?.id === 'REDSBLACKS' 
+                                ? 'conic-gradient(#ff0000 0deg 120deg, #000 120deg 180deg, #ff0000 180deg 300deg, #000 300deg 360deg)'
+                                : activeVariant?.id === 'HILOW'
+                                ? `linear-gradient(to right, ${VARIANT_COLORS.HILOW}, ${HILOW_SECONDARY_COLOR})`
+                                : VARIANT_COLORS[activeVariant?.id || 'HOLDEM']
+                        }}
+                    />
+                    <div className="absolute inset-0 rounded-[50%] border-[24px] border-[#0a0a0a] shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_2px_10px_rgba(255,255,255,0.1)]" />
+                </div>
 
                 {/* 2. Wooden Racetrack */}
                 <div className="absolute inset-0 rounded-[50%] border-[40px] border-[#1a110a] shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] z-0 bg-[#2b1d12]" />
 
-                {/* 3. Casino Felt Surface */}
+                {/* 3. Casino Felt Surface (Standardized to Midnight Blue) */}
                 <div 
                   className={`absolute inset-[35px] rounded-[50%] transition-all duration-700 overflow-hidden ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''}`} 
                   style={{ 
-                    backgroundColor: VARIANT_FELT_COLORS[activeVariant?.id || 'HOLDEM'],
-                    backgroundImage: `radial-gradient(circle at center, rgba(255,255,255,0.15) 0%, transparent 70%)`,
+                    backgroundColor: TABLE_FELT_COLOR,
+                    backgroundImage: `radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 75%)`,
                     boxShadow: `inset 0 0 100px rgba(0,0,0,0.6)`
                   }} 
                 >
-                    {/* Noise texture for felt feel */}
                     <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} />
                 </div>
 
