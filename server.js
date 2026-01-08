@@ -186,7 +186,9 @@ const processShowdown = (roomId) => {
 
     const activePlayers = room.players.filter(p => p !== null && !p.waitingForNextHand);
     const variantId = room.activeVariant?.id || 'HOLDEM';
-    room.showdownWinners = [];
+    
+    // Intermediate storage for every win calculated
+    const rawPotsWins = [];
 
     const contributions = activePlayers.map(p => ({ 
         uid: p.uid, amount: p.totalContribution, folded: p.isFolded, name: p.name, player: p
@@ -216,7 +218,7 @@ const processShowdown = (roomId) => {
         if (totalUnfolded === 1 && eligiblePlayers.length === 1) {
             const soleWinner = eligiblePlayers[0];
             soleWinner.chips += pot.amount;
-            room.showdownWinners.push({ name: soleWinner.name, rank: "!", hand: [], amount: pot.amount });
+            rawPotsWins.push({ name: soleWinner.name, uid: soleWinner.uid, rank: "!", hand: [], amount: pot.amount });
             return;
         }
 
@@ -234,7 +236,7 @@ const processShowdown = (roomId) => {
                 const winnersL = lowSorted.filter(e => e.res.low.power === lowSorted[0].res.low.power);
                 winnersL.forEach(w => {
                     const share = lowHalf / winnersL.length; w.player.chips += share;
-                    room.showdownWinners.push({ name: w.player.name, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share });
+                    rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: `LOW: ${w.res.low.name}`, hand: w.res.low.cards, amount: share });
                 });
                 
                 // Award High Half
@@ -242,7 +244,7 @@ const processShowdown = (roomId) => {
                 const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
                 winnersH.forEach(w => {
                     const share = highHalf / winnersH.length; w.player.chips += share;
-                    room.showdownWinners.push({ name: w.player.name, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share });
+                    rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share });
                 });
             } else {
                 // SCOOP: High takes it all because no one qualified/formed a Low
@@ -250,7 +252,7 @@ const processShowdown = (roomId) => {
                 const winnersH = highSorted.filter(e => e.res.high.power === highSorted[0].res.high.power);
                 winnersH.forEach(w => {
                     const share = pot.amount / winnersH.length; w.player.chips += share;
-                    room.showdownWinners.push({ name: w.player.name, rank: `SCOOP: ${w.res.high.name}`, hand: w.res.high.cards, amount: share });
+                    rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: `HIGH: ${w.res.high.name}`, hand: w.res.high.cards, amount: share });
                 });
             }
         } else {
@@ -258,20 +260,39 @@ const processShowdown = (roomId) => {
             const winners = evals.filter(e => e.res.high.power === evals[0].res.high.power);
             winners.forEach(w => {
                 const share = pot.amount / winners.length; w.player.chips += share;
-                room.showdownWinners.push({ name: w.player.name, rank: w.res.high.name, hand: w.res.high.cards, amount: share });
+                rawPotsWins.push({ name: w.player.name, uid: w.player.uid, rank: w.res.high.name, hand: w.res.high.cards, amount: share });
             });
         }
     });
 
+    // SOLUTION 1: TOTALIZED ROLLUP
+    // Aggregating side-pot wins by player to avoid long, redundant animations
+    const aggregated = {};
+    rawPotsWins.forEach(win => {
+        if (!aggregated[win.uid]) {
+            aggregated[win.uid] = { ...win };
+        } else {
+            aggregated[win.uid].amount += win.amount;
+            // For Hi-Low or mixed results, combine the rank strings
+            if (win.rank !== "!" && aggregated[win.uid].rank !== "!" && !aggregated[win.uid].rank.includes(win.rank)) {
+                aggregated[win.uid].rank = `${aggregated[win.uid].rank} & ${win.rank}`;
+                // Keep the 'hand' as the cards for the most recently processed part (usually fine)
+                aggregated[win.uid].hand = win.hand; 
+            }
+        }
+    });
+
+    room.showdownWinners = Object.values(aggregated);
     room.phase = PHASES.SHOWDOWN;
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     
     room.showdownWinners.forEach(w => {
       const cardStr = w.hand && w.hand.length > 0 ? ` (${w.hand.map(c => `${c.value}${c.suit}`).join(', ')})` : "";
-      const actionStr = w.rank === "!" ? `SCOOPED THE POT` : `WON $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}${cardStr}`;
+      const actionStr = w.rank === "!" ? `SCOOPED THE POT` : `WON TOTAL $${w.amount.toFixed(2)} WITH ${w.rank.toUpperCase()}${cardStr}`;
       io.to(roomId).emit('log', { name: w.name, action: actionStr, type: 'win' });
     });
 
+    // Revised Server-Side Delay logic (8s standard, 5s split per unique winner, 2s muck)
     const isMuckWin = room.showdownWinners.some(w => w.rank === "!");
     let durationPerWinner = 8000;
     if (isMuckWin) {
