@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.60
+// VERSION: v1.0.61
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.60";
+const VERSION = "v1.0.61";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -89,7 +89,7 @@ const VARIANTS = {
   MUFLIS: { 
     id: 'MUFLIS', 
     name: 'Muflis', 
-    rules: ["Worst hand wins the pot.", "Ace is the lowest card (value 1).", "The 'best' hand is the one that would normally be the weakest."] 
+    rules: ["Worst hand wins the pot.", "Ace is the lowest card (value 1).", "The 'best' hand is the one that would normally be the weakest.", "You MUST use BOTH hole cards and 3 board cards."] 
   }, 
   HILOW: { 
     id: 'HILOW', 
@@ -119,21 +119,16 @@ const DISPLAY_POSITIONS = [
 ];
 
 const DashTimer = ({ timeRemaining }) => {
-  // Use 24 as the base for the limit. 
-  // Calculate percentage smoothly.
   const percentage = Math.max(0, (timeRemaining / 24) * 100);
   const color = timeRemaining < 6 ? '#ef4444' : timeRemaining < 12 ? '#f59e0b' : '#22d3ee';
   
   return (
     <div className="w-24 md:w-32 h-1.5 bg-white/10 rounded-full relative mt-1 overflow-hidden">
-      {/* Background Dim Segments */}
       <div className="absolute inset-0 flex gap-1 items-center px-1">
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={`bg-seg-${i}`} className="h-1 flex-1 bg-white/5 rounded-full" />
         ))}
       </div>
-      
-      {/* Foreground Active Segments with Clipping and Smooth Transition */}
       <div 
         className="absolute inset-0 overflow-hidden transition-all duration-1000 linear"
         style={{ width: `${percentage}%` }}
@@ -185,15 +180,12 @@ const Seat = ({
     };
 
     const action = getActionDisplay();
-    // Action overlay is now only used for persistent states like FOLDED
     const showActionOverlay = action && player.isFolded; 
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !isMuckWin);
     
     const cardZIndex = isHero ? 'z-[200]' : (phase === PHASES.SHOWDOWN ? 'z-[150]' : 'z-[40]');
-
-    // Sync animation to global timestamp (6000ms loop)
     const globalSyncDelay = -(Date.now() % 6000);
 
     return (
@@ -255,7 +247,6 @@ const Seat = ({
                   ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} 
                   ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}
             >
-                {/* Traditional overlay for persistent states like FOLDED */}
                 {showActionOverlay && (
                     <div 
                       key={`action-overlay-${String(action.text)}`} 
@@ -274,15 +265,12 @@ const Seat = ({
                 )}
 
                 <div className="flex flex-col items-center w-full relative z-10 py-1 overflow-hidden">
-                    {/* TOP ROW: Fixed Player Name */}
                     <div className="flex items-center gap-1 opacity-60 mb-1 shrink-0">
                       {player.isBot && <Bot size={10} className="text-indigo-400" />}
                       <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
                     </div>
 
-                    {/* BOTTOM ROW: Synchronized Fade Carousel (Stationary) */}
                     <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center">
-                        {/* Slide 1: Balance (3s Sync Fade) */}
                         <div 
                             className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${action && !player.isFolded && !isCollectingBets ? 'animate-fade-balance' : 'opacity-100'}`}
                             style={action ? { animationDelay: `${globalSyncDelay}ms` } : {}}
@@ -291,7 +279,6 @@ const Seat = ({
                                 ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
                             </span>
                         </div>
-                        {/* Slide 2: Action (3s Sync Fade) */}
                         {action && !player.isFolded && !isCollectingBets && (
                             <div 
                                 className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg animate-fade-action"
@@ -996,7 +983,7 @@ const App = () => {
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
                 <div 
-                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_60px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
+                  className={`absolute inset-0 rounded-[50%] border-[4px] transition-all duration-700 ${activeVariant?.id === 'REDSBLACKS' ? 'border-red-600 shadow-[0_0_50px_#ff0000]' : 'border-slate-800'} ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''} ${activeVariant?.id === 'HILOW' ? 'animate-hilow-split' : ''} ${activeVariant?.id === 'PINEAPPLE' ? 'animate-pineapple-spark' : ''}`} 
                   style={{ 
                     backgroundColor: '#070a13',
                     boxShadow: !['REDSBLACKS', 'MUFLIS', 'OMAHA', 'HILOW', 'PINEAPPLE'].includes(activeVariant?.id) ? `
