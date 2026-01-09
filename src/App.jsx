@@ -158,7 +158,7 @@ const Seat = ({
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         
                         // Hero card scale DOUBLED from previous턴 (7.36 Mobile, 12.88 Desktop)
-                        const scaleBase = isHero ? (isMobile ? 7.36 : 12.88) : 1.0;
+                        const scaleBase = isHero ? (isMobile ? 4.00 : 7.00) : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
                         const isWinningCard = (winning5Ids || []).includes(c.id);
                         const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard && !isMuckWin;
