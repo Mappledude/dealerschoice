@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.91
+// VERSION: v1.0.92
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.91";
+const VERSION = "v1.0.92";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -158,7 +158,7 @@ const Seat = ({
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         
                         // Hero card scale DOUBLED from previous턴 (7.36 Mobile, 12.88 Desktop)
-                        const scaleBase = isHero ? (isMobile ? 1.84 : 3.22) : 1.0;
+                        const scaleBase = isHero ? (isMobile ? 2.00 : 2.00) : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
                         const isWinningCard = (winning5Ids || []).includes(c.id);
                         const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard && !isMuckWin;
