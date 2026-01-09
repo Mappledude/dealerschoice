@@ -145,7 +145,6 @@ const processShowdown = (roomId) => {
   room.potAmount = 0;
   io.to(roomId).emit('roomUpdate', serializeRoom(room));
   
-  // Extended 8 second showdown
   setTimeout(() => { 
     room.dealerIdx = (room.dealerIdx + 1) % TOTAL_SEATS;
     while (!room.players[room.dealerIdx]) room.dealerIdx = (room.dealerIdx + 1) % TOTAL_SEATS;
