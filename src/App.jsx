@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.95
+// VERSION: v1.0.96
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.95";
+const VERSION = "v1.0.96";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -111,16 +111,16 @@ const Seat = ({
 
     const currentAction = useMemo(() => {
         if (!player) return null;
-        if (isFoldedBool) return { text: "FOLDED", color: "text-red-500", glow: "shadow-[0_0_30px_rgba(239,68,68,0.8)]" };
+        if (isFoldedBool) return { text: "FOLDED", color: "text-red-500", glow: "shadow-[0_0_20px_rgba(239,68,68,0.6)]" };
         if (phase === PHASES.PRE_FLOP && currentBetNum > 0 && !lastActionStr) {
-            if (currentBetNum === bigBlind) return { text: `BB $${currentBetNum}`, color: "text-indigo-400", glow: "shadow-[0_0_30px_rgba(129,140,248,0.8)]" };
-            return { text: `SB $${currentBetNum}`, color: "text-purple-400", glow: "shadow-[0_0_30px_rgba(168,85,247,0.8)]" };
+            if (currentBetNum === bigBlind) return { text: `BB $${currentBetNum}`, color: "text-indigo-400", glow: "shadow-[0_0_20px_rgba(129,140,248,0.4)]" };
+            return { text: `SB $${currentBetNum}`, color: "text-purple-400", glow: "shadow-[0_0_20px_rgba(168,85,247,0.4)]" };
         }
         if (!lastActionStr) return null;
         switch (lastActionStr) {
-            case 'RAISE': return { text: `RAISE $${currentBetNum}`, color: "text-orange-500", glow: "shadow-[0_0_30px_rgba(249,115,22,0.8)]" };
-            case 'CALL': return { text: `CALL $${currentBetNum}`, color: "text-emerald-400", glow: "shadow-[0_0_30px_rgba(52,211,153,0.8)]" };
-            case 'CHECK': return { text: "CHECK", color: "text-slate-400", glow: "shadow-[0_0_30px_rgba(148,163,184,0.5)]" };
+            case 'RAISE': return { text: `RAISE $${currentBetNum}`, color: "text-orange-500", glow: "shadow-[0_0_30px_rgba(249,115,22,0.6)]" };
+            case 'CALL': return { text: `CALL $${currentBetNum}`, color: "text-emerald-400", glow: "shadow-[0_0_30px_rgba(52,211,153,0.6)]" };
+            case 'CHECK': return { text: "CHECK", color: "text-slate-400", glow: "shadow-[0_0_30px_rgba(148,163,184,0.4)]" };
             default: return null;
         }
     }, [lastActionStr, currentBetNum, isFoldedBool, phase, bigBlind]);
@@ -155,8 +155,8 @@ const Seat = ({
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
                         
-                        // Calculated Opponent Spread: 50% Visibility (3.75vw for mobile, 2.75vh for desktop)
-                        const cardSpacing = isHero ? 3 : (isMobile ? 3.75 : 2.75);
+                        // Hero card spacing controlled by slider, Opponents stay at 50% width spread
+                        const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.75 : 2.75);
                         
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         const scaleBase = isHero ? visuals.heroCardScale : 1.0;
@@ -186,52 +186,52 @@ const Seat = ({
             <div className="relative flex flex-col items-center">
                 <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}>
                     
-                    {/* DEALER INDICATOR - persistent and opaque regardless of fold status */}
+                    {/* PERSISTENT DEALER INDICATOR */}
                     {isDealer && (
                         <div className="absolute top-2 right-2 z-[110] pointer-events-none">
                           <div className="w-2.5 h-2.5 bg-red-600 rounded-full border border-red-900 shadow-[0_0_8px_rgba(239,68,68,0.8),inset_0_0_2px_rgba(0,0,0,0.5)]" />
                         </div>
                     )}
 
-                    {/* FOLD CONTENT WRAPPER */}
-                    <div className={`flex flex-col items-center w-full transition-opacity duration-500 ${isFoldedBool ? 'opacity-30 grayscale' : 'opacity-100'}`}>
-                        {currentAction && isFoldedBool && (<div key={`action-overlay-${String(currentAction.text)}`} className={`absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-action-flash-once border-2 rounded-xl border-white/40 ${currentAction.glow}`}><span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${currentAction.color}`}>{String(currentAction.text)}</span></div>)}
-                        {player.isDisconnected && (<div className="absolute inset-0 z-[150] bg-red-950/60 backdrop-blur-[1px] flex items-center justify-center border border-red-500/40 rounded-xl overflow-hidden"><span className="text-white text-[10px] md:text-xs font-black animate-pulse uppercase tracking-[0.2em] px-2 text-center">LINK LOST • SECURED</span></div>)}
-                        
-                        <div className="flex flex-col items-center w-full relative z-10 py-1 overflow-hidden">
-                            <div className="flex flex-col items-center gap-0.5 shrink-0 mb-1">
-                              <div className="flex items-center gap-1 opacity-60">
-                                {player.isBot && <Bot size={10} className="text-indigo-400" />}
-                                <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
-                              </div>
-                              {phase === PHASES.SHOWDOWN && !isFoldedBool && player.strength && (
-                                <div className="text-[8px] lg:text-[1.1vh] text-cyan-400 font-bold tracking-tighter animate-in fade-in slide-in-from-bottom-1 duration-500 whitespace-nowrap overflow-hidden">
-                                  {formatRank(String(player.strength))}
-                                </div>
-                              )}
+                    {/* DYNAMIC CONTENT AREA */}
+                    <div className={`flex flex-col items-center w-full relative z-10 py-1 overflow-hidden transition-all duration-500 ${isFoldedBool ? 'opacity-40 grayscale' : 'opacity-100'}`}>
+                        <div className="flex flex-col items-center gap-0.5 shrink-0 mb-1">
+                          <div className="flex items-center gap-1 opacity-60">
+                            {player.isBot && <Bot size={10} className="text-indigo-400" />}
+                            <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
+                          </div>
+                          {phase === PHASES.SHOWDOWN && !isFoldedBool && player.strength && (
+                            <div className="text-[8px] lg:text-[1.1vh] text-cyan-400 font-bold tracking-tighter animate-in fade-in slide-in-from-bottom-1 duration-500 whitespace-nowrap overflow-hidden">
+                              {formatRank(String(player.strength))}
                             </div>
-                            <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center">
-                                <div 
-                                    className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${ghostAction && !isFoldedBool ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'}`}
-                                >
-                                    {player.chips <= 0 && !isFoldedBool && phase !== PHASES.IDLE && !player.waitingForNextHand ? (
-                                        <span className="text-[14px] lg:text-[2.2vh] font-black italic uppercase text-red-500 leading-none tracking-tighter">
-                                            All-in ${Number(player.totalContribution + (player.currentBet || 0)).toLocaleString(undefined, {minimumFractionDigits: 0})}
-                                        </span>
-                                    ) : (
-                                        <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
-                                            ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                        </span>
-                                    )}
-                                </div>
-                                {ghostAction && !isFoldedBool && (
-                                    <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg transition-opacity duration-500 ${isCollectingBets ? 'opacity-50 animate-pulse' : 'opacity-100 animate-action-flash-once'}`}>
-                                        <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${ghostAction.color}`}>{String(ghostAction.text)}</span>
-                                    </div>
+                          )}
+                        </div>
+
+                        {/* ACTION STATUS AREA */}
+                        <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center overflow-hidden">
+                            {/* CHIP BALANCE / ALL-IN DISPLAY */}
+                            <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${ghostAction ? 'opacity-0 -translate-y-4 scale-75 pointer-events-none' : 'opacity-100 translate-y-0 scale-100'}`}>
+                                {player.chips <= 0 && phase !== PHASES.IDLE && !player.waitingForNextHand ? (
+                                    <span className="text-[14px] lg:text-[2.2vh] font-black italic uppercase text-red-500 leading-none tracking-tighter animate-pulse">
+                                        ALL-IN ${Number(player.totalContribution + (player.currentBet || 0)).toLocaleString(undefined, {minimumFractionDigits: 0})}
+                                    </span>
+                                ) : (
+                                    <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
+                                        ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                    </span>
                                 )}
                             </div>
-                            {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
+
+                            {/* DYNAMIC ACTION TEXT */}
+                            {ghostAction && (
+                                <div key={`action-${ghostAction.text}`} className={`absolute inset-0 flex items-center justify-center transition-all duration-300 animate-action-status-in`}>
+                                    <span className={`text-[14px] lg:text-[2.4vh] font-black italic uppercase tracking-tighter text-center drop-shadow-md whitespace-nowrap ${ghostAction.color}`}>
+                                        {String(ghostAction.text)}
+                                    </span>
+                                </div>
+                            )}
                         </div>
+                        {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
                     </div>
                 </div>
             </div>
@@ -290,11 +290,10 @@ const App = () => {
   const turnInitializedRef = useRef(-1); 
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
-  
-  // NEW DEFAULTS: heroCardScale 2.0, Y offset -54 (desktop) / 0 (mobile)
   const [visuals, setVisuals] = useState({ 
     heroCardScale: 2.0,
     heroCardY: isMobile ? 0 : -54, 
+    heroCardSpread: 3.0, // Initial hero card spread value
     oppCardScale: 1.0, 
     oppCardY: -10, 
     commCardScale: 1.5, 
@@ -383,54 +382,26 @@ const App = () => {
 
   const formatRank = (rank) => {
     if (!rank || typeof rank !== 'string' || rank === "null" || rank === "No Qualifier") return rank || "";
-    if (rank.includes(" & ")) return rank.split(" & ").map(r => formatRank(r)).join(" & ");
-    
-    const lower = rank.toLowerCase();
+    const cleanRank = String(rank);
+    const lower = cleanRank.toLowerCase();
     let prefix = "";
     if (lower.startsWith("high: ")) prefix = "HIGH: ";
     else if (lower.startsWith("low: ")) prefix = "LOW: ";
     else if (lower.startsWith("scoop: ")) prefix = "SCOOP: ";
     
-    const cleanRank = rank.replace(/^(high|low|scoop): /i, "");
-    const cleanLower = cleanRank.toLowerCase();
-    let result = cleanRank;
-
-    const getVal = (str) => str.split(' ').pop();
-
-    if (cleanLower.includes("five of a kind")) {
-      result = `5 of a KIND, ${getVal(cleanRank)}`;
-    } else if (cleanLower.includes("straight flush")) {
-      result = "STRAIGHT FLUSH";
-    } else if (cleanLower.includes("four of a kind")) {
-      result = `4 of a KIND, ${getVal(cleanRank)}`;
-    } else if (cleanLower.includes("full house")) {
-      result = cleanRank.toUpperCase();
-    } else if (cleanLower.includes("three of a kind")) {
-      result = `3 of a KIND, ${getVal(cleanRank)}`;
-    } else if (cleanLower.includes("two pair")) {
-      result = "Two Pair, " + cleanRank.split(' ').slice(-3).join(' '); 
-    } else if (cleanLower.includes("pair")) {
-      result = `Pair, ${getVal(cleanRank)}`;
-    } else if (cleanLower.includes("high card")) {
-      result = `High ${getVal(cleanRank)}`;
-    } else if (cleanLower.includes("low")) {
-      result = `Low ${getVal(cleanRank)}`;
-    }
-
-    return prefix + result;
+    const cleanLabel = cleanRank.replace(/^(high|low|scoop): /i, "");
+    return prefix + cleanLabel.toUpperCase();
   };
 
   const getStrengthClass = (strength) => {
     if (!strength) return "";
-    const s = strength.toLowerCase();
-    
+    const s = String(strength).toLowerCase();
     if (s.includes("low") || s.includes("high card")) {
       if (s.includes(" 5") || s.includes(" 6")) return "strength-hi-res-monster";
       if (s.includes(" 7") || s.includes(" 8")) return "strength-hi-res-strong";
       if (s.includes(" 9") || s.includes(" 10")) return "strength-hi-res-ember";
       return "strength-hi-res-smolder";
     }
-
     if (s.includes("straight flush") || s.includes("4 of a kind") || s.includes("full house") || s.includes("5 of a kind")) {
       return "strength-hi-res-monster";
     }
@@ -810,6 +781,7 @@ const App = () => {
   return (
     <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
       
+      {/* SVG FILTERS DEFINITION */}
       <svg style={{ visibility: 'hidden', position: 'absolute', width: 0, height: 0 }}>
         <filter id="fire-hi-res">
           <feTurbulence type="fractalNoise" baseFrequency="0.05 0.2" numOctaves="3" seed={noiseSeed} result="noise" />
@@ -1096,6 +1068,7 @@ const App = () => {
                   <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">HUD Action Height <span>{visuals.footerHeight}px</span></label>
                   <input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" />
                 </div>
+                
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Hero Card Scale <span>{visuals.heroCardScale.toFixed(2)}</span></label>
                   <input type="range" min="1.0" max="15.0" step="0.01" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" />
@@ -1103,6 +1076,11 @@ const App = () => {
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Hero Card Y Offset <span>{visuals.heroCardY}px</span></label>
                   <input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" />
+                </div>
+                {/* NEW: Hero Card Spread Slider */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Hero Card Spread <span>{visuals.heroCardSpread.toFixed(2)}</span></label>
+                  <input type="range" min="0.5" max="10.0" step="0.05" value={visuals.heroCardSpread} onChange={(e) => setVisuals({...visuals, heroCardSpread: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" />
                 </div>
               </div>
             </div>
@@ -1115,6 +1093,15 @@ const App = () => {
           .animate-announcement-pop { animation: announcement-pop 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
           @keyframes action-flash-once { 0% { opacity: 0; transform: scale(0.9); } 40% { opacity: 1; transform: scale(1.05); filter: brightness(1.5); } 100% { opacity: 1; transform: scale(1); filter: brightness(1.1); } }
           .animate-action-flash-once { animation: action-flash-once 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+          
+          /* Unified Action Animation */
+          @keyframes action-status-in {
+            0% { opacity: 0; transform: translateY(10px) scale(0.9); filter: blur(4px); }
+            50% { opacity: 1; transform: translateY(-2px) scale(1.1); filter: blur(0px); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+          }
+          .animate-action-status-in { animation: action-status-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
           @keyframes attention-trigger { 0% { box-shadow: 0 0px 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); transform: scale(1); } 30% { box-shadow: 0 0 40px rgba(255,255,255,0.9), inset 0 0 10px rgba(255,255,255,0.5); border-color: rgba(255,255,255,1); transform: scale(1.08); } 100% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); transform: scale(1); } }
           .animate-hand-trigger { animation: attention-trigger 3s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
           .animate-deal-trigger { animation: attention-trigger 1s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
@@ -1124,27 +1111,24 @@ const App = () => {
           }
           .animate-high-prob { animation: high-prob-pulse 1s infinite ease-in-out; }
           
-          /* HI-RES STEADY BURNING TEXT EFFECTS (Heat Distortion) */
+          /* HI-RES STEADY BURNING TEXT EFFECTS */
           .strength-hi-res-monster { 
             color: #fff; 
             font-weight: 900; 
             filter: url(#fire-hi-res) brightness(1.4); 
             text-shadow: 0 0 4px #fff, 0 -2px 10px #ff0, 0 -4px 15px #f90, 0 -8px 25px #f20;
           }
-
           .strength-hi-res-strong { 
             color: #ffda44; 
             font-weight: 800; 
             filter: url(#fire-hi-res) brightness(1.1);
             text-shadow: 0 0 3px #fff, 0 -1px 8px #ff0, 0 -3px 15px #f90;
           }
-
           .strength-hi-res-ember { 
             color: #ff4d00; 
             filter: url(#fire-hi-res) brightness(0.9);
             text-shadow: 0 0 5px #f20, 0 0 10px #700;
           }
-
           .strength-hi-res-smolder { 
             color: #820; 
             filter: url(#fire-hi-res) brightness(0.7);
@@ -1154,7 +1138,7 @@ const App = () => {
 
           @keyframes muflis-glow { 0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; } 50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; } }
           .animate-muflis-glow { animation: muflis-glow 4s infinite ease-in-out; }
-          @keyframes omaha-swirl { 0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } 25% { box-shadow: 0 0 35px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f755; } 50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; } 75% { box-shadow: 0 0 35px #a855f744, inset 20px -20px 50px #a855f722; border-color: #a855f755; } 100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } }
+          @keyframes omaha-swirl { 0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } 25% { box-shadow: 0 0 35px #a855f744, inset -20px 20px 50px #a855f722; border-color: #a855f755; } 50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; } 75% { box-shadow: 0 0 35px #a855f744, inset 20px -20px 50px #a855f722; border-color: #a855f755; } 100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } }
           .animate-omaha-swirl { animation: omaha-swirl 8s infinite linear; }
           html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #000; }
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
