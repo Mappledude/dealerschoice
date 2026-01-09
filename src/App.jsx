@@ -9,48 +9,8 @@ import {
 } from 'lucide-react';
 import io from 'socket.io-client';
 
-// --- TOP-LEVEL UTILITIES (Ensures availability across all components) ---
-
-const getContrastColor = (hex) => {
-  if (!hex) return 'white';
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-  return (yiq >= 128) ? 'black' : 'white';
-};
-
-const formatRank = (rank) => {
-  if (!rank || typeof rank !== 'string' || rank === "null" || rank === "No Qualifier") return "";
-  const lower = rank.toLowerCase();
-  let prefix = "";
-  if (lower.startsWith("high: ")) prefix = "HIGH: ";
-  else if (lower.startsWith("low: ")) prefix = "LOW: ";
-  else if (lower.startsWith("scoop: ")) prefix = "SCOOP: ";
-  const cleanLabel = rank.replace(/^(high|low|scoop): /i, "");
-  return prefix + cleanLabel.toUpperCase();
-};
-
-const getNeonNameColor = (name) => {
-  if (!name || name === "SYSTEM") return "text-white";
-  const palette = ['text-[#39FF14]', 'text-[#FF00FF]', 'text-[#00FFFF]', 'text-[#FF5F1F]', 'text-[#FFFF00]', 'text-[#B026FF]'];
-  let hash = 0;
-  const n = String(name);
-  for (let i = 0; i < n.length; i++) hash = n.charCodeAt(i) + ((hash << 5) - hash);
-  return palette[Math.abs(hash) % palette.length];
-};
-
-// --- CONSTANTS ---
-const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
-const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
-
-const socket = io(SOCKET_URL, { 
-  transports: ['websocket', 'polling'],
-  reconnectionAttempts: 10,
-  reconnectionDelay: 1000 
-});
-
-const VERSION = "v1.3.0";
+// --- SHARED CONSTANTS ---
+const VERSION = "v1.3.8";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -68,6 +28,7 @@ const VARIANT_COLORS = {
 };
 
 const TABLE_FELT_COLOR = '#0f172a'; 
+const HILOW_SECONDARY_COLOR = '#4d7c0f';
 
 const VARIANTS = { 
   HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', rules: ["Each player gets 2 hole cards.", "Standard high hand rankings apply.", "Best 5-card combination from 2 hole + 5 community cards wins."] }, 
@@ -82,6 +43,50 @@ const DISPLAY_POSITIONS = [
   { x: 50, y: 92 }, { x: 25, y: 84 }, { x: 10, y: 62 }, { x: 10, y: 38 }, { x: 25, y: 16 },
   { x: 50, y: 8  }, { x: 75, y: 16 }, { x: 90, y: 38 }, { x: 90, y: 62 }, { x: 75, y: 84 }
 ];
+
+// --- TOP-LEVEL UTILITIES ---
+
+const getContrastColor = (hex) => {
+  if (!hex) return 'white';
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  return (yiq >= 128) ? 'black' : 'white';
+};
+
+const formatRank = (rank) => {
+  if (!rank || typeof rank !== 'string' || rank === "null" || rank === "No Qualifier") return "";
+  const cleanRank = String(rank);
+  const lower = cleanRank.toLowerCase();
+  let prefix = "";
+  if (lower.startsWith("high: ")) prefix = "HIGH: ";
+  else if (lower.startsWith("low: ")) prefix = "LOW: ";
+  else if (lower.startsWith("scoop: ")) prefix = "SCOOP: ";
+  const cleanLabel = cleanRank.replace(/^(high|low|scoop): /i, "");
+  return prefix + cleanLabel.toUpperCase();
+};
+
+const getNeonNameColor = (name) => {
+  if (!name || name === "SYSTEM") return "text-white";
+  const palette = ['text-[#39FF14]', 'text-[#FF00FF]', 'text-[#00FFFF]', 'text-[#FF5F1F]', 'text-[#FFFF00]', 'text-[#B026FF]'];
+  let hash = 0;
+  const n = String(name);
+  for (let i = 0; i < n.length; i++) hash = n.charCodeAt(i) + ((hash << 5) - hash);
+  return palette[Math.abs(hash) % palette.length];
+};
+
+// --- GLOBAL SOCKET ---
+const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
+const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
+
+const socket = io(SOCKET_URL, { 
+  transports: ['websocket', 'polling'],
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000 
+});
+
+// --- SUB-COMPONENTS ---
 
 const DashTimer = ({ timeRemaining }) => {
   const percentage = Math.max(0, (timeRemaining / 24) * 100);
@@ -158,17 +163,15 @@ const Seat = ({
                         const offset = ci - (player.hand.length - 1) / 2;
                         const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.75 : 2.75);
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
-                        const scaleBase = isHero ? visuals.heroCardScale : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
-                        const isWinningCard = (winning5Ids || []).includes(c.id);
-                        const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard && !isMuckWin;
+                        const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && winning5Ids?.includes(c.id);
 
                         return (
                           <div 
                             key={`${c.id || ci}-${ci}`} 
                             className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white border-black/10' : 'card-back-royal-red border-red-900/50'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
                             style={{ 
-                              transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? scaleBase * 1.1 : scaleBase})`, 
+                              transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? visuals.heroCardScale * 0.6 : 1.0})`, 
                               transformOrigin: 'bottom center', 
                               zIndex: isHighlighted ? 350 : 100 + ci 
                             }}
@@ -222,12 +225,69 @@ const Seat = ({
     );
 };
 
+const ActivityFeedContent = ({ logs, handHistory, expandedHands, setExpandedHands, isMobile, setIntelExpanded, getNeonNameColor, formatRank }) => {
+  const handleCopyLogs = () => {
+    const text = logs.map(l => `[${new Date().toLocaleTimeString()}] ${String(l.name).toUpperCase()}: ${String(l.action).toUpperCase()}`).join('\n');
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+  };
+
+  return (
+    <div className="flex-1 flex flex-col h-full overflow-hidden p-4">
+        <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2 font-black tracking-[0.2em] uppercase">
+            <div className="flex items-center gap-2"><Terminal size={14}/> Activity Log</div>
+            <div className="flex items-center gap-2">
+                <button onClick={handleCopyLogs} className="text-white/30 hover:text-emerald-400 transition-all" title="Copy All Logs"><Copy size={14}/></button>
+                {isMobile && <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white ml-1"><X size={14}/></button>}
+            </div>
+        </div>
+        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
+            {handHistory && handHistory.length > 0 ? handHistory.map((hand) => (
+                <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
+                    <button onClick={() => { 
+                      const n = new Set(expandedHands); 
+                      if (n.has(hand.id)) n.delete(hand.id); 
+                      else n.add(hand.id); 
+                      setExpandedHands(n); 
+                    }} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
+                        <div className="flex items-center justify-between w-full">
+                            <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span>
+                            <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
+                        </div>
+                        <div className="text-[11px] text-white/90 text-left">
+                            {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400 uppercase"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic uppercase">HAND IN PROGRESS...</span>)}
+                        </div>
+                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(String(hand.rank))}</div>)}
+                    </button>
+                    {expandedHands.has(hand.id) && (
+                      <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
+                        {hand.events && hand.events.map((ev, i) => (
+                          <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
+                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
+                            <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                </div>
+            )) : (<div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3"><Activity size={32} className="animate-pulse" /><span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span></div>)}
+        </div>
+    </div>
+  );
+};
+
+// --- MAIN APP COMPONENT ---
+
 const App = () => {
-  // --- REFS (Defined at top to prevent ReferenceError) ---
+  // --- REFS & HOOKS ---
   const phaseRef = useRef(PHASES.IDLE); 
   const turnInitializedRef = useRef(-1); 
+  const noiseSeedRef = useRef(1);
 
-  // --- STATE ---
   const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
   const [adminTab, setAdminTab] = useState(ADMIN_TABS.PLAYERS);
   const [userProfile, setUserProfile] = useState(null);
@@ -272,7 +332,7 @@ const App = () => {
   const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 });
   const [noiseSeed, setNoiseSeed] = useState(1);
 
-  // --- MEMOIZED DATA ---
+  // --- MEMOIZED LOGIC ---
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
     return players.findIndex(p => p && (p.uid === userProfile.uid || p.name === userProfile.name));
@@ -298,53 +358,6 @@ const App = () => {
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
   const [visuals, setVisuals] = useState({ heroCardScale: 2.0, heroCardY: isMobile ? 0 : -54, heroCardSpread: 3.0, tableZoom: 0.9, holeCardFan: 35, footerHeight: 250 });
-
-  // --- HANDLERS ---
-  const handleForceSync = useCallback(() => {
-    socket.disconnect().connect();
-    socket.emit('getInitialData');
-    if (currentRoomId && userProfile) socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 });
-  }, [currentRoomId, userProfile]);
-
-  const handleAction = useCallback((type, amt = 0) => {
-    const finalAmount = amt !== 0 ? amt : raiseInput;
-    if (currentRoomId) socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(finalAmount) : 0 });
-  }, [currentRoomId, raiseInput]);
-
-  const handleAllIn = useCallback(() => {
-    if (!heroPlayerObj) return;
-    handleAction('RAISE', Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0));
-  }, [heroPlayerObj, handleAction]);
-
-  const handleLogin = useCallback(() => { 
-    const pass = String(passwordInput).toLowerCase().trim();
-    if (pass === 'pass') { 
-        setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin', chips: 1000000 }); 
-        setCurrentView(VIEWS.ADMIN); 
-        socket.emit('getInitialData'); 
-    } else {
-        socket.emit('playerLogin', { password: pass });
-    }
-  }, [passwordInput]);
-
-  const joinRoom = useCallback(() => {
-    if (!selectedTableForJoin || !userProfile || isJoining) return;
-    setIsJoining(true);
-    socket.emit('joinRoom', { 
-      roomId: selectedTableForJoin.id, 
-      profile: { ...userProfile, pendingVariant: pendingVariantId }, 
-      buyIn: Math.min(buyInAmount, userProfile.chips || 1000) 
-    }, (res) => {
-        setIsJoining(false);
-        if (res?.status === 'ok') { setCurrentRoomId(selectedTableForJoin.id); setCurrentView(VIEWS.GAME); setSelectedTableForJoin(null); }
-    });
-  }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount, isJoining]);
-
-  const handleNuclearTriplePurge = useCallback(() => {
-    if (!nuclearConfirm) { setNuclearConfirm(true); setTimeout(() => setNuclearConfirm(false), 3000); return; } 
-    socket.emit('adminNuclearReset'); 
-    setPlayers(INITIAL_PLAYERS); setAllProfiles([]); setActiveTables([]); setNuclearConfirm(false);
-  }, [nuclearConfirm]);
 
   const handHistory = useMemo(() => {
     const hands = []; 
@@ -372,37 +385,57 @@ const App = () => {
     return hands.reverse();
   }, [logs]);
 
-  const ActivityFeedContent = () => (
-    <div className="flex-1 flex flex-col h-full overflow-hidden p-4">
-        <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2 font-black tracking-[0.2em] uppercase">
-            <div className="flex items-center gap-2"><Terminal size={14}/> Activity Log</div>
-            <div className="flex items-center gap-2">{isMobile && <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>}</div>
-        </div>
-        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
-            {handHistory.length > 0 ? handHistory.map((hand) => (
-                <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
-                    <button onClick={() => { 
-                      const n = new Set(expandedHands); if (n.has(hand.id)) n.delete(hand.id); else n.add(hand.id); setExpandedHands(n); 
-                    }} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
-                        <div className="flex items-center justify-between w-full"><span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span><ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} /></div>
-                        <div className="text-[11px] text-white/90 text-left">{hand.winner ? (<span className="flex items-center gap-2 text-emerald-400 uppercase"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic uppercase">HAND IN PROGRESS...</span>)}</div>
-                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(String(hand.rank))}</div>)}
-                    </button>
-                    {expandedHands.has(hand.id) && (
-                      <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
-                        {hand.events.map((ev, i) => (
-                          <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
-                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
-                            <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                </div>
-            )) : (<div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3"><Activity size={32} className="animate-pulse" /><span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span></div>)}
-        </div>
-    </div>
-  );
+  // --- ACTIONS ---
+  const handleForceSync = useCallback(() => {
+    socket.disconnect().connect();
+    socket.emit('getInitialData');
+    if (currentRoomId && userProfile) socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 });
+  }, [currentRoomId, userProfile]);
+
+  const handleAction = useCallback((type, amt = 0) => {
+    const finalAmount = amt !== 0 ? amt : raiseInput;
+    if (currentRoomId) socket.emit('playerAction', { roomId: currentRoomId, type, amount: type === 'RAISE' ? Number(finalAmount) : 0 });
+  }, [currentRoomId, raiseInput]);
+
+  const handleAllIn = useCallback(() => {
+    if (!heroPlayerObj) return;
+    handleAction('RAISE', Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0));
+  }, [heroPlayerObj, handleAction]);
+
+  const handleRebuy = useCallback(() => {
+    if (!currentRoomId || !userProfile) return;
+    socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: rebuyAmount });
+    setShowRebuyModal(false);
+  }, [currentRoomId, userProfile, rebuyAmount]);
+
+  const handleNuclearTriplePurge = useCallback(() => {
+    if (!nuclearConfirm) { setNuclearConfirm(true); setTimeout(() => setNuclearConfirm(false), 3000); return; } 
+    socket.emit('adminNuclearReset'); setPlayers(INITIAL_PLAYERS); setAllProfiles([]); setActiveTables([]); setNuclearConfirm(false);
+  }, [nuclearConfirm]);
+
+  const handleLogin = useCallback(() => { 
+    const pass = String(passwordInput).toLowerCase().trim();
+    if (pass === 'pass') { 
+        setUserProfile({ name: 'SYSTEM ADMIN', uid: 'admin_sys', role: 'admin', chips: 1000000 }); 
+        setCurrentView(VIEWS.ADMIN); 
+        socket.emit('getInitialData'); 
+    } else {
+        socket.emit('playerLogin', { password: pass });
+    }
+  }, [passwordInput]);
+
+  const joinRoom = useCallback(() => {
+    if (!selectedTableForJoin || !userProfile || isJoining) return;
+    setIsJoining(true);
+    socket.emit('joinRoom', { 
+      roomId: selectedTableForJoin.id, 
+      profile: { ...userProfile, pendingVariant: pendingVariantId }, 
+      buyIn: Math.min(buyInAmount, userProfile.chips || 1000) 
+    }, (res) => {
+        setIsJoining(false);
+        if (res?.status === 'ok') { setCurrentRoomId(selectedTableForJoin.id); setCurrentView(VIEWS.GAME); setSelectedTableForJoin(null); }
+    });
+  }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount, isJoining]);
 
   // --- EFFECTS ---
   useEffect(() => {
@@ -436,6 +469,12 @@ const App = () => {
             setTimeout(() => setPotTransferring(false), Math.max(1, rawWinners.length) * dur);
         } else if (d.phase !== PHASES.SHOWDOWN) { setPotTransferring(false); setShowdownWinners(null); }
     };
+
+    socket.on('forceLogout', () => {
+        setUserProfile(null);
+        setCurrentView(VIEWS.LOGIN);
+        socket.disconnect().connect();
+    });
     
     socket.on('roomUpdate', handleRoomUpdate);
     socket.on('variantPreview', setPreviewVariantId);
@@ -458,7 +497,16 @@ const App = () => {
         else setCurrentView(VIEWS.LOBBY); 
     });
     
-    return () => { socket.off('roomUpdate'); socket.off('variantPreview'); socket.off('lobbyUpdate'); socket.off('profilesUpdate'); socket.off('initialDataResponse'); socket.off('loginSuccess'); socket.off('log'); };
+    return () => { 
+      socket.off('forceLogout');
+      socket.off('roomUpdate'); 
+      socket.off('variantPreview'); 
+      socket.off('lobbyUpdate'); 
+      socket.off('profilesUpdate'); 
+      socket.off('initialDataResponse'); 
+      socket.off('loginSuccess'); 
+      socket.off('log'); 
+    };
   }, [showdownWinners, userProfile]);
 
   useEffect(() => {
@@ -471,7 +519,8 @@ const App = () => {
     } else if (activeIdx !== heroIdx) turnInitializedRef.current = -1;
   }, [activeIdx, heroIdx, heroPlayerObj, highestBet, bigBlind, minRaiseAmount, preAction, handleAction]);
 
-  // --- RENDER ---
+  // --- RENDERING ---
+
   if (currentView === VIEWS.LOGIN) return (
     <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
         <div className="w-full max-w-[400px] p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8">
@@ -575,7 +624,7 @@ const App = () => {
                       <h3 className="text-xl md:text-3xl text-white font-black tracking-tight mb-4 uppercase truncate">{String(t.name)}</h3>
                       <div className="flex flex-col gap-4 mb-6">
                         <div className="flex justify-between items-end border-b border-white/5 pb-2"><div className="flex flex-col"><span className="text-[8px] text-white/30 tracking-widest">STAKES</span><span className="text-emerald-400 text-xl md:text-2xl font-mono leading-none">${t.sb}/${t.bb}</span></div><div className="flex flex-col items-end"><span className="text-[8px] text-white/30 tracking-widest">BUY-IN</span><span className="text-white/80 text-sm md:text-lg font-mono leading-none">${t.minBuy}-${t.maxBuy}</span></div></div>
-                        <div className="flex flex-col gap-2">
+                        <div className="flex col gap-2">
                           <span className="text-[9px] text-white/30 tracking-widest flex items-center gap-1.5 uppercase"><Users size={10} /> Seated Players ({(t.players || []).filter(p=>p).length}/10)</span>
                           <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 bg-black/40 rounded-xl border border-white/5">{(t.players || []).filter(p=>p).map((p, idx) => (<span key={`${t.id}-p-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] text-white/80 font-black tracking-tight flex items-center gap-1">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}</div>
                         </div>
@@ -628,7 +677,18 @@ const App = () => {
       </header>
 
       <div className="flex-1 flex flex-row overflow-hidden relative">
-        {intelExpanded && !isMobile && (<aside className="w-80 bg-black/40 border-r border-white/5 hidden lg:flex flex-col animate-in slide-in-from-left duration-300"><ActivityFeedContent /></aside>)}
+        {intelExpanded && !isMobile && (<aside className="w-80 bg-black/40 border-r border-white/5 hidden lg:flex flex-col animate-in slide-in-from-left duration-300">
+          <ActivityFeedContent 
+            logs={logs}
+            handHistory={handHistory} 
+            expandedHands={expandedHands} 
+            setExpandedHands={setExpandedHands} 
+            isMobile={isMobile} 
+            setIntelExpanded={setIntelExpanded} 
+            getNeonNameColor={getNeonNameColor} 
+            formatRank={formatRank} 
+          />
+        </aside>)}
         <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden font-black uppercase text-center">
             {heroPlayerObj && phase !== PHASES.IDLE && phase !== PHASES.PRE_FLOP && (
               <div className={`transition-all duration-500 ${heroPlayerObj.isFolded ? 'opacity-30 grayscale pointer-events-none' : ''}`}>
@@ -641,7 +701,7 @@ const App = () => {
                 <div className="absolute inset-[-100px] rounded-[50%] blur-[120px] opacity-20 pointer-events-none z-0" style={{ background: `radial-gradient(circle at center, ${underTableNeonColor}, transparent 70%)` }} />
                 <div className="absolute inset-[-20px] rounded-[50%] z-0"><div className="absolute inset-0 rounded-[50%] blur-[20px] opacity-40 animate-pulse" style={{ background: (previewVariantId || activeVariant?.id) === 'REDSBLACKS' ? 'conic-gradient(#ff0000 0deg 120deg, #000 120deg 180deg, #ff0000 180deg 300deg, #000 300deg 360deg)' : (previewVariantId || activeVariant?.id) === 'HILOW' ? `linear-gradient(to right, ${VARIANT_COLORS.HILOW}, ${HILOW_SECONDARY_COLOR})` : VARIANT_COLORS[previewVariantId || activeVariant?.id || 'HOLDEM'] }} /><div className="absolute inset-0 rounded-[50%] border-[24px] border-[#0a0a0a] shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_2px_10px_rgba(255,255,255,0.1)]" /></div>
                 <div className="absolute inset-0 rounded-[50%] border-[40px] border-[#1a110a] shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] z-0 bg-[#2b1d12]" />
-                <div className={`absolute inset-[35px] rounded-[50%] transition-all duration-700 overflow-hidden ${(previewVariantId || activeVariant?.id) === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${(previewVariantId || activeVariant?.id) === 'OMAHA' ? 'animate-omaha-swirl' : ''}`} style={{ backgroundColor: TABLE_FELT_COLOR, backgroundImage: `radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 75%)`, boxShadow: `inset 0 0 100px rgba(0,0,0,0.6)` }} ><div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'><feTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' seed={noiseSeed} result='noise' /><feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" /></filter></svg>")` }} /></div>
+                <div className={`absolute inset-[35px] rounded-[50%] transition-all duration-700 overflow-hidden ${(previewVariantId || activeVariant?.id) === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${(previewVariantId || activeVariant?.id) === 'OMAHA' ? 'animate-omaha-swirl' : ''}`} style={{ backgroundColor: TABLE_FELT_COLOR, backgroundImage: `radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 75%)`, boxShadow: `inset 0 0 100px rgba(0,0,0,0.6)` }} ><div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'><feTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' seed=${noiseSeed} result='noise' /><feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" /></filter></svg>")` }} /></div>
                 <div className="absolute inset-[15%] rounded-[50%] border border-white/10 pointer-events-none z-10" />
                 <div className="absolute inset-0 pointer-events-none z-20">
                   {players.map((p, i) => {
