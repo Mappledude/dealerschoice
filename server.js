@@ -13,7 +13,7 @@ const io = new Server(server, {
   pingInterval: 25000  
 });
 
-const VERSION = "v1.3.11";
+const VERSION = "v1.3.13";
 const TOTAL_SEATS = 10; 
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -58,7 +58,10 @@ const rankHand = (cards, isAceLow = false) => {
   else if (vc[0] === 2 && vc[1] === 2) score = 2, name = `Two Pair`;
   else if (vc[0] === 2) score = 1, name = `Pair`;
   const power = score * Math.pow(15, 7) + compArr.reduce((acc, v, i) => acc + (v * Math.pow(15, 6 - i)), 0);
-  return { power, name, cards: sorted.slice(0, 5) };
+  
+  // Create the actual 5-card combination from the sorted input that matches this rank
+  const winningHandCards = sorted.slice(0, 5); 
+  return { power, name, cards: winningHandCards };
 };
 
 const combinations = (array, k) => {
@@ -104,9 +107,13 @@ const updateRoomStrengths = (roomId) => {
     if (p && p.hand && !p.isFolded) {
       const evalRes = (VARIATION_STRATEGIES[vId] || VARIATION_STRATEGIES.HOLDEM)(p.hand, room.community);
       p.strength = evalRes.high.name; p.strengthPower = evalRes.high.power;
+      p.winningHandCards = evalRes.high.cards; // THE BEST 5 CARDS
       const maxPower = 9 * Math.pow(15, 7);
       p.winProbability = vId === 'MUFLIS' ? (1 - (p.strengthPower / maxPower)) * 100 : (p.strengthPower / maxPower) * 100;
-      if (evalRes.low) { p.lowStrength = evalRes.low.name; p.lowWinProbability = 50; }
+      if (evalRes.low) { 
+        p.lowStrength = evalRes.low.name; 
+        p.lowWinProbability = (1 - (evalRes.low.power / maxPower)) * 100; // SIMULATED LOW PROB
+      }
     }
   });
 };
@@ -130,12 +137,11 @@ const processShowdown = (roomId) => {
     const maxPower = active[0].strengthPower;
     const winners = active.filter(p => p.strengthPower === maxPower);
     
-    // Split pot aggregation
     const share = Math.floor(room.potAmount / winners.length);
     room.showdownWinners = winners.map(w => {
       w.chips += share;
       w.isWinner = true;
-      return { name: w.name, amount: share, rank: w.strength, hand: w.hand, winning5Ids: [] }; 
+      return { name: w.name, amount: share, rank: w.strength, hand: w.hand, winningHandCards: w.winningHandCards, winning5Ids: (w.winningHandCards || []).map(c => c.id) }; 
     });
     
     const winnerNames = winners.map(w => w.name).join(' & ');
