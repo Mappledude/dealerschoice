@@ -154,7 +154,7 @@ const Seat = ({
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
-                        const cardSpacing = isHero ? 3 : 1.8;
+                        const cardSpacing = isHero ? 3 : 2.5;
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         
                         // Hero card scale DOUBLED from previous턴 (7.36 Mobile, 12.88 Desktop)
