@@ -19,7 +19,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.4";
+const VERSION = "v1.1.6";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -27,16 +27,17 @@ const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN',
 
 const INITIAL_PLAYERS = Array(TOTAL_SEATS).fill(null);
 
+// Muted, subtle palette to prevent eye strain
 const VARIANT_COLORS = {
-  HOLDEM: '#22d3ee',
-  OMAHA: '#a855f7',
-  PINEAPPLE: '#eab308',
-  MUFLIS: '#39FF14',
-  HILOW: '#ff007f', 
-  REDSBLACKS: '#ff0000'
+  HOLDEM: '#0891b2',     // Muted Cyan
+  OMAHA: '#7e22ce',      // Muted Purple
+  PINEAPPLE: '#a16207',  // Muted Gold
+  MUFLIS: '#166534',     // New Deep Forest Green
+  HILOW: '#be185d',      // Muted Deep Pink
+  REDSBLACKS: '#991b1b'  // Muted Deep Red
 };
 
-const HILOW_SECONDARY_COLOR = '#bfff00'; 
+const HILOW_SECONDARY_COLOR = '#4d7c0f'; 
 const TABLE_FELT_COLOR = '#0f172a'; 
 
 const getContrastColor = (hex) => {
@@ -163,7 +164,7 @@ const Seat = ({
                         return (
                           <div 
                             key={`${c.id || ci}-${ci}`} 
-                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white border-black/10' : 'card-back-casino-red border-red-900'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
+                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white border-black/10' : 'card-back-royal-red border-red-900/50'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
                             style={{ 
                               transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? scaleBase * 1.1 : scaleBase})`, 
                               transformOrigin: 'bottom center', 
@@ -300,7 +301,7 @@ const App = () => {
   // Dynamic Background Palette logic
   const ambientStyle = useMemo(() => {
     const vId = previewVariantId || activeVariant?.id || 'HOLDEM';
-    const color = VARIANT_COLORS[vId] || '#22d3ee';
+    const color = VARIANT_COLORS[vId] || '#0891b2';
     return {
       background: `radial-gradient(circle at center, ${color}15 0%, #06080c 100%)`,
       transition: 'background 1.5s ease-in-out'
@@ -309,7 +310,7 @@ const App = () => {
 
   const underTableNeonColor = useMemo(() => {
     const vId = previewVariantId || activeVariant?.id || 'HOLDEM';
-    return VARIANT_COLORS[vId] || '#22d3ee';
+    return VARIANT_COLORS[vId] || '#0891b2';
   }, [previewVariantId, activeVariant]);
 
   useEffect(() => {
@@ -615,18 +616,19 @@ const App = () => {
     }
   }, [activeIdx, heroIdx, heroPlayerObj, highestBet, bigBlind, minRaiseAmount, preAction, handleAction]);
 
+  // UI OPTION 4: THE TRIPLE PURGE (Server, Local, Browser)
   const handleNuclearTriplePurge = () => {
     if (!nuclearConfirm) {
       setNuclearConfirm(true); 
       setTimeout(() => setNuclearConfirm(false), 3000); 
       return;
     } 
+    // Server Ram Wipe
     socket.emit('adminNuclearReset'); 
-    setPlayers(INITIAL_PLAYERS);
-    setAllProfiles([]);
-    setActiveTables([]);
+    // Browser Storage Wipe
     localStorage.clear();
-    setTimeout(() => window.location.reload(), 500);
+    // Force Refresh
+    window.location.reload();
   };
 
   if (currentView === VIEWS.LOGIN) return (
@@ -660,7 +662,7 @@ const App = () => {
                     <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10">
                         <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm"/>
                         <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm"/>
-                        <button onClick={() => { if (!newPlayer.name.trim()) return; socket.emit('adminCreatePlayer', { ...newPlayer, uid: 'p_' + Math.random().toString(36).slice(2, 7) }); setNewPlayer({ ...newPlayer, name: '', password: '' }); }} className="bg-[#fbbf24] text-black rounded-xl font-black p-3 text-sm">CREATE PLAYER</button>
+                        <button onClick={() => { if (!newPlayer.name.trim()) return; socket.emit('adminCreatePlayer', { ...newPlayer, chips: Number(newPlayer.chips), uid: 'p_' + Math.random().toString(36).slice(2, 7) }); setNewPlayer({ ...newPlayer, name: '', password: '' }); }} className="bg-[#fbbf24] text-black rounded-xl font-black p-3 text-sm">CREATE PLAYER</button>
                     </div>
                     <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
                         {allProfiles.length > 0 ? allProfiles.map(p => (
@@ -858,9 +860,9 @@ const App = () => {
           </aside>
         )}
         <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden font-black uppercase text-center">
-            {/* PAPER WHITE STANDARD Labels */}
-            {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && phase !== PHASES.PRE_FLOP && (
-              <>
+            {/* PAPER WHITE STANDARD Labels - Now visible when folded but dimmed */}
+            {heroPlayerObj && phase !== PHASES.IDLE && phase !== PHASES.PRE_FLOP && (
+              <div className={`transition-all duration-500 ${heroPlayerObj.isFolded ? 'opacity-30 grayscale pointer-events-none' : ''}`}>
                 {activeVariant?.id === 'HILOW' && (
                   <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
                       <div className="bg-black/95 border-2 border-emerald-400 px-4 py-2 rounded-xl shadow-2xl">
@@ -881,7 +883,7 @@ const App = () => {
                     </span>
                   </div>
                 </div>
-              </>
+              </div>
             )}
             
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
@@ -1097,18 +1099,16 @@ const App = () => {
             text-shadow: 2px 2px 0px rgba(0,0,0,0.8), -1px -1px 0px rgba(0,0,0,0.8);
           }
 
-          /* Classic Casino Red Card Back with Lattice Pattern */
-          .card-back-casino-red {
-            background-color: #b91c1c;
+          /* New Intricate Deep Royal Red Card Back */
+          .card-back-royal-red {
+            background-color: #450a0a;
             background-image: 
-              linear-gradient(135deg, #ffffff20 25%, transparent 25%), 
-              linear-gradient(225deg, #ffffff20 25%, transparent 25%), 
-              linear-gradient(45deg, #ffffff20 25%, transparent 25%), 
-              linear-gradient(315deg, #ffffff20 25%, transparent 25%);
-            background-position: 4px 0, 4px 0, 0 0, 0 0;
-            background-size: 8px 8px;
-            background-repeat: repeat;
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.3);
+              radial-gradient(circle at 50% 50%, #ffffff05 2px, transparent 2px),
+              linear-gradient(45deg, #00000030 25%, transparent 25%, transparent 75%, #00000030 75%),
+              linear-gradient(-45deg, #00000030 25%, transparent 25%, transparent 75%, #00000030 75%),
+              repeating-linear-gradient(0deg, transparent, transparent 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 11px);
+            background-size: 6px 6px, 16px 16px, 16px 16px, 100% 20px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
           }
       `}</style>
     </div>
