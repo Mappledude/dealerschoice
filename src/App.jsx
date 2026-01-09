@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.92
+// VERSION: v1.0.95
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.92";
+const VERSION = "v1.0.95";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -150,15 +150,16 @@ const Seat = ({
             {player.hand && Array.isArray(player.hand) && !player.waitingForNextHand && (
                 <div 
                   className={`flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none transition-all duration-500 ${cardZIndex} ${isHero ? 'absolute' : 'relative -mb-[5.25vw] lg:-mb-[4vh]'} ${isFoldedBool ? 'opacity-30 grayscale scale-90' : 'opacity-100'}`} 
-                  style={isHero ? { transform: isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw)` : `translate(${cardInwardX * 0.4}vh, calc(${cardInwardY * 0.4}vh - 140px))` } : {}}
+                  style={isHero ? { transform: isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw) translateY(${visuals.heroCardY}px)` : `translate(${cardInwardX * 0.4}vh, ${cardInwardY * 0.4}vh) translateY(${visuals.heroCardY}px)` } : {}}
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
-                        const cardSpacing = isHero ? 3 : 2.5;
-                        const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         
-                        // Hero card scale DOUBLED from previous턴 (7.36 Mobile, 12.88 Desktop)
-                        const scaleBase = isHero ? (isMobile ? 2.00 : 2.00) : 1.0;
+                        // Calculated Opponent Spread: 50% Visibility (3.75vw for mobile, 2.75vh for desktop)
+                        const cardSpacing = isHero ? 3 : (isMobile ? 3.75 : 2.75);
+                        
+                        const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
+                        const scaleBase = isHero ? visuals.heroCardScale : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
                         const isWinningCard = (winning5Ids || []).includes(c.id);
                         const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard && !isMuckWin;
@@ -166,7 +167,7 @@ const Seat = ({
                         return (
                           <div 
                             key={`${c.id || ci}-${ci}`} 
-                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-slate-900 border-white/20'} ${isHighlighted ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24] z-[300]' : ''}`} 
+                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-slate-900 border-white/20'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
                             style={{ 
                               transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? scaleBase * 1.1 : scaleBase})`, 
                               transformOrigin: 'bottom center', 
@@ -183,49 +184,54 @@ const Seat = ({
 
             {/* PLAYER HUD WRAPPER */}
             <div className="relative flex flex-col items-center">
-                <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''} ${isFoldedBool ? 'opacity-30 grayscale' : 'opacity-100'}`}>
+                <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}>
                     
+                    {/* DEALER INDICATOR - persistent and opaque regardless of fold status */}
                     {isDealer && (
-                        <div className="absolute top-2 right-2 z-[100] pointer-events-none">
-                          <div className="w-2.5 h-2.5 bg-red-900 rounded-full border border-red-950 shadow-[inset_0_0_4px_rgba(0,0,0,0.5)]" />
+                        <div className="absolute top-2 right-2 z-[110] pointer-events-none">
+                          <div className="w-2.5 h-2.5 bg-red-600 rounded-full border border-red-900 shadow-[0_0_8px_rgba(239,68,68,0.8),inset_0_0_2px_rgba(0,0,0,0.5)]" />
                         </div>
                     )}
 
-                    {currentAction && isFoldedBool && (<div key={`action-overlay-${String(currentAction.text)}`} className={`absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-action-flash-once border-2 rounded-xl border-white/40 ${currentAction.glow}`}><span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${currentAction.color}`}>{String(currentAction.text)}</span></div>)}
-                    {player.isDisconnected && (<div className="absolute inset-0 z-[150] bg-red-950/60 backdrop-blur-[1px] flex items-center justify-center border border-red-500/40 rounded-xl overflow-hidden"><span className="text-white text-[10px] md:text-xs font-black animate-pulse uppercase tracking-[0.2em] px-2 text-center">LINK LOST • SECURED</span></div>)}
-                    <div className="flex flex-col items-center w-full relative z-10 py-1 overflow-hidden">
-                        <div className="flex flex-col items-center gap-0.5 shrink-0 mb-1">
-                          <div className="flex items-center gap-1 opacity-60">
-                            {player.isBot && <Bot size={10} className="text-indigo-400" />}
-                            <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
-                          </div>
-                          {phase === PHASES.SHOWDOWN && !isFoldedBool && player.strength && (
-                            <div className="text-[8px] lg:text-[1.1vh] text-cyan-400 font-bold tracking-tighter animate-in fade-in slide-in-from-bottom-1 duration-500 whitespace-nowrap overflow-hidden">
-                              {formatRank(String(player.strength))}
+                    {/* FOLD CONTENT WRAPPER */}
+                    <div className={`flex flex-col items-center w-full transition-opacity duration-500 ${isFoldedBool ? 'opacity-30 grayscale' : 'opacity-100'}`}>
+                        {currentAction && isFoldedBool && (<div key={`action-overlay-${String(currentAction.text)}`} className={`absolute inset-0 z-50 flex items-center justify-center bg-black/60 animate-action-flash-once border-2 rounded-xl border-white/40 ${currentAction.glow}`}><span className={`text-sm lg:text-lg font-black italic uppercase tracking-tighter text-center px-2 drop-shadow-[0_0_10px_rgba(0,0,0,1)] ${currentAction.color}`}>{String(currentAction.text)}</span></div>)}
+                        {player.isDisconnected && (<div className="absolute inset-0 z-[150] bg-red-950/60 backdrop-blur-[1px] flex items-center justify-center border border-red-500/40 rounded-xl overflow-hidden"><span className="text-white text-[10px] md:text-xs font-black animate-pulse uppercase tracking-[0.2em] px-2 text-center">LINK LOST • SECURED</span></div>)}
+                        
+                        <div className="flex flex-col items-center w-full relative z-10 py-1 overflow-hidden">
+                            <div className="flex flex-col items-center gap-0.5 shrink-0 mb-1">
+                              <div className="flex items-center gap-1 opacity-60">
+                                {player.isBot && <Bot size={10} className="text-indigo-400" />}
+                                <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
+                              </div>
+                              {phase === PHASES.SHOWDOWN && !isFoldedBool && player.strength && (
+                                <div className="text-[8px] lg:text-[1.1vh] text-cyan-400 font-bold tracking-tighter animate-in fade-in slide-in-from-bottom-1 duration-500 whitespace-nowrap overflow-hidden">
+                                  {formatRank(String(player.strength))}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                        <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center">
-                            <div 
-                                className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${ghostAction && !isFoldedBool ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'}`}
-                            >
-                                {player.chips <= 0 && !isFoldedBool && phase !== PHASES.IDLE && !player.waitingForNextHand ? (
-                                    <span className="text-[14px] lg:text-[2.2vh] font-black italic uppercase text-red-500 leading-none tracking-tighter">
-                                        All-in ${Number(player.totalContribution + (player.currentBet || 0)).toLocaleString(undefined, {minimumFractionDigits: 0})}
-                                    </span>
-                                ) : (
-                                    <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
-                                        ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                    </span>
+                            <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center">
+                                <div 
+                                    className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${ghostAction && !isFoldedBool ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'}`}
+                                >
+                                    {player.chips <= 0 && !isFoldedBool && phase !== PHASES.IDLE && !player.waitingForNextHand ? (
+                                        <span className="text-[14px] lg:text-[2.2vh] font-black italic uppercase text-red-500 leading-none tracking-tighter">
+                                            All-in ${Number(player.totalContribution + (player.currentBet || 0)).toLocaleString(undefined, {minimumFractionDigits: 0})}
+                                        </span>
+                                    ) : (
+                                        <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
+                                            ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                        </span>
+                                    )}
+                                </div>
+                                {ghostAction && !isFoldedBool && (
+                                    <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg transition-opacity duration-500 ${isCollectingBets ? 'opacity-50 animate-pulse' : 'opacity-100 animate-action-flash-once'}`}>
+                                        <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${ghostAction.color}`}>{String(ghostAction.text)}</span>
+                                    </div>
                                 )}
                             </div>
-                            {ghostAction && !isFoldedBool && (
-                                <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg transition-opacity duration-500 ${isCollectingBets ? 'opacity-50 animate-pulse' : 'opacity-100 animate-action-flash-once'}`}>
-                                    <span className={`text-[14px] lg:text-[2.2vh] font-black italic uppercase tracking-tight text-center px-1 drop-shadow-md whitespace-nowrap ${ghostAction.color}`}>{String(ghostAction.text)}</span>
-                                </div>
-                            )}
+                            {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
                         </div>
-                        {isActiveTurn && <DashTimer timeRemaining={timeRemaining} />}
                     </div>
                 </div>
             </div>
@@ -284,9 +290,11 @@ const App = () => {
   const turnInitializedRef = useRef(-1); 
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
+  
+  // NEW DEFAULTS: heroCardScale 2.0, Y offset -54 (desktop) / 0 (mobile)
   const [visuals, setVisuals] = useState({ 
-    heroCardScale: 2.0, 
-    heroCardY: 20, 
+    heroCardScale: 2.0,
+    heroCardY: isMobile ? 0 : -54, 
     oppCardScale: 1.0, 
     oppCardY: -10, 
     commCardScale: 1.5, 
@@ -416,7 +424,6 @@ const App = () => {
     if (!strength) return "";
     const s = strength.toLowerCase();
     
-    // Hand Strength fire logic prioritizing best hands in Low-Hand modes
     if (s.includes("low") || s.includes("high card")) {
       if (s.includes(" 5") || s.includes(" 6")) return "strength-hi-res-monster";
       if (s.includes(" 7") || s.includes(" 8")) return "strength-hi-res-strong";
@@ -473,17 +480,17 @@ const App = () => {
   }, [logs]);
 
   const copyActivityToClipboard = () => {
-    let logText = "--- DEALER'S CHOICE POKER ARENA LOG ---\n\n";
+    let logTextExport = "--- DEALER'S CHOICE POKER ARENA LOG ---\n\n";
     handHistory.forEach(hand => {
-      logText += `[${hand.variant.toUpperCase()} HAND]\n`;
+      logTextExport += `[${hand.variant.toUpperCase()} HAND]\n`;
       hand.events.forEach(ev => { 
-        logText += `[${new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}] ${ev.name}: ${ev.action}\n`; 
+        logTextExport += `[${new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}] ${ev.name}: ${ev.action}\n`; 
       });
-      if (hand.winner) logText += `RESULT: ${hand.winner} WON $${hand.amount} with ${hand.rank}\n`;
-      logText += "---------------------------------------\n\n";
+      if (hand.winner) logTextExport += `RESULT: ${hand.winner} WON $${hand.amount} with ${hand.rank}\n`;
+      logTextExport += "---------------------------------------\n\n";
     });
     const textArea = document.createElement("textarea"); 
-    textArea.value = logText; 
+    textArea.value = logTextExport; 
     document.body.appendChild(textArea); 
     textArea.select();
     try { document.execCommand('copy'); } catch (err) {} 
@@ -803,7 +810,6 @@ const App = () => {
   return (
     <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
       
-      {/* HI-RES SVG DISTORTION FILTERS */}
       <svg style={{ visibility: 'hidden', position: 'absolute', width: 0, height: 0 }}>
         <filter id="fire-hi-res">
           <feTurbulence type="fractalNoise" baseFrequency="0.05 0.2" numOctaves="3" seed={noiseSeed} result="noise" />
@@ -903,7 +909,7 @@ const App = () => {
                 {activeVariant?.id === 'HILOW' && (
                   <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
                       <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                      <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(heroPlayerObj?.lowStrength)}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
+                      <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(String(heroPlayerObj?.lowStrength))}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
                       <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
                             style={{ 
                               textShadow: `0 0 ${Math.pow(heroPlayerObj.lowWinProbability / 8, 1.6)}px #fbbf24`,
@@ -916,7 +922,7 @@ const App = () => {
                 )}
                 <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
                   <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-                  <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(heroPlayerObj?.strength)}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
+                  <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(String(heroPlayerObj?.strength))}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
                   <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
                         style={{ 
                           textShadow: `0 0 ${Math.pow(heroPlayerObj.winProbability / 8, 1.6)}px #fbbf24`,
@@ -1028,7 +1034,7 @@ const App = () => {
                         </div>
                         {!isMuckWin && (
                           <>
-                            <div className="text-[10px] md:text-sm font-black text-white/60 tracking-widest uppercase">HOLDING <span className={themeColor}>{String(formatRank(winner.rank))}</span></div>
+                            <div className="text-[10px] md:text-sm font-black text-white/60 tracking-widest uppercase">HOLDING <span className={themeColor}>{String(formatRank(String(winner.rank)))}</span></div>
                             <div className="flex gap-1 justify-center mt-1">
                               {(winner.hand || []).map((c, ci) => (
                                 <div key={`winner-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
@@ -1090,6 +1096,14 @@ const App = () => {
                   <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">HUD Action Height <span>{visuals.footerHeight}px</span></label>
                   <input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" />
                 </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Hero Card Scale <span>{visuals.heroCardScale.toFixed(2)}</span></label>
+                  <input type="range" min="1.0" max="15.0" step="0.01" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Hero Card Y Offset <span>{visuals.heroCardY}px</span></label>
+                  <input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" />
+                </div>
               </div>
             </div>
             <button onClick={() => setShowVisualControls(false)} className="w-full py-4 bg-cyan-600 text-black font-black rounded-xl uppercase hover:brightness-110">Save & Apply</button>
@@ -1140,7 +1154,7 @@ const App = () => {
 
           @keyframes muflis-glow { 0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; } 50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; } }
           .animate-muflis-glow { animation: muflis-glow 4s infinite ease-in-out; }
-          @keyframes omaha-swirl { 0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } 25% { box-shadow: 0 0 35px #a855f744, inset -20px 20px 50px #a855f722; border-color: #a855f755; } 50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; } 75% { box-shadow: 0 0 35px #a855f744, inset 20px -20px 50px #a855f722; border-color: #a855f755; } 100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } }
+          @keyframes omaha-swirl { 0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } 25% { box-shadow: 0 0 35px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f755; } 50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; } 75% { box-shadow: 0 0 35px #a855f744, inset 20px -20px 50px #a855f722; border-color: #a855f755; } 100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } }
           .animate-omaha-swirl { animation: omaha-swirl 8s infinite linear; }
           html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #000; }
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
