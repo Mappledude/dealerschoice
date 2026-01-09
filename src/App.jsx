@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.79
+// VERSION: v1.0.83
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.79";
+const VERSION = "v1.0.83";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -146,7 +146,7 @@ const Seat = ({
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-500 ${isHero ? 'z-[100]' : 'z-20'} ${player.waitingForNextHand ? 'opacity-50' : ''}`}>
             {player.waitingForNextHand && (<div className="absolute top-[-35px] bg-slate-900 text-cyan-400 text-[8px] px-2 py-0.5 rounded-full border border-cyan-500/50 uppercase font-bold tracking-[0.2em] z-[150] backdrop-blur-md">WAITING</div>)}
             
-            {/* HOLE CARDS - Centered on top center of HUD, bottom 50% hidden */}
+            {/* HOLE CARDS */}
             {player.hand && Array.isArray(player.hand) && !player.waitingForNextHand && (
                 <div 
                   className={`flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none transition-all duration-500 ${cardZIndex} ${isHero ? 'absolute' : 'relative -mb-[5.25vw] lg:-mb-[4vh]'} ${isFoldedBool ? 'opacity-30 grayscale scale-90' : 'opacity-100'}`} 
@@ -154,9 +154,10 @@ const Seat = ({
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
-                        const cardSpacing = isHero ? (isMobile ? 2 : 1.5) : (isMobile ? 3.75 : 1.8);
+                        const cardSpacing = isHero ? (isMobile ? 3 : 1.5) : (isMobile ? 3.75 : 1.8);
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
-                        const scaleBase = isHero ? (isMobile ? 1.84 : 1.61) : 1.0;
+                        // INCREASED Hero scale on desktop to 2x (6.44 based on previous turn logic)
+                        const scaleBase = isHero ? (isMobile ? 3.68 : 6.44) : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
                         const isWinningCard = (winning5Ids || []).includes(c.id);
                         const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard && !isMuckWin;
@@ -184,7 +185,7 @@ const Seat = ({
                 {/* NAME HUD */}
                 <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''} ${isFoldedBool ? 'opacity-30 grayscale' : 'opacity-100'}`}>
                     
-                    {/* DEALER INDICATOR - Inside HUD top right corner */}
+                    {/* DEALER INDICATOR */}
                     {isDealer && (
                         <div className="absolute top-2 right-2 z-[100] pointer-events-none">
                           <div className="w-2.5 h-2.5 bg-red-900 rounded-full border border-red-950 shadow-[inset_0_0_4px_rgba(0,0,0,0.5)]" />
@@ -209,7 +210,15 @@ const Seat = ({
                             <div 
                                 className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${ghostAction && !isFoldedBool ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'}`}
                             >
-                                <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                {player.chips <= 0 && !isFoldedBool && phase !== PHASES.IDLE && !player.waitingForNextHand ? (
+                                    <span className="text-[14px] lg:text-[2.2vh] font-black italic uppercase text-red-500 leading-none tracking-tighter">
+                                        All-in ${Number(player.totalContribution + (player.currentBet || 0)).toLocaleString(undefined, {minimumFractionDigits: 0})}
+                                    </span>
+                                ) : (
+                                    <span className={`text-[18px] lg:text-[2.8vh] font-mono font-black ${player.chips <= 0 ? 'text-red-500' : 'text-emerald-400'} leading-none tracking-tighter`}>
+                                        ${Number(player.chips).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                    </span>
+                                )}
                             </div>
                             {ghostAction && !isFoldedBool && (
                                 <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg transition-opacity duration-500 ${isCollectingBets ? 'opacity-50 animate-pulse' : 'opacity-100 animate-action-flash-once'}`}>
@@ -285,7 +294,7 @@ const App = () => {
     betScale: 1.5, 
     betY: 0, 
     badgeY: 0, 
-    footerHeight: (typeof window !== 'undefined' && window.innerWidth < 1024) ? 150 : 250, 
+    footerHeight: 250, 
     tableZoom: 0.9, 
     holeCardFan: 35 
   });
@@ -394,6 +403,22 @@ const App = () => {
     }
 
     return prefix + result;
+  };
+
+  // UPDATED: Hand Strength Fire Animation Logic
+  const getStrengthClass = (strength) => {
+    if (!strength) return "";
+    const s = strength.toLowerCase();
+    if (s.includes("straight flush") || s.includes("4 of a kind") || s.includes("full house") || s.includes("5 of a kind")) {
+      return "strength-fire-monster";
+    }
+    if (s.includes("flush") || s.includes("straight") || s.includes("3 of a kind")) {
+      return "strength-fire-flame";
+    }
+    if (s.includes("pair")) {
+      return "strength-fire-ember";
+    }
+    return "strength-fire-smolder"; // For High Card / Low strength
   };
 
   const handHistory = useMemo(() => {
@@ -854,14 +879,30 @@ const App = () => {
                 {activeVariant?.id === 'HILOW' && (
                   <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
                       <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                      <span className="text-[14px] lg:text-[2.5vh] text-emerald-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
-                      <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500 ${heroPlayerObj?.lowWinProbability > 80 ? 'animate-high-prob text-yellow-300' : 'text-[#fbbf24]'}`}>{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
+                      <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(heroPlayerObj?.lowStrength)}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
+                      {/* NEW: Dynamic Win Prob Glow Style */}
+                      <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
+                            style={{ 
+                              textShadow: `0 0 ${heroPlayerObj.lowWinProbability / 4}px #fbbf24`,
+                              color: heroPlayerObj.lowWinProbability > 80 ? '#fff' : '#fbbf24',
+                              filter: `brightness(${1 + heroPlayerObj.lowWinProbability / 50})`
+                            }}>
+                        {Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB
+                      </span>
                   </div>
                 )}
                 <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
                   <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-                  <span className="text-[14px] lg:text-[2.5vh] text-purple-400 font-black tracking-tighter drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-                  <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500 ${heroPlayerObj?.winProbability > 80 ? 'animate-high-prob text-yellow-300' : 'text-[#fbbf24]'}`}>{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
+                  <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(heroPlayerObj?.strength)}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
+                  {/* NEW: Dynamic Win Prob Glow Style */}
+                  <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
+                        style={{ 
+                          textShadow: `0 0 ${heroPlayerObj.winProbability / 4}px #fbbf24`,
+                          color: heroPlayerObj.winProbability > 80 ? '#fff' : '#fbbf24',
+                          filter: `brightness(${1 + heroPlayerObj.winProbability / 50})`
+                        }}>
+                    {Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB
+                  </span>
                 </div>
               </>
             )}
@@ -1042,10 +1083,36 @@ const App = () => {
           .animate-hand-trigger { animation: attention-trigger 3s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
           .animate-deal-trigger { animation: attention-trigger 1s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
           @keyframes high-prob-pulse {
-            0%, 100% { transform: scale(1); filter: brightness(1); text-shadow: 0 0 5px rgba(251, 191, 36, 0.5); }
-            50% { transform: scale(1.1); filter: brightness(1.5); text-shadow: 0 0 20px rgba(251, 191, 36, 1); }
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.1); filter: brightness(1.5); }
           }
           .animate-high-prob { animation: high-prob-pulse 1s infinite ease-in-out; }
+          
+          /* NEW FIRE ANIMATIONS */
+          @keyframes fire-monster {
+            0%, 100% { text-shadow: 0 -2px 4px #ff4d00, 0 -4px 10px #ff9500, 0 -10px 20px #ffdb00, 0 0 20px rgba(255,149,0,0.5); transform: translateY(0) scale(1.1); }
+            50% { text-shadow: 0 -4px 8px #ff4d00, 0 -8px 15px #ff9500, 0 -15px 30px #ffdb00, 0 0 40px rgba(255,149,0,0.8); transform: translateY(-2px) scale(1.15); }
+          }
+          .strength-fire-monster { animation: fire-monster 0.4s infinite alternate; color: #fff; font-weight: 900; }
+
+          @keyframes fire-strong {
+            0%, 100% { text-shadow: 0 -1px 3px #ff4d00, 0 -2px 6px #ff9500; transform: scale(1.05); }
+            50% { text-shadow: 0 -2px 5px #ff4d00, 0 -4px 10px #ff9500; transform: scale(1.08); }
+          }
+          .strength-fire-flame { animation: fire-strong 0.8s infinite alternate; color: #ff9500; font-weight: 800; }
+
+          @keyframes fire-ember {
+            0%, 100% { text-shadow: 0 0 2px #ff4d00; opacity: 0.9; }
+            50% { text-shadow: 0 0 6px #ff4d00; opacity: 1; }
+          }
+          .strength-fire-ember { animation: fire-ember 1.5s infinite alternate; color: #f87171; }
+
+          @keyframes fire-smolder {
+            0%, 100% { color: #92400e; opacity: 0.6; }
+            50% { color: #b45309; opacity: 0.8; }
+          }
+          .strength-fire-smolder { animation: fire-smolder 3s infinite alternate; }
+
           @keyframes muflis-glow { 0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; } 50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; } }
           .animate-muflis-glow { animation: muflis-glow 4s infinite ease-in-out; }
           @keyframes omaha-swirl { 0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } 25% { box-shadow: 0 0 35px #a855f744, inset -20px 20px 50px #a855f722; border-color: #a855f755; } 50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; } 75% { box-shadow: 0 0 35px #a855f744, inset 20px -20px 50px #a855f722; border-color: #a855f755; } 100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } }
