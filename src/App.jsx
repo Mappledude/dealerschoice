@@ -156,7 +156,7 @@ const Seat = ({
                         const offset = ci - (player.hand.length - 1) / 2;
                         const cardSpacing = isHero ? 3 : 1.8;
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
-                        const scaleBase = isHero ? (isMobile ? 3.68 : 6.44) : 1.0;
+                        const scaleBase = isHero ? (isMobile ? 7 : 7) : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
                         const isWinningCard = (winning5Ids || []).includes(c.id);
                         const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard && !isMuckWin;
