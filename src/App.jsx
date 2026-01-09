@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- SHARED CONSTANTS ---
-const VERSION = "v1.3.8";
+const VERSION = "v1.3.13";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -77,6 +77,7 @@ const getNeonNameColor = (name) => {
 };
 
 // --- GLOBAL SOCKET ---
+
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -164,7 +165,8 @@ const Seat = ({
                         const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.75 : 2.75);
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
-                        const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && winning5Ids?.includes(c.id);
+                        const isWinningCard = (winning5Ids || []).includes(c.id);
+                        const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard;
 
                         return (
                           <div 
@@ -227,7 +229,7 @@ const Seat = ({
 
 const ActivityFeedContent = ({ logs, handHistory, expandedHands, setExpandedHands, isMobile, setIntelExpanded, getNeonNameColor, formatRank }) => {
   const handleCopyLogs = () => {
-    const text = logs.map(l => `[${new Date().toLocaleTimeString()}] ${String(l.name).toUpperCase()}: ${String(l.action).toUpperCase()}`).join('\n');
+    const text = (logs || []).map(l => `[${new Date(l.timestamp || Date.now()).toLocaleTimeString()}] ${String(l.name).toUpperCase()}: ${String(l.action).toUpperCase()}`).join('\n');
     const textArea = document.createElement("textarea");
     textArea.value = text;
     document.body.appendChild(textArea);
@@ -332,7 +334,7 @@ const App = () => {
   const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 });
   const [noiseSeed, setNoiseSeed] = useState(1);
 
-  // --- MEMOIZED LOGIC ---
+  // --- MEMOIZED DATA ---
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
     return players.findIndex(p => p && (p.uid === userProfile.uid || p.name === userProfile.name));
@@ -358,32 +360,6 @@ const App = () => {
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
   const [visuals, setVisuals] = useState({ heroCardScale: 2.0, heroCardY: isMobile ? 0 : -54, heroCardSpread: 3.0, tableZoom: 0.9, holeCardFan: 35, footerHeight: 250 });
-
-  const handHistory = useMemo(() => {
-    const hands = []; 
-    let currentHand = null;
-    ([...logs].reverse()).forEach(log => {
-        if (String(log.action).includes("DEALING") || String(log.action).includes("LOCKS IN") || String(log.action).includes("PRE_FLOP DEALT")) {
-            if (currentHand) hands.push(currentHand);
-            currentHand = { 
-              id: log.handId || `hand-${log.timestamp}-${Math.random()}`, 
-              winner: null, rank: null, amount: null, events: [], 
-              variant: String(log.action).includes("LOCKS IN") ? String(log.action).split("LOCKS IN ")[1] : (String(log.action).split('DEALING ')[1] || "Poker")
-            };
-        }
-        if (currentHand) {
-            currentHand.events.push(log);
-            if (log.type === 'win') {
-                const match = String(log.action).match(/WON \$([\d.]+) WITH (.*)/);
-                const matchScoop = String(log.action).match(/SCOOPED THE POT \$([\d.]+)/);
-                if (match) { currentHand.winner = log.name; currentHand.amount = match[1]; currentHand.rank = match[2]; } 
-                else if (matchScoop) { currentHand.winner = log.name; currentHand.amount = matchScoop[1]; currentHand.rank = "Muck/Default"; }
-            }
-        }
-    });
-    if (currentHand) hands.push(currentHand);
-    return hands.reverse();
-  }, [logs]);
 
   // --- ACTIONS ---
   const handleForceSync = useCallback(() => {
@@ -460,13 +436,16 @@ const App = () => {
         if (d.phase === PHASES.SHOWDOWN && !showdownWinners) {
             setPotTransferring(true); setCurrentShowdownIdx(0); const rawWinners = d.showdownWinners || []; 
             setShowdownWinners(rawWinners); setWinning5Ids(rawWinners[0]?.winning5Ids || []);
-            const dur = rawWinners.some(w => w.rank === "!") ? 2000 : 5000;
+            
+            const totalShowdownTime = 8000;
+            const durPerWinner = Math.floor(totalShowdownTime / Math.max(1, rawWinners.length));
+            
             if (rawWinners.length > 1) { 
                 for (let i = 1; i < rawWinners.length; i++) { 
-                    setTimeout(() => { if (phaseRef.current === PHASES.SHOWDOWN) { setCurrentShowdownIdx(i); setWinning5Ids(rawWinners[i]?.winning5Ids || []); } }, i * dur); 
+                    setTimeout(() => { if (phaseRef.current === PHASES.SHOWDOWN) { setCurrentShowdownIdx(i); setWinning5Ids(rawWinners[i]?.winning5Ids || []); } }, i * durPerWinner); 
                 } 
             }
-            setTimeout(() => setPotTransferring(false), Math.max(1, rawWinners.length) * dur);
+            setTimeout(() => setPotTransferring(false), totalShowdownTime);
         } else if (d.phase !== PHASES.SHOWDOWN) { setPotTransferring(false); setShowdownWinners(null); }
     };
 
