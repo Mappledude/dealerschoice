@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.83
+// VERSION: v1.0.88
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.83";
+const VERSION = "v1.0.88";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -150,13 +150,12 @@ const Seat = ({
             {player.hand && Array.isArray(player.hand) && !player.waitingForNextHand && (
                 <div 
                   className={`flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none transition-all duration-500 ${cardZIndex} ${isHero ? 'absolute' : 'relative -mb-[5.25vw] lg:-mb-[4vh]'} ${isFoldedBool ? 'opacity-30 grayscale scale-90' : 'opacity-100'}`} 
-                  style={isHero ? { transform: isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw)` : `translate(${cardInwardX * 0.4}vh, calc(${cardInwardY * 0.4}vh - 70px))` } : {}}
+                  style={isHero ? { transform: isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw)` : `translate(${cardInwardX * 0.4}vh, calc(${cardInwardY * 0.4}vh - 140px))` } : {}}
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
-                        const cardSpacing = isHero ? (isMobile ? 3 : 1.5) : (isMobile ? 3.75 : 1.8);
+                        const cardSpacing = isHero ? 3 : 1.8;
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
-                        // INCREASED Hero scale on desktop to 2x (6.44 based on previous turn logic)
                         const scaleBase = isHero ? (isMobile ? 3.68 : 6.44) : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
                         const isWinningCard = (winning5Ids || []).includes(c.id);
@@ -277,6 +276,7 @@ const App = () => {
   const [dealAttention, setDealAttention] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 1000, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'HOLDEM' });
+  const [noiseSeed, setNoiseSeed] = useState(1);
 
   const joinLock = useRef(false);
   const phaseRef = useRef(PHASES.IDLE); 
@@ -298,6 +298,13 @@ const App = () => {
     tableZoom: 0.9, 
     holeCardFan: 35 
   });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNoiseSeed(s => (s + 1) % 1000);
+    }, 80);
+    return () => clearInterval(interval);
+  }, []);
 
   const heroIdx = useMemo(() => {
     if (!userProfile || !Array.isArray(players)) return -1;
@@ -405,20 +412,30 @@ const App = () => {
     return prefix + result;
   };
 
-  // UPDATED: Hand Strength Fire Animation Logic
+  // UPDATED: Dynamic Hand Strength Intensity with "Low 6" prioritization
   const getStrengthClass = (strength) => {
     if (!strength) return "";
     const s = strength.toLowerCase();
+    
+    // NEW: Low hand priority for Muflis and Low portion of Hi-Low
+    if (s.includes("low") || s.includes("high card")) {
+      // Best possible lows in Hi-Low/Muflis context get Monster intensity
+      if (s.includes(" 5") || s.includes(" 6")) return "strength-hi-res-monster";
+      if (s.includes(" 7") || s.includes(" 8")) return "strength-hi-res-strong";
+      if (s.includes(" 9") || s.includes(" 10")) return "strength-hi-res-ember";
+      return "strength-hi-res-smolder";
+    }
+
     if (s.includes("straight flush") || s.includes("4 of a kind") || s.includes("full house") || s.includes("5 of a kind")) {
-      return "strength-fire-monster";
+      return "strength-hi-res-monster";
     }
     if (s.includes("flush") || s.includes("straight") || s.includes("3 of a kind")) {
-      return "strength-fire-flame";
+      return "strength-hi-res-strong";
     }
     if (s.includes("pair")) {
-      return "strength-fire-ember";
+      return "strength-hi-res-ember";
     }
-    return "strength-fire-smolder"; // For High Card / Low strength
+    return "strength-hi-res-smolder";
   };
 
   const handHistory = useMemo(() => {
@@ -458,7 +475,7 @@ const App = () => {
   }, [logs]);
 
   const copyActivityToClipboard = () => {
-    let text = "--- DEALER'S CHOICE POKER ARENA LOG ---\n\n";
+    let text = "--- DEALER'S CHOICE POKER ARE ---\n\n";
     handHistory.forEach(hand => {
       text += `[${hand.variant.toUpperCase()} HAND]\n`;
       hand.events.forEach(ev => { 
@@ -787,6 +804,15 @@ const App = () => {
 
   return (
     <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
+      
+      {/* HI-RES SVG DISTORTION FILTERS */}
+      <svg style={{ visibility: 'hidden', position: 'absolute', width: 0, height: 0 }}>
+        <filter id="fire-hi-res">
+          <feTurbulence type="fractalNoise" baseFrequency="0.05 0.2" numOctaves="3" seed={noiseSeed} result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </svg>
+
       {announcement && (
         <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
           <div className="relative">
@@ -880,12 +906,12 @@ const App = () => {
                   <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
                       <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
                       <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(heroPlayerObj?.lowStrength)}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
-                      {/* NEW: Dynamic Win Prob Glow Style */}
+                      {/* Dynamic Win Prob Glow */}
                       <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
                             style={{ 
-                              textShadow: `0 0 ${heroPlayerObj.lowWinProbability / 4}px #fbbf24`,
-                              color: heroPlayerObj.lowWinProbability > 80 ? '#fff' : '#fbbf24',
-                              filter: `brightness(${1 + heroPlayerObj.lowWinProbability / 50})`
+                              textShadow: `0 0 ${Math.pow(heroPlayerObj.lowWinProbability / 8, 1.6)}px #fbbf24`,
+                              color: heroPlayerObj.lowWinProbability > 85 ? '#fff' : '#fbbf24',
+                              filter: `brightness(${1 + (heroPlayerObj.lowWinProbability / 30)}) drop-shadow(0 0 10px rgba(251,191,36,${heroPlayerObj.lowWinProbability/100}))`
                             }}>
                         {Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB
                       </span>
@@ -894,12 +920,12 @@ const App = () => {
                 <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
                   <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
                   <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(heroPlayerObj?.strength)}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-                  {/* NEW: Dynamic Win Prob Glow Style */}
+                  {/* Dynamic Win Prob Glow */}
                   <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
                         style={{ 
-                          textShadow: `0 0 ${heroPlayerObj.winProbability / 4}px #fbbf24`,
-                          color: heroPlayerObj.winProbability > 80 ? '#fff' : '#fbbf24',
-                          filter: `brightness(${1 + heroPlayerObj.winProbability / 50})`
+                          textShadow: `0 0 ${Math.pow(heroPlayerObj.winProbability / 8, 1.6)}px #fbbf24`,
+                          color: heroPlayerObj.winProbability > 85 ? '#fff' : '#fbbf24',
+                          filter: `brightness(${1 + (heroPlayerObj.winProbability / 30)}) drop-shadow(0 0 10px rgba(251,191,36,${heroPlayerObj.winProbability/100}))`
                         }}>
                     {Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB
                   </span>
@@ -1088,30 +1114,33 @@ const App = () => {
           }
           .animate-high-prob { animation: high-prob-pulse 1s infinite ease-in-out; }
           
-          /* NEW FIRE ANIMATIONS */
-          @keyframes fire-monster {
-            0%, 100% { text-shadow: 0 -2px 4px #ff4d00, 0 -4px 10px #ff9500, 0 -10px 20px #ffdb00, 0 0 20px rgba(255,149,0,0.5); transform: translateY(0) scale(1.1); }
-            50% { text-shadow: 0 -4px 8px #ff4d00, 0 -8px 15px #ff9500, 0 -15px 30px #ffdb00, 0 0 40px rgba(255,149,0,0.8); transform: translateY(-2px) scale(1.15); }
+          /* HI-RES STEADY BURNING TEXT EFFECTS (Heat Distortion) */
+          .strength-hi-res-monster { 
+            color: #fff; 
+            font-weight: 900; 
+            filter: url(#fire-hi-res) brightness(1.4); 
+            text-shadow: 0 0 4px #fff, 0 -2px 10px #ff0, 0 -4px 15px #f90, 0 -8px 25px #f20;
           }
-          .strength-fire-monster { animation: fire-monster 0.4s infinite alternate; color: #fff; font-weight: 900; }
 
-          @keyframes fire-strong {
-            0%, 100% { text-shadow: 0 -1px 3px #ff4d00, 0 -2px 6px #ff9500; transform: scale(1.05); }
-            50% { text-shadow: 0 -2px 5px #ff4d00, 0 -4px 10px #ff9500; transform: scale(1.08); }
+          .strength-hi-res-strong { 
+            color: #ffda44; 
+            font-weight: 800; 
+            filter: url(#fire-hi-res) brightness(1.1);
+            text-shadow: 0 0 3px #fff, 0 -1px 8px #ff0, 0 -3px 15px #f90;
           }
-          .strength-fire-flame { animation: fire-strong 0.8s infinite alternate; color: #ff9500; font-weight: 800; }
 
-          @keyframes fire-ember {
-            0%, 100% { text-shadow: 0 0 2px #ff4d00; opacity: 0.9; }
-            50% { text-shadow: 0 0 6px #ff4d00; opacity: 1; }
+          .strength-hi-res-ember { 
+            color: #ff4d00; 
+            filter: url(#fire-hi-res) brightness(0.9);
+            text-shadow: 0 0 5px #f20, 0 0 10px #700;
           }
-          .strength-fire-ember { animation: fire-ember 1.5s infinite alternate; color: #f87171; }
 
-          @keyframes fire-smolder {
-            0%, 100% { color: #92400e; opacity: 0.6; }
-            50% { color: #b45309; opacity: 0.8; }
+          .strength-hi-res-smolder { 
+            color: #820; 
+            filter: url(#fire-hi-res) brightness(0.7);
+            text-shadow: 0 0 2px #310;
+            opacity: 0.8;
           }
-          .strength-fire-smolder { animation: fire-smolder 3s infinite alternate; }
 
           @keyframes muflis-glow { 0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; } 50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; } }
           .animate-muflis-glow { animation: muflis-glow 4s infinite ease-in-out; }
