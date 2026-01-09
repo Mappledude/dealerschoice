@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- SHARED CONSTANTS ---
-const VERSION = "v1.3.13";
+const VERSION = "v1.3.19";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -77,7 +77,6 @@ const getNeonNameColor = (name) => {
 };
 
 // --- GLOBAL SOCKET ---
-
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -155,15 +154,20 @@ const Seat = ({
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-500 ${isHero ? 'z-[100]' : 'z-20'} ${player.waitingForNextHand ? 'opacity-50' : ''}`}>
             {player.waitingForNextHand && (<div className="absolute top-[-35px] bg-slate-900 text-cyan-400 text-[8px] px-2 py-0.5 rounded-full border border-cyan-500/50 uppercase font-bold tracking-[0.2em] z-[150] backdrop-blur-md">WAITING</div>)}
             
+            {/* CARDS CONTAINER - Layered behind HUD for opponents */}
             {player.hand && Array.isArray(player.hand) && !player.waitingForNextHand && (
                 <div 
-                  className={`flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none transition-all duration-500 ${isHero ? 'absolute' : 'relative -mb-[5.25vw] lg:-mb-[4vh]'} ${isFoldedBool ? 'opacity-30 grayscale scale-90' : 'opacity-100'}`} 
-                  style={isHero ? { transform: isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw) translateY(${visuals.heroCardY}px)` : `translate(${cardInwardX * 0.4}vh, ${cardInwardY * 0.4}vh) translateY(${visuals.heroCardY}px)` } : {}}
+                  className={`flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none transition-all duration-500 ${isHero ? 'absolute z-[110]' : 'absolute z-[85]'} ${isFoldedBool ? 'opacity-30 grayscale scale-90' : 'opacity-100'}`} 
+                  style={{
+                    transform: isHero 
+                      ? (isMobile ? `translate(${cardInwardX}vw, ${cardInwardY}vw) translateY(${visuals.heroCardY}px)` : `translate(${cardInwardX * 0.4}vh, ${cardInwardY * 0.4}vh) translateY(${visuals.heroCardY}px)`)
+                      : (isMobile ? `translateY(-3vw)` : `translateY(-3vh)`)
+                  }}
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
-                        const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.75 : 2.75);
-                        const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
+                        const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.0 : 2.2);
+                        const rotation = isHero ? (offset * visuals.holeCardFan) : (offset * 10);
                         const isRed = c.suit === '♥' || c.suit === '♦';
                         const isWinningCard = (winning5Ids || []).includes(c.id);
                         const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard;
@@ -186,8 +190,9 @@ const Seat = ({
                 </div>
             )}
 
-            <div className="relative flex flex-col items-center">
-                <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}>
+            {/* HUD CONTAINER - Layered on top of cards for opponents */}
+            <div className="relative flex flex-col items-center z-[90]">
+                <div className={`relative flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}>
                     {isDealer && (
                         <div className="absolute top-2 right-2 z-[110] pointer-events-none">
                           <div className="w-2.5 h-2.5 bg-red-600 rounded-full border border-red-900 shadow-[0_0_8px_rgba(239,68,68,0.8),inset_0_0_2px_rgba(0,0,0,0.5)]" />
@@ -269,7 +274,7 @@ const ActivityFeedContent = ({ logs, handHistory, expandedHands, setExpandedHand
                       <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
                         {hand.events && hand.events.map((ev, i) => (
                           <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
-                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
+                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
                             <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
                           </div>
                         ))}
@@ -285,7 +290,7 @@ const ActivityFeedContent = ({ logs, handHistory, expandedHands, setExpandedHand
 // --- MAIN APP COMPONENT ---
 
 const App = () => {
-  // --- REFS & HOOKS ---
+  // --- REFS & HOOKS (Ensuring absolute top-level definitions) ---
   const phaseRef = useRef(PHASES.IDLE); 
   const turnInitializedRef = useRef(-1); 
   const noiseSeedRef = useRef(1);
@@ -324,8 +329,6 @@ const App = () => {
   const [expandedHands, setExpandedHands] = useState(new Set());
   const [isJoining, setIsJoining] = useState(false);
   const [announcement, setAnnouncement] = useState(null); 
-  const [rebuyAmount, setRebuyAmount] = useState(100);
-  const [showRebuyModal, setShowRebuyModal] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [preAction, setPreAction] = useState(null);
   const [handAttention, setHandAttention] = useState(false);
@@ -354,12 +357,38 @@ const App = () => {
   }, [previewVariantId, activeVariant]);
 
   const totalDisplayPot = useMemo(() => {
-    const currentBetsSum = players.reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
-    return Number(potAmount) + currentBetsSum;
+    const currentBetsSum = (players || []).reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
+    return Number(potAmount || 0) + currentBetsSum;
   }, [potAmount, players]);
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
   const [visuals, setVisuals] = useState({ heroCardScale: 2.0, heroCardY: isMobile ? 0 : -54, heroCardSpread: 3.0, tableZoom: 0.9, holeCardFan: 35, footerHeight: 250 });
+
+  const handHistory = useMemo(() => {
+    const hands = []; 
+    let currentHand = null;
+    ([...logs].reverse()).forEach(log => {
+        if (String(log.action).includes("DEALING") || String(log.action).includes("LOCKS IN") || String(log.action).includes("PRE_FLOP DEALT")) {
+            if (currentHand) hands.push(currentHand);
+            currentHand = { 
+              id: log.handId || `hand-${log.timestamp}-${Math.random()}`, 
+              winner: null, rank: null, amount: null, events: [], 
+              variant: String(log.action).includes("LOCKS IN") ? String(log.action).split("LOCKS IN ")[1] : (String(log.action).split('DEALING ')[1] || "Poker")
+            };
+        }
+        if (currentHand) {
+            currentHand.events.push(log);
+            if (log.type === 'win') {
+                const match = String(log.action).match(/WON \$([\d.]+) WITH (.*)/);
+                const matchScoop = String(log.action).match(/SCOOPED THE POT \$([\d.]+)/);
+                if (match) { currentHand.winner = log.name; currentHand.amount = match[1]; currentHand.rank = match[2]; } 
+                else if (matchScoop) { currentHand.winner = log.name; currentHand.amount = matchScoop[1]; currentHand.rank = "Muck/Default"; }
+            }
+        }
+    });
+    if (currentHand) hands.push(currentHand);
+    return hands.reverse();
+  }, [logs]);
 
   // --- ACTIONS ---
   const handleForceSync = useCallback(() => {
@@ -375,14 +404,16 @@ const App = () => {
 
   const handleAllIn = useCallback(() => {
     if (!heroPlayerObj) return;
-    handleAction('RAISE', Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0));
+    const allInAmount = Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0);
+    handleAction('RAISE', allInAmount);
   }, [heroPlayerObj, handleAction]);
 
   const handleRebuy = useCallback(() => {
-    if (!currentRoomId || !userProfile) return;
-    socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: rebuyAmount });
-    setShowRebuyModal(false);
-  }, [currentRoomId, userProfile, rebuyAmount]);
+    const amt = Number(prompt("REBUY AMOUNT:", "1000"));
+    if(!isNaN(amt) && amt > 0 && currentRoomId && userProfile) {
+        socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: amt });
+    }
+  }, [currentRoomId, userProfile]);
 
   const handleNuclearTriplePurge = useCallback(() => {
     if (!nuclearConfirm) { setNuclearConfirm(true); setTimeout(() => setNuclearConfirm(false), 3000); return; } 
@@ -422,7 +453,7 @@ const App = () => {
         });
         const isPhaseTransition = d.phase !== phaseRef.current;
         if (isPhaseTransition && d.phase === PHASES.PRE_FLOP) {
-            setAnnouncement({ text: VARIANTS[d.activeVariant?.id || 'HOLDEM']?.name || "Poker", color: VARIANT_COLORS[d.activeVariant?.id || 'HOLDEM'] || '#fff' });
+            setAnnouncement({ text: String(VARIANTS[d.activeVariant?.id || 'HOLDEM']?.name || "Poker"), color: String(VARIANT_COLORS[d.activeVariant?.id || 'HOLDEM'] || '#fff') });
             setTimeout(() => setAnnouncement(null), 1500); setPreviewVariantId(null); 
         }
         if (isPhaseTransition && [PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(d.phase)) {
@@ -498,7 +529,7 @@ const App = () => {
     } else if (activeIdx !== heroIdx) turnInitializedRef.current = -1;
   }, [activeIdx, heroIdx, heroPlayerObj, highestBet, bigBlind, minRaiseAmount, preAction, handleAction]);
 
-  // --- RENDERING ---
+  // --- RENDER ---
 
   if (currentView === VIEWS.LOGIN) return (
     <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
@@ -603,7 +634,7 @@ const App = () => {
                       <h3 className="text-xl md:text-3xl text-white font-black tracking-tight mb-4 uppercase truncate">{String(t.name)}</h3>
                       <div className="flex flex-col gap-4 mb-6">
                         <div className="flex justify-between items-end border-b border-white/5 pb-2"><div className="flex flex-col"><span className="text-[8px] text-white/30 tracking-widest">STAKES</span><span className="text-emerald-400 text-xl md:text-2xl font-mono leading-none">${t.sb}/${t.bb}</span></div><div className="flex flex-col items-end"><span className="text-[8px] text-white/30 tracking-widest">BUY-IN</span><span className="text-white/80 text-sm md:text-lg font-mono leading-none">${t.minBuy}-${t.maxBuy}</span></div></div>
-                        <div className="flex col gap-2">
+                        <div className="flex flex-col gap-2">
                           <span className="text-[9px] text-white/30 tracking-widest flex items-center gap-1.5 uppercase"><Users size={10} /> Seated Players ({(t.players || []).filter(p=>p).length}/10)</span>
                           <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 bg-black/40 rounded-xl border border-white/5">{(t.players || []).filter(p=>p).map((p, idx) => (<span key={`${t.id}-p-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] text-white/80 font-black tracking-tight flex items-center gap-1">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}</div>
                         </div>
@@ -626,16 +657,6 @@ const App = () => {
         </div>
       )}
       
-      {showRebuyModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6">
-          <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col gap-10">
-            <h3 className="text-3xl text-center text-indigo-400 uppercase font-black">ARENA TOP-UP</h3>
-            <div className="space-y-4 font-black text-center uppercase"><div className="flex justify-between items-center text-[10px] text-white/40 tracking-[0.2em] font-black"><span>CREDIT AMOUNT</span><span className="text-indigo-400 text-2xl font-mono">${Math.min(rebuyAmount, userProfile?.chips || 0).toLocaleString()}</span></div><input type="range" min={1} max={userProfile?.chips || 100} step={1} value={rebuyAmount} onChange={(e) => setRebuyAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" /></div>
-            <div className="flex gap-4"><button onClick={()=>setShowRebuyModal(false)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl font-black text-xs uppercase">CANCEL</button><button onClick={handleRebuy} className="flex-2 p-4 bg-indigo-600 rounded-xl shadow-lg transition-all text-xs font-black uppercase">INJECT FUNDS</button></div>
-          </div>
-        </div>
-      )}
-
       {showRulesModal && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6">
           <div className="w-full max-w-[500px] p-8 bg-slate-900 border border-cyan-500/30 rounded-3xl shadow-2xl flex flex-col gap-6 relative">
@@ -651,7 +672,12 @@ const App = () => {
       
       <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[45px] md:h-[55px]">
         <div className="flex-1 flex items-center"><button onClick={()=>setShowRulesModal(true)} style={{ backgroundColor: VARIANT_COLORS[previewVariantId || activeVariant?.id || 'HOLDEM'] || '#1e293b' }} className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'}`}><span style={{ color: getContrastColor(VARIANT_COLORS[previewVariantId || activeVariant?.id || 'HOLDEM']) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-black flex items-center gap-1 opacity-70">{phase === PHASES.IDLE ? 'Previewing:' : 'This Hand:'} <HelpCircle size={8}/></span><span style={{ color: getContrastColor(VARIANT_COLORS[previewVariantId || activeVariant?.id || 'HOLDEM']) }} className="text-xs md:text-sm font-black truncate drop-shadow-sm">{VARIANTS[previewVariantId || activeVariant?.id]?.name || '...'}</span></button></div>
-        <div className="flex-1 flex items-center justify-center gap-2 md:gap-4"><button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button><button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button><button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button></div>
+        <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
+          <button onClick={handleRebuy} className="text-emerald-400 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-emerald-500/10 transition-all" title="Rebuy Chips"><Plus size={16}/></button>
+          <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button>
+          <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button>
+          <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
+        </div>
         <div className="flex-1 flex items-center justify-end"><div className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group shadow-lg ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`} style={{ backgroundColor: VARIANT_COLORS[pendingVariantId] || '#1e293b' }}><span style={{ color: getContrastColor(VARIANT_COLORS[pendingVariantId]) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold opacity-70">On My Deal:</span><div className="flex items-center"><select value={pendingVariantId} onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('previewVariation', { roomId: currentRoomId, variantId: e.target.value }); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} style={{ color: getContrastColor(VARIANT_COLORS[pendingVariantId]) }} className="bg-transparent text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full">{Object.entries(VARIANTS).map(([k,v]) => (<option key={`opt-${k}`} value={k} className="bg-slate-900">{v.name}</option>))}</select><ChevronDown size={18} className="animate-subtle-bounce ml-1 pointer-events-none" style={{ color: getContrastColor(VARIANT_COLORS[pendingVariantId]) }}/></div></div></div>
       </header>
 
