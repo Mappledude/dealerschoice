@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- SHARED CONSTANTS ---
-const VERSION = "v1.3.19";
+const VERSION = "v1.3.21";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -166,8 +166,11 @@ const Seat = ({
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
-                        const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.0 : 2.2);
-                        const rotation = isHero ? (offset * visuals.holeCardFan) : (offset * 10);
+                        // Spacing: For opponents, rest flat (no rotation) and overlap by 50%
+                        const cardWidth = isMobile ? 7.5 : 5.5;
+                        const cardSpacing = isHero ? visuals.heroCardSpread : (cardWidth / 2);
+                        const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
+                        const scaleBase = 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
                         const isWinningCard = (winning5Ids || []).includes(c.id);
                         const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard;
@@ -177,7 +180,7 @@ const Seat = ({
                             key={`${c.id || ci}-${ci}`} 
                             className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white border-black/10' : 'card-back-royal-red border-red-900/50'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
                             style={{ 
-                              transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? visuals.heroCardScale * 0.6 : 1.0})`, 
+                              transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? visuals.heroCardScale * 0.6 : scaleBase})`, 
                               transformOrigin: 'bottom center', 
                               zIndex: isHighlighted ? 350 : 100 + ci 
                             }}
@@ -274,7 +277,7 @@ const ActivityFeedContent = ({ logs, handHistory, expandedHands, setExpandedHand
                       <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
                         {hand.events && hand.events.map((ev, i) => (
                           <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
-                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
+                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
                             <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
                           </div>
                         ))}
@@ -290,7 +293,7 @@ const ActivityFeedContent = ({ logs, handHistory, expandedHands, setExpandedHand
 // --- MAIN APP COMPONENT ---
 
 const App = () => {
-  // --- REFS & HOOKS (Ensuring absolute top-level definitions) ---
+  // --- REFS & INITIAL HOOKS ---
   const phaseRef = useRef(PHASES.IDLE); 
   const turnInitializedRef = useRef(-1); 
   const noiseSeedRef = useRef(1);
@@ -407,13 +410,6 @@ const App = () => {
     const allInAmount = Number(heroPlayerObj.chips || 0) + Number(heroPlayerObj.currentBet || 0);
     handleAction('RAISE', allInAmount);
   }, [heroPlayerObj, handleAction]);
-
-  const handleRebuy = useCallback(() => {
-    const amt = Number(prompt("REBUY AMOUNT:", "1000"));
-    if(!isNaN(amt) && amt > 0 && currentRoomId && userProfile) {
-        socket.emit('playerRebuy', { roomId: currentRoomId, uid: userProfile.uid, amount: amt });
-    }
-  }, [currentRoomId, userProfile]);
 
   const handleNuclearTriplePurge = useCallback(() => {
     if (!nuclearConfirm) { setNuclearConfirm(true); setTimeout(() => setNuclearConfirm(false), 3000); return; } 
@@ -673,7 +669,6 @@ const App = () => {
       <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[45px] md:h-[55px]">
         <div className="flex-1 flex items-center"><button onClick={()=>setShowRulesModal(true)} style={{ backgroundColor: VARIANT_COLORS[previewVariantId || activeVariant?.id || 'HOLDEM'] || '#1e293b' }} className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'}`}><span style={{ color: getContrastColor(VARIANT_COLORS[previewVariantId || activeVariant?.id || 'HOLDEM']) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-black flex items-center gap-1 opacity-70">{phase === PHASES.IDLE ? 'Previewing:' : 'This Hand:'} <HelpCircle size={8}/></span><span style={{ color: getContrastColor(VARIANT_COLORS[previewVariantId || activeVariant?.id || 'HOLDEM']) }} className="text-xs md:text-sm font-black truncate drop-shadow-sm">{VARIANTS[previewVariantId || activeVariant?.id]?.name || '...'}</span></button></div>
         <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
-          <button onClick={handleRebuy} className="text-emerald-400 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-emerald-500/10 transition-all" title="Rebuy Chips"><Plus size={16}/></button>
           <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button>
           <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button>
           <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
