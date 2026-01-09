@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.88
+// VERSION: v1.0.91
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.88";
+const VERSION = "v1.0.91";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -156,7 +156,9 @@ const Seat = ({
                         const offset = ci - (player.hand.length - 1) / 2;
                         const cardSpacing = isHero ? 3 : 1.8;
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
-                        const scaleBase = isHero ? (isMobile ? 7 : 7) : 1.0;
+                        
+                        // Hero card scale DOUBLED from previous턴 (7.36 Mobile, 12.88 Desktop)
+                        const scaleBase = isHero ? (isMobile ? 7.36 : 12.88) : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
                         const isWinningCard = (winning5Ids || []).includes(c.id);
                         const isHighlighted = phase === PHASES.SHOWDOWN && player.isWinner && isWinningCard && !isMuckWin;
@@ -166,7 +168,7 @@ const Seat = ({
                             key={`${c.id || ci}-${ci}`} 
                             className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-slate-900 border-white/20'} ${isHighlighted ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24] z-[300]' : ''}`} 
                             style={{ 
-                              transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? 1.1 : 1.0})`, 
+                              transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? scaleBase * 1.1 : scaleBase})`, 
                               transformOrigin: 'bottom center', 
                               zIndex: isHighlighted ? 350 : 100 + ci 
                             }}
@@ -181,10 +183,8 @@ const Seat = ({
 
             {/* PLAYER HUD WRAPPER */}
             <div className="relative flex flex-col items-center">
-                {/* NAME HUD */}
                 <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''} ${isFoldedBool ? 'opacity-30 grayscale' : 'opacity-100'}`}>
                     
-                    {/* DEALER INDICATOR */}
                     {isDealer && (
                         <div className="absolute top-2 right-2 z-[100] pointer-events-none">
                           <div className="w-2.5 h-2.5 bg-red-900 rounded-full border border-red-950 shadow-[inset_0_0_4px_rgba(0,0,0,0.5)]" />
@@ -201,7 +201,7 @@ const Seat = ({
                           </div>
                           {phase === PHASES.SHOWDOWN && !isFoldedBool && player.strength && (
                             <div className="text-[8px] lg:text-[1.1vh] text-cyan-400 font-bold tracking-tighter animate-in fade-in slide-in-from-bottom-1 duration-500 whitespace-nowrap overflow-hidden">
-                              {formatRank(player.strength)}
+                              {formatRank(String(player.strength))}
                             </div>
                           )}
                         </div>
@@ -302,7 +302,7 @@ const App = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setNoiseSeed(s => (s + 1) % 1000);
-    }, 80);
+    }, 100);
     return () => clearInterval(interval);
   }, []);
 
@@ -412,14 +412,12 @@ const App = () => {
     return prefix + result;
   };
 
-  // UPDATED: Dynamic Hand Strength Intensity with "Low 6" prioritization
   const getStrengthClass = (strength) => {
     if (!strength) return "";
     const s = strength.toLowerCase();
     
-    // NEW: Low hand priority for Muflis and Low portion of Hi-Low
+    // Hand Strength fire logic prioritizing best hands in Low-Hand modes
     if (s.includes("low") || s.includes("high card")) {
-      // Best possible lows in Hi-Low/Muflis context get Monster intensity
       if (s.includes(" 5") || s.includes(" 6")) return "strength-hi-res-monster";
       if (s.includes(" 7") || s.includes(" 8")) return "strength-hi-res-strong";
       if (s.includes(" 9") || s.includes(" 10")) return "strength-hi-res-ember";
@@ -475,17 +473,17 @@ const App = () => {
   }, [logs]);
 
   const copyActivityToClipboard = () => {
-    let text = "--- DEALER'S CHOICE POKER ARE ---\n\n";
+    let logText = "--- DEALER'S CHOICE POKER ARENA LOG ---\n\n";
     handHistory.forEach(hand => {
-      text += `[${hand.variant.toUpperCase()} HAND]\n`;
+      logText += `[${hand.variant.toUpperCase()} HAND]\n`;
       hand.events.forEach(ev => { 
-        text += `[${new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}] ${ev.name}: ${ev.action}\n`; 
+        logText += `[${new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}] ${ev.name}: ${ev.action}\n`; 
       });
-      if (hand.winner) text += `RESULT: ${hand.winner} WON $${hand.amount} with ${hand.rank}\n`;
-      text += "---------------------------------------\n\n";
+      if (hand.winner) logText += `RESULT: ${hand.winner} WON $${hand.amount} with ${hand.rank}\n`;
+      logText += "---------------------------------------\n\n";
     });
     const textArea = document.createElement("textarea"); 
-    textArea.value = text; 
+    textArea.value = logText; 
     document.body.appendChild(textArea); 
     textArea.select();
     try { document.execCommand('copy'); } catch (err) {} 
@@ -679,7 +677,7 @@ const App = () => {
   if (currentView === VIEWS.LOGIN) return (
     <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
         <div className="w-full max-w-[400px] p-12 bg-black/60 border border-white/10 rounded-3xl backdrop-blur-3xl shadow-2xl flex flex-col items-center gap-8">
-            <div className="flex flex-col items-center gap-2">
+            <div className="flex col items-center gap-2">
                 <Lock size={32} className="text-[#fbbf24] animate-pulse" />
                 <span className="text-white/20 text-[10px] font-mono tracking-widest">{VERSION}</span>
             </div>
@@ -809,7 +807,7 @@ const App = () => {
       <svg style={{ visibility: 'hidden', position: 'absolute', width: 0, height: 0 }}>
         <filter id="fire-hi-res">
           <feTurbulence type="fractalNoise" baseFrequency="0.05 0.2" numOctaves="3" seed={noiseSeed} result="noise" />
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" xChannelSelector="R" yChannelSelector="G" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </svg>
 
@@ -906,7 +904,6 @@ const App = () => {
                   <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
                       <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
                       <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(heroPlayerObj?.lowStrength)}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
-                      {/* Dynamic Win Prob Glow */}
                       <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
                             style={{ 
                               textShadow: `0 0 ${Math.pow(heroPlayerObj.lowWinProbability / 8, 1.6)}px #fbbf24`,
@@ -920,7 +917,6 @@ const App = () => {
                 <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
                   <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
                   <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(heroPlayerObj?.strength)}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-                  {/* Dynamic Win Prob Glow */}
                   <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
                         style={{ 
                           textShadow: `0 0 ${Math.pow(heroPlayerObj.winProbability / 8, 1.6)}px #fbbf24`,
