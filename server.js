@@ -13,7 +13,7 @@ const io = new Server(server, {
   pingInterval: 25000  
 });
 
-const VERSION = "v1.2.4";
+const VERSION = "v1.3.8";
 const TOTAL_SEATS = 10; 
 
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
@@ -26,22 +26,11 @@ const holeCardsMap = { HOLDEM: 2, OMAHA: 4, PINEAPPLE: 3, MUFLIS: 2, HILOW: 4, R
 const variantNames = { HOLDEM: "Texas Hold'em", OMAHA: "Omaha", PINEAPPLE: "Pineapple", MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks" };
 const BOT_NAMES = ["Baabu Shona", "Laddoo", "Chikku", "Guddu", "Kalia", "Chinky", "Bunty", "Babli", "Chhotu", "Motu", "Jadiya", "Piddi"];
 
-const BOT_PERSONALITIES = {
-    "Baabu Shona": "CALCULATED", "Chinky": "CALCULATED", "Motu": "CALCULATED",
-    "Kalia": "AGGRESSIVE", "Chikku": "AGGRESSIVE", "Bunty": "AGGRESSIVE",
-    "Jadiya": "TIGHT", "Guddu": "TIGHT", "Babli": "TIGHT",
-    "Laddoo": "PASSIVE", "Chhotu": "PASSIVE", "Piddi": "PASSIVE"
-};
-
 let profiles = []; 
 let rooms = {};
+let connectedUsers = new Map(); // Track uid -> socketId
 
-const combinations = (array, k) => {
-  let result = [];
-  const fn = (start, prev) => { if (prev.length === k) { result.push(prev); return; } for (let i = start; i < array.length; i++) { fn(i + 1, [...prev, array[i]]); } };
-  fn(0, []); return result;
-};
-
+// Helper: Get power rankings for hands
 const rankHand = (cards, isAceLow = false) => {
   if (!cards || cards.length < 5) return { power: 0, name: "...", cards: [] };
   const getVal = (v) => (isAceLow && v === 'A') ? 1 : VM[v];
@@ -59,17 +48,23 @@ const rankHand = (cards, isAceLow = false) => {
     if (!isStraight && !isAceLow && uniqueRanks.includes(14) && [5,4,3,2].every(r => uniqueRanks.includes(r))) { isStraight = true; straightHigh = 5; compArr = [5, 4, 3, 2, 1]; }
   }
   let score = 0, name = `High Card ${V_LABEL[compArr[0]] || compArr[0]}`;
-  if (vc[0] === 5) { score = 9; name = `Five of a Kind`; }
-  else if (isStraight && isFlush) { score = 8; name = "Straight Flush"; }
-  else if (vc[0] === 4) { score = 7; name = `Four of a Kind`; }
-  else if (vc[0] === 3 && vc[1] >= 2) { score = 6; name = `Full House`; }
-  else if (isFlush) { score = 5; name = `Flush`; }
-  else if (isStraight) { score = 4; name = `Straight`; }
-  else if (vc[0] === 3) { score = 3; name = `Three of a Kind`; }
-  else if (vc[0] === 2 && vc[1] === 2) { score = 2; name = `Two Pair`; }
-  else if (vc[0] === 2) { score = 1; name = `Pair`; }
+  if (vc[0] === 5) score = 9, name = `Five of a Kind`;
+  else if (isStraight && isFlush) score = 8, name = "Straight Flush";
+  else if (vc[0] === 4) score = 7, name = `Four of a Kind`;
+  else if (vc[0] === 3 && vc[1] >= 2) score = 6, name = `Full House`;
+  else if (isFlush) score = 5, name = `Flush`;
+  else if (isStraight) score = 4, name = `Straight`;
+  else if (vc[0] === 3) score = 3, name = `Three of a Kind`;
+  else if (vc[0] === 2 && vc[1] === 2) score = 2, name = `Two Pair`;
+  else if (vc[0] === 2) score = 1, name = `Pair`;
   const power = score * Math.pow(15, 7) + compArr.reduce((acc, v, i) => acc + (v * Math.pow(15, 6 - i)), 0);
   return { power, name, cards: sorted.slice(0, 5) };
+};
+
+const combinations = (array, k) => {
+  let result = [];
+  const fn = (start, prev) => { if (prev.length === k) { result.push(prev); return; } for (let i = start; i < array.length; i++) { fn(i + 1, [...prev, array[i]]); } };
+  fn(0, []); return result;
 };
 
 const VARIATION_STRATEGIES = {
@@ -99,7 +94,7 @@ const VARIATION_STRATEGIES = {
 const serializeRoom = (room) => { 
   if (!room) return null; 
   const { timer, deck, ignitionTimer, ...rest } = room; 
-  return { ...rest, minRaiseAmount: (room.highestBet || 0) + (room.lastRaiseIncrement || 2) }; 
+  return { ...rest, minRaiseAmount: (room.highestBet || 0) + (room.lastRaiseIncrement || (room.bb || 2)) }; 
 };
 
 const updateRoomStrengths = (roomId) => {
@@ -121,16 +116,52 @@ const triggerBotTurn = (roomId) => {
     const player = room.players[room.activeIdx]; if (!player || !player.isBot) return;
     setTimeout(() => {
         const current = rooms[roomId]; if (!current || current.activeIdx === -1 || current.players[current.activeIdx]?.uid !== player.uid) return;
-        performAction(roomId, 'CALL', 0);
+        performAction(roomId, current.highestBet > player.currentBet ? 'CALL' : 'CHECK', 0);
     }, 2000);
+};
+
+const processShowdown = (roomId) => {
+  const room = rooms[roomId]; if (!room) return;
+  room.phase = PHASES.SHOWDOWN;
+  const active = room.players.filter(p => p && !p.isFolded);
+  active.sort((a,b) => b.strengthPower - a.strengthPower);
+  const winner = active[0];
+  if (winner) {
+    winner.chips += room.potAmount;
+    room.showdownWinners = [{ name: winner.name, amount: room.potAmount, rank: winner.strength, hand: winner.hand }];
+    io.to(roomId).emit('log', { name: "SYSTEM", action: `${winner.name} WON $${room.potAmount} WITH ${winner.strength}`, type: 'win' });
+  }
+  room.potAmount = 0;
+  io.to(roomId).emit('roomUpdate', serializeRoom(room));
+  setTimeout(() => { 
+    room.dealerIdx = (room.dealerIdx + 1) % TOTAL_SEATS;
+    while (!room.players[room.dealerIdx]) room.dealerIdx = (room.dealerIdx + 1) % TOTAL_SEATS;
+    room.phase = PHASES.IDLE;
+    runIgnition(roomId);
+  }, 5000);
+};
+
+const nextPhase = (roomId) => {
+  const room = rooms[roomId]; if (!room) return;
+  room.players.forEach(p => { if (p) p.actedThisStreet = false; });
+  if (room.phase === PHASES.PRE_FLOP) { room.phase = PHASES.FLOP; room.community = room.deck.splice(0, 3); }
+  else if (room.phase === PHASES.FLOP) { room.phase = PHASES.TURN; room.community.push(room.deck.shift()); }
+  else if (room.phase === PHASES.TURN) { room.phase = PHASES.RIVER; room.community.push(room.deck.shift()); }
+  else { return processShowdown(roomId); }
+  
+  room.highestBet = 0; room.players.forEach(p => { if (p) p.currentBet = 0; });
+  room.activeIdx = (room.dealerIdx + 1) % TOTAL_SEATS;
+  while (!room.players[room.activeIdx] || room.players[room.activeIdx].isFolded) { room.activeIdx = (room.activeIdx + 1) % TOTAL_SEATS; }
+  updateRoomStrengths(roomId); io.to(roomId).emit('roomUpdate', serializeRoom(room));
+  triggerBotTurn(roomId);
 };
 
 const performAction = (roomId, type, amount) => {
     const room = rooms[roomId]; if (!room || room.activeIdx === -1) return;
     const player = room.players[room.activeIdx]; if (!player) return;
     player.actedThisStreet = true;
-    if (type === 'FOLD') { player.isFolded = true; player.lastAction = "FOLD"; }
-    else if (type === 'CALL') { const diff = room.highestBet - player.currentBet; player.chips -= diff; player.currentBet += diff; player.lastAction = "CALL"; }
+    if (type === 'FOLD') { player.isFolded = true; player.lastAction = "FOLD"; io.to(roomId).emit('log', { name: player.name, action: 'folds', type: 'fold' }); }
+    else if (type === 'CALL' || type === 'CHECK') { const diff = room.highestBet - player.currentBet; player.chips -= diff; player.currentBet += diff; player.lastAction = type; }
     else if (type === 'RAISE') { const diff = amount - player.currentBet; player.chips -= diff; player.currentBet = amount; room.highestBet = amount; player.lastAction = "RAISE"; }
     moveToNextPlayer(roomId);
 };
@@ -142,37 +173,33 @@ const moveToNextPlayer = (roomId) => {
     const allMatched = active.every(p => p.currentBet === room.highestBet);
     const allActed = active.every(p => p.actedThisStreet);
 
-    if (active.length <= 1) { /* processShowdown logic... */ }
-    else if (allMatched && allActed) { /* nextPhase logic... */ }
-    else {
+    if (active.length <= 1) return processShowdown(roomId);
+    if (allMatched && allActed) return nextPhase(roomId);
+    
+    room.activeIdx = (room.activeIdx + 1) % TOTAL_SEATS;
+    while (!room.players[room.activeIdx] || room.players[room.activeIdx].isFolded || room.players[room.activeIdx].waitingForNextHand) {
         room.activeIdx = (room.activeIdx + 1) % TOTAL_SEATS;
-        while (!room.players[room.activeIdx] || room.players[room.activeIdx].isFolded || room.players[room.activeIdx].waitingForNextHand) {
-            room.activeIdx = (room.activeIdx + 1) % TOTAL_SEATS;
-        }
-        io.to(roomId).emit('roomUpdate', serializeRoom(room));
-        triggerBotTurn(roomId);
     }
+    io.to(roomId).emit('roomUpdate', serializeRoom(room));
+    triggerBotTurn(roomId);
 };
 
 const runIgnition = (roomId) => {
   const room = rooms[roomId]; if (!room) return;
   const seated = room.players.filter(p => p && p.chips > 0);
   if (seated.length < 2) { room.phase = PHASES.IDLE; return; }
-  const dSeat = room.players[room.dealerIdx]; if (dSeat?.isBot) { const vIds = Object.keys(variantNames); dSeat.pendingVariant = vIds[Math.floor(Math.random() * vIds.length)]; }
-  const vId = dSeat?.pendingVariant || 'HOLDEM';
+  
+  const dSeat = room.players[room.dealerIdx]; 
+  const vId = dSeat?.pendingVariant || 'HOLDEM'; 
   room.activeVariant = { id: vId, name: variantNames[vId], holeCards: holeCardsMap[vId] };
   io.to(roomId).emit('log', { name: "SYSTEM", action: `${dSeat?.name || 'DEALER'} LOCKS IN ${variantNames[vId]}`, type: 'phase' });
-  room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
-  room.community = []; room.phase = PHASES.PRE_FLOP; room.highestBet = 2; room.lastRaiseIncrement = 2;
   
-  // FIXED: Explicitly clear the waiting flag when the hand starts
+  room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
+  room.community = []; room.phase = PHASES.PRE_FLOP; room.highestBet = room.bb || 2; room.lastRaiseIncrement = room.bb || 2;
+  
   room.players.forEach(p => { if (p) { 
     p.hand = room.deck.splice(0, room.activeVariant.holeCards); 
-    p.isFolded = false; 
-    p.currentBet = 0; 
-    p.actedThisStreet = false; 
-    p.lastAction = null; 
-    p.waitingForNextHand = false; 
+    p.isFolded = false; p.currentBet = 0; p.actedThisStreet = false; p.lastAction = null; p.waitingForNextHand = false; 
   } });
   
   const seatedIdxs = room.players.map((p, i) => p ? i : null).filter(x => x !== null);
@@ -181,9 +208,11 @@ const runIgnition = (roomId) => {
   
   room.players[sbIdx].chips -= room.sb || 1; room.players[sbIdx].currentBet = room.sb || 1;
   room.players[bbIdx].chips -= room.bb || 2; room.players[bbIdx].currentBet = room.bb || 2;
+  room.potAmount = (room.sb || 1) + (room.bb || 2);
   room.activeIdx = seatedIdxs[(seatedIdxs.indexOf(bbIdx) + 1) % seatedIdxs.length];
   
-  updateRoomStrengths(roomId); io.to(roomId).emit('roomUpdate', serializeRoom(room));
+  updateRoomStrengths(roomId); 
+  io.to(roomId).emit('roomUpdate', serializeRoom(room));
   triggerBotTurn(roomId);
 };
 
@@ -192,7 +221,14 @@ io.on('connection', (socket) => {
   
   socket.on('playerLogin', ({ password }) => {
     const profile = profiles.find(p => p.password.toLowerCase() === String(password).toLowerCase());
-    if (profile) socket.emit('loginSuccess', profile);
+    if (profile) {
+      // SINGLE SESSION ENFORCEMENT
+      if (connectedUsers.has(profile.uid)) {
+        io.to(connectedUsers.get(profile.uid)).emit('forceLogout');
+      }
+      connectedUsers.set(profile.uid, socket.id);
+      socket.emit('loginSuccess', profile);
+    }
   });
 
   socket.on('adminNuclearReset', () => {
@@ -201,7 +237,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('adminCreatePlayer', (data) => {
-    const p = { uid: data.uid, name: data.name, password: data.password, chips: Number(data.chips) || 1000, role: data.role || 'player' };
+    const p = { uid: data.uid, name: data.name, password: data.password, chips: Number(data.chips) || 1000, role: 'player' };
     profiles.push(p); io.emit('profilesUpdate', profiles);
   });
 
@@ -209,7 +245,7 @@ io.on('connection', (socket) => {
     const room = rooms[roomId]; if (!room) return;
     const emptyIdx = room.players.findIndex(p => p === null); if (emptyIdx === -1) return;
     const name = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
-    room.players[emptyIdx] = { uid: `bot_${Math.random().toString(36).slice(2, 7)}`, name, isBot: true, chips: 1000, seatIdx: emptyIdx, isFolded: false, waitingForNextHand: room.phase !== PHASES.IDLE, currentBet: 0 };
+    room.players[emptyIdx] = { uid: `bot_${Math.random()}`, name, isBot: true, chips: 1000, seatIdx: emptyIdx, isFolded: false, waitingForNextHand: room.phase !== PHASES.IDLE, currentBet: 0 };
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     io.emit('lobbyUpdate', Object.values(rooms).map(serializeRoom));
     if (room.phase === PHASES.IDLE && room.players.filter(p => p && p.chips > 0).length >= 2) runIgnition(roomId);
@@ -233,8 +269,23 @@ io.on('connection', (socket) => {
 
   socket.on('playerAction', ({ roomId, type, amount }) => performAction(roomId, type, amount));
 
+  socket.on('updatePlayerSettings', ({ uid, pendingVariant }) => {
+    const profile = profiles.find(p => p.uid === uid);
+    if (profile) profile.pendingVariant = pendingVariant;
+    Object.values(rooms).forEach(room => {
+      const seated = room.players.find(p => p && p.uid === uid);
+      if (seated) seated.pendingVariant = pendingVariant;
+    });
+  });
+
   socket.on('previewVariation', ({ roomId, variantId }) => {
     const room = rooms[roomId]; if (room) { room.pendingVariant = variantId; io.to(roomId).emit('variantPreview', variantId); }
+  });
+
+  socket.on('disconnect', () => {
+    for (let [uid, sid] of connectedUsers.entries()) {
+      if (sid === socket.id) { connectedUsers.delete(uid); break; }
+    }
   });
 });
 
