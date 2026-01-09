@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.4
+// VERSION: v1.2.6
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.4";
+const VERSION = "v1.2.6";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -38,7 +38,7 @@ const VARIANT_COLORS = {
 };
 
 const HILOW_SECONDARY_COLOR = '#bfff00'; 
-const TABLE_FELT_COLOR = '#172554'; // Luxury Midnight Navy Blue (Fixed)
+const TABLE_FELT_COLOR = '#0f172a'; 
 
 const getContrastColor = (hex) => {
   if (!hex) return 'white';
@@ -164,7 +164,7 @@ const Seat = ({
                         return (
                           <div 
                             key={`${c.id || ci}-${ci}`} 
-                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-gradient-to-br from-[#450a0a] via-[#2a0505] to-[#000] border-red-950'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
+                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border-2 absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white border-slate-200' : 'bg-gradient-to-br from-[#450a0a] via-[#2a0505] to-[#000] border-white'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
                             style={{ 
                               transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? scaleBase * 1.1 : scaleBase})`, 
                               transformOrigin: 'bottom center', 
@@ -178,14 +178,14 @@ const Seat = ({
                                 </div>
                               ) : (
                                 <div className="absolute inset-0 flex items-center justify-center opacity-40 overflow-hidden pointer-events-none">
+                                  {/* CRIMSON HEX GRID */}
                                   <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
                                     <defs>
-                                      <pattern id="dragon-scale" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
-                                        <path d="M0 10 Q 5 0, 10 10 Q 15 0, 20 10 L 20 20 Q 10 15, 0 20 Z" fill="#7f1d1d" opacity="0.5" />
-                                        <path d="M10 0 Q 15 10, 20 0 L 20 10 Q 10 5, 0 10 L 0 0 Q 5 10, 10 0 Z" fill="#991b1b" opacity="0.3" />
+                                      <pattern id="hex-grid-pattern" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+                                        <path d="M5 0 L10 2.5 L10 7.5 L5 10 L0 7.5 L0 2.5 Z" fill="none" stroke="#ff0000" strokeWidth="0.5" />
                                       </pattern>
                                     </defs>
-                                    <rect width="100%" height="100%" fill="url(#dragon-scale)" />
+                                    <rect width="100%" height="100%" fill="url(#hex-grid-pattern)" />
                                   </svg>
                                 </div>
                               )}
@@ -309,6 +309,12 @@ const App = () => {
     holeCardFan: 35 
   });
 
+  // --- DERIVED GAME CONSTANTS ---
+  const activeColor = VARIANT_COLORS[activeVariant?.id || 'HOLDEM'];
+  const pendingColor = VARIANT_COLORS[pendingVariantId || 'HOLDEM'];
+  const isHiLow = activeVariant?.id === 'HILOW';
+  const isRedBlack = activeVariant?.id === 'REDSBLACKS';
+
   useEffect(() => {
     const interval = setInterval(() => {
       setNoiseSeed(s => (s + 1) % 1000);
@@ -327,6 +333,8 @@ const App = () => {
     const currentBetsSum = players.reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
     return Number(potAmount) + currentBetsSum;
   }, [potAmount, players]);
+
+  const raisePercentage = heroPlayerObj ? (raiseInput / (Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))) : 0;
 
   const handleForceSync = useCallback(() => {
     socket.disconnect().connect();
@@ -779,13 +787,6 @@ const App = () => {
     </div>
   );
 
-  const activeColor = VARIANT_COLORS[activeVariant?.id || 'HOLDEM'];
-  const pendingColor = VARIANT_COLORS[pendingVariantId || 'HOLDEM'];
-  const raisePercentage = heroPlayerObj ? (raiseInput / (Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))) : 0;
-
-  const isHiLow = activeVariant?.id === 'HILOW';
-  const isRedBlack = activeVariant?.id === 'REDSBLACKS';
-
   return (
     <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#cbd5e1] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
       
@@ -794,15 +795,6 @@ const App = () => {
         <filter id="fire-hi-res">
           <feTurbulence type="fractalNoise" baseFrequency="0.05 0.2" numOctaves="3" seed={noiseSeed} result="noise" />
           <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
-        </filter>
-        <filter id="brushed-metal">
-          <feTurbulence type="fractalNoise" baseFrequency="0.8 0.05" numOctaves="2" seed={noiseSeed} result="noise" />
-          <feColorMatrix type="saturate" values="0" />
-          <feComponentTransfer>
-            <feFuncR type="linear" slope="0.4" />
-            <feFuncG type="linear" slope="0.4" />
-            <feFuncB type="linear" slope="0.4" />
-          </feComponentTransfer>
         </filter>
         <filter id="plasma-forge-arc">
           <feTurbulence type="fractalNoise" baseFrequency="0.1 0.4" numOctaves="3" seed={noiseSeed} result="noise" />
@@ -820,113 +812,98 @@ const App = () => {
       )}
       
       <div className="flex-1 flex flex-row overflow-hidden relative">
-        <main className="flex-1 flex flex-col items-center justify-center relative bg-[#94a3b8] overflow-hidden font-black uppercase text-center">
-            {/* REFLECTIVE BRUSHED SILVER FLOOR */}
-            <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden bg-[#94a3b8]">
-              <div className="absolute inset-0 opacity-20" style={{ filter: 'url(#brushed-metal)' }} />
-              <div className="absolute inset-0 bg-gradient-to-b from-[#e2e8f0]/40 via-transparent to-[#475569]/40" />
-              {/* Dynamic Variation Reflection */}
-              <div className="absolute inset-0 opacity-40 transition-colors duration-1000" 
-                   style={{ background: isHiLow 
-                      ? `radial-gradient(circle at 25% 50%, ${VARIANT_COLORS.HILOW}33 0%, transparent 50%), radial-gradient(circle at 75% 50%, ${HILOW_SECONDARY_COLOR}33 0%, transparent 50%)`
-                      : `radial-gradient(circle at 50% 50%, ${activeColor}44 0%, transparent 65%)` }} />
+        <main className="flex-1 flex flex-col items-center justify-center relative bg-[#f8fafc] overflow-hidden text-center">
+            {/* ARCTIC GALLERY FLOOR */}
+            <div className="absolute inset-0 pointer-events-none z-0 bg-[#f8fafc]">
+               {/* High-Contrast Variation Spotlight Reflection */}
+               <div className="absolute inset-0 transition-colors duration-1000 opacity-40" 
+                    style={{ background: isHiLow 
+                      ? `radial-gradient(circle at 25% 65%, ${VARIANT_COLORS.HILOW} 0%, transparent 50%), radial-gradient(circle at 75% 65%, ${HILOW_SECONDARY_COLOR} 0%, transparent 50%)`
+                      : `radial-gradient(circle at 50% 65%, ${activeColor} 0%, transparent 60%)` }} />
+               {/* Soft polished sheen */}
+               <div className="absolute inset-0 bg-gradient-to-tr from-white via-transparent to-slate-100/50" />
             </div>
             
             {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
               <>
-                {activeVariant?.id === 'HILOW' && (
-                  <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700 bg-black/85 backdrop-blur-xl px-5 py-2 rounded-lg border border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.6)]">
-                      <span className="text-[9px] text-white/40 tracking-[0.2em] font-black mb-0.5">LOW STRENGTH</span>
-                      <span className={`text-[14px] lg:text-[2vh] font-black tracking-[0.1em] transition-all duration-500 text-white`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
-                      <div className="h-0.5 w-full bg-white/10 mt-1.5 relative overflow-hidden">
-                        <div className="absolute inset-y-0 left-0 bg-amber-400 transition-all duration-1000" style={{ width: `${heroPlayerObj?.lowWinProbability || 0}%` }} />
-                      </div>
-                      <span className="text-[10px] lg:text-[1.2vh] font-black mt-1 text-amber-400 tracking-widest">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% PROB</span>
+                {/* MINIMALIST SWISS HUD - WIN PROB & LOW PROB */}
+                <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700 space-y-2">
+                    <div className="bg-black px-5 py-2 rounded-lg shadow-2xl border-l-4 border-cyan-400 flex flex-col items-start">
+                        <span className="text-[9px] text-white/50 tracking-[0.3em] font-sans font-black mb-0.5 uppercase">WIN PROB</span>
+                        <span className="text-[20px] lg:text-[2.6vh] font-sans font-black text-white leading-none">
+                           {Math.round(heroPlayerObj?.winProbability || 0)}%
+                        </span>
+                    </div>
+                    {isHiLow && (
+                       <div className="bg-black px-5 py-2 rounded-lg shadow-2xl border-l-4 border-indigo-400 flex flex-col items-start">
+                          <span className="text-[9px] text-white/50 tracking-[0.3em] font-sans font-black mb-0.5 uppercase">LOW PROB</span>
+                          <span className="text-[20px] lg:text-[2.6vh] font-sans font-black text-white leading-none">
+                             {Math.round(heroPlayerObj?.lowWinProbability || 0)}%
+                          </span>
+                       </div>
+                    )}
+                </div>
+                {/* MINIMALIST SWISS HUD - STRENGTH & LOW STRENGTH */}
+                <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700 space-y-2">
+                  <div className="bg-black px-5 py-2 rounded-lg shadow-2xl border-r-4 border-amber-400 flex flex-col items-end">
+                    <span className="text-[9px] text-white/50 tracking-[0.3em] font-sans font-black mb-0.5 uppercase">STRENGTH</span>
+                    <span className="text-[14px] lg:text-[1.8vh] font-sans font-black text-white uppercase tracking-widest leading-none">
+                       {phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}
+                    </span>
                   </div>
-                )}
-                <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700 bg-black/85 backdrop-blur-xl px-5 py-2 rounded-lg border border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.6)]">
-                  <span className="text-[9px] text-white/40 tracking-[0.2em] font-black mb-0.5">HAND STRENGTH</span>
-                  <span className={`text-[14px] lg:text-[2vh] font-black tracking-[0.1em] transition-all duration-500 text-white`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-                  <div className="h-0.5 w-full bg-white/10 mt-1.5 relative overflow-hidden">
-                    <div className="absolute inset-y-0 right-0 bg-cyan-400 transition-all duration-1000" style={{ width: `${heroPlayerObj?.winProbability || 0}%` }} />
-                  </div>
-                  <span className="text-[10px] lg:text-[1.2vh] font-black mt-1 text-cyan-400 tracking-widest">{Math.round(heroPlayerObj?.winProbability || 0)}% PROB</span>
+                  {isHiLow && heroPlayerObj?.lowStrength && (
+                    <div className="bg-black px-5 py-2 rounded-lg shadow-2xl border-r-4 border-emerald-400 flex flex-col items-end">
+                      <span className="text-[9px] text-white/50 tracking-[0.3em] font-sans font-black mb-0.5 uppercase">LOW STRENGTH</span>
+                      <span className="text-[14px] lg:text-[1.8vh] font-sans font-black text-white uppercase tracking-widest leading-none">
+                         {phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </>
             )}
 
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center z-10">
-                
-                {/* EXECUTIVE PADDED LEATHER RAIL DESIGN */}
-                <div className="absolute inset-[-25px] rounded-[50%] z-0 p-1">
-                    {/* Shadow Glow */}
+                <div className="absolute inset-[-20px] rounded-[50%] z-0">
                     <div 
-                        className="absolute inset-0 rounded-[50%] blur-[35px] opacity-70 transition-colors duration-1000 animate-pulse"
-                        style={{ background: isHiLow 
-                          ? `linear-gradient(90deg, ${VARIANT_COLORS.HILOW}, ${HILOW_SECONDARY_COLOR})`
-                          : isRedBlack 
-                          ? `conic-gradient(#f00 0deg 45deg, #000 45deg 90deg, #f00 90deg 135deg, #000 135deg 180deg, #f00 180deg 225deg, #000 225deg 270deg, #f00 270deg 315deg, #000 315deg 360deg)`
-                          : activeColor }}
+                        className="absolute inset-0 rounded-[50%] blur-[20px] opacity-40 animate-pulse"
+                        style={{
+                            background: isRedBlack 
+                                ? 'conic-gradient(#ff0000 0deg 120deg, #000 120deg 180deg, #ff0000 180deg 300deg, #000 300deg 360deg)'
+                                : isHiLow
+                                ? `linear-gradient(to right, ${VARIANT_COLORS.HILOW}, ${HILOW_SECONDARY_COLOR})`
+                                : activeColor
+                        }}
                     />
-                    {/* The Leather Padded Rail */}
-                    <div className="absolute inset-0 rounded-[50%] border-[32px] border-[#0a0a0a] shadow-[0_50px_80px_rgba(0,0,0,1),inset_0_2px_15px_rgba(255,255,255,0.1)] flex items-center justify-center">
-                       {/* Stitching Line */}
-                       <div className="absolute inset-[10px] rounded-[50%] border border-dashed border-white/5" />
-                       {/* Mahogany Spacer */}
-                       <div className="absolute inset-[28px] rounded-[50%] border-[4px] border-[#3f1601] shadow-[inset_0_0_10px_rgba(0,0,0,0.8)]" />
-                    </div>
+                    <div className="absolute inset-0 rounded-[50%] border-[24px] border-[#0a0a0a] shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_2px_10px_rgba(255,255,255,0.1)]" />
                 </div>
-
-                <div className="absolute inset-0 rounded-[50%] border-[45px] border-[#1e293b]/20 z-0 bg-[#334155]/10" />
-                
+                <div className="absolute inset-0 rounded-[50%] border-[40px] border-[#1a110a] shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] z-0 bg-[#2b1d12]" />
                 <div 
-                  className={`absolute inset-[40px] rounded-[50%] transition-all duration-700 overflow-hidden`} 
+                  className={`absolute inset-[35px] rounded-[50%] transition-all duration-700 overflow-hidden ${activeVariant?.id === 'MUFLIS' ? 'animate-muflis-glow' : ''} ${activeVariant?.id === 'OMAHA' ? 'animate-omaha-swirl' : ''}`} 
                   style={{ 
                     backgroundColor: TABLE_FELT_COLOR,
-                    backgroundImage: `radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 85%)`,
-                    boxShadow: `inset 0 0 160px rgba(0,0,0,0.95), inset 0 0 100px ${activeColor}22`
+                    backgroundImage: `radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 75%)`,
+                    boxShadow: `inset 0 0 100px rgba(0,0,0,0.6)`
                   }} 
                 >
-                    {/* GOLDEN SIGNATURE WATERMARK */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20 select-none">
-                       <span className="text-[6vw] lg:text-[8vh] font-black text-[#fbbf24] drop-shadow-lg italic" style={{ fontFamily: 'serif', letterSpacing: '-0.05em' }}>Dealers Choice</span>
-                    </div>
-
-                    {/* HALO LED INTERIOR RIM (HI-LOW & RED-BLACK LOGIC) */}
-                    <div className="absolute inset-0 pointer-events-none rounded-[50%] opacity-80" 
-                         style={{ 
-                           boxShadow: `inset 0 0 120px rgba(0,0,0,1)`,
-                           background: isHiLow 
-                             ? `linear-gradient(90deg, ${VARIANT_COLORS.HILOW}77 0% 50%, ${HILOW_SECONDARY_COLOR}77 50% 100%)`
-                             : isRedBlack 
-                             ? `conic-gradient(#f006 0deg 45deg, #0006 45deg 90deg, #f006 90deg 135deg, #0006 135deg 180deg, #f006 180deg 225deg, #0006 225deg 270deg, #f006 270deg 315deg, #0006 315deg 360deg)`
-                             : `radial-gradient(circle at center, transparent 60%, ${activeColor}44 100%)`
-                         }} />
+                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} />
                 </div>
-
-                <div className="absolute inset-[15%] rounded-[50%] border border-white/5 pointer-events-none z-10" />
-                
-                <div className="absolute inset-0 pointer-events-none z-20">
-                  {(players || []).map((p, i) => { 
-                    if (!p) return null; 
-                    const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; 
-                    return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} visuals={visuals} bigBlind={bigBlind} showdownWinners={showdownWinners} isCollectingBets={potTransferring} timeRemaining={timeRemaining} formatRank={formatRank} />); 
-                  })}
-                </div>
-
+                <div className="absolute inset-[15%] rounded-[50%] border border-white/10 pointer-events-none z-10" />
+                <button onClick={handleForceSync} className="absolute bottom-6 right-6 z-[150] bg-black/60 border border-white/20 p-3 rounded-full text-white/40 hover:text-white transition-all shadow-xl active:scale-95 group pointer-events-auto" title="Force Sync State"><RefreshCcw size={20} className="group-active:animate-spin" /></button>
+                <div className="absolute inset-0 pointer-events-none z-20">{(players || []).map((p, i) => { if (!p) return null; const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; return (<Seat key={`seat-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} visuals={visuals} bigBlind={bigBlind} showdownWinners={showdownWinners} isCollectingBets={potTransferring} timeRemaining={timeRemaining} formatRank={formatRank} />); })}</div>
                 <div className="absolute top-[calc(48%-50px)] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full">
                   {!potTransferring && (
                     <div className="flex flex-col items-center mb-3 transition-all">
-                      <span className="text-white/20 text-[10px] tracking-[0.8em] mb-1 uppercase font-black">ARENA POT</span>
-                      <div className="text-[6vw] lg:text-[6vh] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_40px_rgba(255,255,255,0.4)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                      <span className="text-white/20 text-[10px] tracking-[0.5em] mb-1 uppercase font-black">Total Pot:</span>
+                      <div className="text-[6vw] lg:text-[6vh] font-black text-white font-mono tracking-tighter leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">${Number(totalDisplayPot).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                     </div>
                   )}
                   {community.length > 0 && (
-                    <div className="flex gap-2 md:gap-4 mt-4 transition-transform" style={{ transform: isMobile ? `scale(${visuals.commCardScale})` : `scale(${visuals.commCardScale * 0.9})` }}>
+                    <div className="flex gap-2 md:gap-4 mt-4 transition-transform" style={{ transform: isMobile ? `scale(${visuals.commCardScale})` : `scale(${visuals.commCardScale * 0.8})` }}>
                       {(community || []).map((c, j) => { 
                         const isRed = c.suit === '♥' || c.suit === '♦'; 
                         return (
-                          <div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] lg:w-[6vh] h-[11vw] lg:h-[9vh] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 shadow-2xl ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_50px_#fbbf24]' : 'border-slate-300'}`}>
+                          <div key={`comm-${c.id || j}-${j}`} className={`w-[8vw] lg:w-[6vh] h-[11vw] lg:h-[9vh] rounded-xl border-2 bg-white flex flex-col items-start justify-start p-1.5 text-black font-black transition-all duration-500 shadow-2xl ${winning5Ids?.includes(c.id) ? 'ring-4 ring-yellow-400 scale-110 shadow-[0_0_30px_#fbbf24]' : 'border-slate-300'}`}>
                             <span className={`text-[12px] lg:text-[1.6vh] font-black leading-tight ${isRed ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
                             <span className={`text-[14px] lg:text-[2.2vh] font-black leading-tight ${isRed ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
                           </div>
@@ -935,13 +912,12 @@ const App = () => {
                     </div>
                   )}
                 </div>
-
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
                   <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                     <div className="flex-1 w-full relative flex items-center justify-center py-4">
-                      <input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-black/40 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer shadow-xl border border-white/10" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
+                      <input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-black/30 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer shadow-lg border border-white/20" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
                     </div>
-                    <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px] shadow-[0_20px_50px_rgba(0,0,0,0.8)]">
+                    <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px] shadow-2xl">
                       <span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span>
                       <div className="flex items-center justify-center w-full">
                         <span className="text-emerald-500 font-mono text-lg md:text-2xl mr-0.5">$</span>
@@ -1008,10 +984,11 @@ const App = () => {
             (() => {
                 const winner = showdownWinners[currentShowdownIdx];
                 if (!winner) return null;
-                const isHiLoWin = String(winner.rank).includes("LOW:"); 
+                const isHiLoRes = activeVariant?.id === 'HILOW'; 
+                const isLowWin = String(winner.rank).includes("LOW:"); 
                 const isMuckWin = winner.rank === "!";
-                const themeColor = isHiLoWin ? "text-emerald-400" : (isHiLow ? "text-amber-400" : "text-white");
-                const cardBorder = isHiLoWin ? "border-emerald-400/50" : (isHiLow ? "border-amber-400/50" : "border-white/20");
+                const themeColor = isLowWin ? "text-emerald-400" : (isHiLoRes ? "text-amber-400" : "text-white");
+                const cardBorder = isLowWin ? "border-emerald-400/50" : (isHiLoRes ? "border-amber-400/50" : "border-white/20");
                 return (
                     <div key={`winner-disp-${winner.name}-${currentShowdownIdx}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className={`flex items-center gap-3 bg-white/5 px-5 py-1 rounded-full border border-white/10 max-w-full overflow-hidden shadow-2xl`}>
@@ -1063,7 +1040,7 @@ const App = () => {
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={20} className="text-emerald-400" />} FOLD</button>
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.2)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/5 opacity-60'}`}>{preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
                       <div className={`flex-[1.5] flex bg-white/10 backdrop-blur-md border border-white/20 rounded-xl overflow-hidden transition-all shadow-xl relative group ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
-                        {/* PLASMA FORGE BUTTON */}
+                        {/* PLASMA FORGE BUTTON (ICON REMOVED) */}
                         <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity pointer-events-none" 
                              style={{ background: `linear-gradient(90deg, transparent, ${activeColor}44, transparent)`, filter: 'url(#plasma-forge-arc)' }} />
                         <button 
@@ -1085,13 +1062,12 @@ const App = () => {
                     </div>
                   </>
                 ) : (
-                  <div className="flex flex-col items-center gap-1 py-10"><span className="text-white/10 tracking-[1em] text-sm font-black italic animate-pulse">Spectating Match</span></div>
+                  <div className="flex flex-col items-center gap-1 py-10"><span className="text-white/10 tracking-[1em] text-sm font-black italic animate-pulse">Observation Mode</span></div>
                 )}
             </div>
           )}
         </div>
       </footer>
-
       {showVisualControls && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6" onClick={() => setShowVisualControls(false)}>
           <div className="w-full max-w-[400px] bg-slate-900 border border-white/20 rounded-3xl p-8 flex flex-col gap-6 shadow-[0_40px_100px_rgba(0,0,0,1)]" onClick={e => e.stopPropagation()}>
