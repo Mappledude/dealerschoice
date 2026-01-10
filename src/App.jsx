@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.6
+// VERSION: v1.1.8
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.6";
+const VERSION = "v1.1.8";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -958,7 +958,62 @@ const App = () => {
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
                   <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                     <div className="flex-1 w-full relative flex items-center justify-center py-4">
-                      <input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet))} max={Number(effectiveMaxBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
+                      {/* Betting Slider Container with Snap Markers */}
+                      <div className="relative h-full w-8 md:w-10">
+                        {/* Pot Markers */}
+                        {(() => {
+                           const min = Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet));
+                           const max = Number(effectiveMaxBet);
+                           const range = max - min;
+                           if (range <= 0) return null;
+
+                           const hPot = highestBet + Math.floor(totalDisplayPot * 0.5);
+                           const fPot = highestBet + totalDisplayPot;
+                           
+                           const hPos = ((hPot - min) / range) * 100;
+                           const fPos = ((fPot - min) / range) * 100;
+
+                           return (
+                             <>
+                               {hPos > 0 && hPos < 100 && (
+                                 <div className="absolute left-0 right-0 h-0.5 bg-white/40 z-0 pointer-events-none" style={{ bottom: `${hPos}%` }}>
+                                   <span className="absolute left-[-20px] text-[6px] font-bold text-white/40">1/2</span>
+                                 </div>
+                               )}
+                               {fPos > 0 && fPos < 100 && (
+                                 <div className="absolute left-0 right-0 h-0.5 bg-white/60 z-0 pointer-events-none" style={{ bottom: `${fPos}%` }}>
+                                   <span className="absolute left-[-20px] text-[6px] font-bold text-white/60">POT</span>
+                                 </div>
+                               )}
+                             </>
+                           );
+                        })()}
+                        
+                        <input 
+                          type="range" 
+                          min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet))} 
+                          max={Number(effectiveMaxBet)} 
+                          step={1} 
+                          value={raiseInput} 
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            const min = Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet));
+                            const max = Number(effectiveMaxBet);
+                            const range = max - min;
+                            
+                            const hPot = highestBet + Math.floor(totalDisplayPot * 0.5);
+                            const fPot = highestBet + totalDisplayPot;
+
+                            // Snap Logic: if within 3% of the range, snap to pot size
+                            const threshold = range * 0.03;
+                            if (Math.abs(val - hPot) < threshold) setRaiseInput(hPot);
+                            else if (Math.abs(val - fPot) < threshold) setRaiseInput(fPot);
+                            else setRaiseInput(val);
+                          }} 
+                          className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer relative z-10" 
+                          style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} 
+                        />
+                      </div>
                     </div>
                     <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]">
                       <span className="text-[8px] text-white/50 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span>
@@ -1033,7 +1088,7 @@ const App = () => {
           </div>
         </header>
 
-        {/* Action HUD Area - Tightened Spacing */}
+        {/* Action HUD Area - Optimized Button Sizing */}
         <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-0 overflow-hidden"> 
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
@@ -1090,7 +1145,7 @@ const App = () => {
                     </div>
                 ) : heroPlayerObj && heroPlayerObj.chips >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (
                   <>
-                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-24 md:h-28">
+                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-16 md:h-20">
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={20} className="text-emerald-400" />} FOLD</button>
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/10 opacity-60'}`}>{preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
                       <div className={`flex-[1.5] flex bg-black/60 border border-white/20 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
@@ -1098,7 +1153,12 @@ const App = () => {
                           onClick={()=> { if(activeIdx === heroIdx) handleRaiseSubmit(raiseInput); }} 
                           className={`flex-1 ${raiseInput >= effectiveMaxBet ? 'bg-amber-600 border-amber-400' : 'bg-emerald-600 border-emerald-400'} border rounded-lg flex items-center justify-center font-black text-lg uppercase transition-all active:scale-95`}
                         >
-                          {raiseInput >= effectiveMaxBet ? 'ALL IN' : 'RAISE'}
+                          {(() => {
+                            if (raiseInput >= effectiveMaxBet) return 'ALL IN';
+                            if (Math.abs(raiseInput - (highestBet + totalDisplayPot)) < 0.01) return 'RAISE POT';
+                            if (Math.abs(raiseInput - (highestBet + Math.floor(totalDisplayPot * 0.5))) < 0.01) return 'RAISE 1/2 POT';
+                            return 'RAISE';
+                          })()}
                         </button>
                       </div>
                     </div>
