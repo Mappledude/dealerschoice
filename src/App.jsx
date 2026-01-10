@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.4
+// VERSION: v1.1.5
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.4";
+const VERSION = "v1.1.5";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -64,7 +64,7 @@ const getNeonNameColor = (name) => {
 };
 
 const VARIANTS = { 
-  RANDOM: { id: 'RANDOM', name: 'RANDOM', rules: ["The server will pick a different variation for you every time you deal.", "Keep your opponents guessing with dynamic rule changes."] },
+  RANDOM: { id: 'RANDOM', name: 'Random', rules: ["The server will pick a different variation for you every time you deal.", "Keep your opponents guessing with dynamic rule changes."] },
   HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', rules: ["Each player gets 2 hole cards.", "Standard high hand rankings apply.", "Best 5-card combination from 2 hole + 5 community cards wins."] }, 
   OMAHA: { id: 'OMAHA', name: 'Omaha', rules: ["Each player gets 4 hole cards.", "You MUST use EXACTLY 2 hole cards and 3 community cards.", "Standard high hand rankings apply."] }, 
   PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', rules: ["Each player gets 3 hole cards.", "Standard high hand rankings.", "Similar to Hold'em but with an extra card for better drawing potential."] }, 
@@ -206,7 +206,7 @@ const Seat = ({
                           </div>
                           {phase === PHASES.SHOWDOWN && !isFoldedBool && player.strength && (
                             <div className="text-[8px] lg:text-[1.1vh] text-cyan-400 font-bold tracking-tighter animate-in fade-in slide-in-from-bottom-1 duration-500 whitespace-nowrap overflow-hidden">
-                              {formatRank(String(player.strength))}
+                              {formatRank(player.strength)}
                             </div>
                           )}
                         </div>
@@ -271,7 +271,7 @@ const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
               {player.payouts.map((p, pi) => (
                 <div key={`payout-${pi}`} className="flex items-center justify-between opacity-80">
                    <div className="flex items-center gap-2">
-                     <span className="text-[8px] text-white/40 uppercase tracking-tighter">{formatRank(String(p.rank))}</span>
+                     <span className="text-[8px] text-white/40 uppercase tracking-tighter">{formatRank(p.rank)}</span>
                      <div className="flex gap-0.5">
                         {p.hand?.map((c, ci) => (
                           <span key={`micro-${ci}`} className={`text-[9px] px-0.5 rounded ${c.suit === '♥' || c.suit === '♦' ? 'bg-red-500/20 text-red-500' : 'bg-white/10 text-white'}`}>
@@ -450,7 +450,7 @@ const App = () => {
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
   const formatRank = (rank) => {
-    if (!rank || typeof rank !== 'string' || rank === "null") return rank || "";
+    if (!rank || rank === "null" || rank === "undefined") return "";
     const cleanRank = String(rank);
     const lower = cleanRank.toLowerCase();
     let prefix = "";
@@ -546,7 +546,7 @@ const App = () => {
                         <div className="text-[11px] text-white/90 text-left">
                             {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400 uppercase"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic uppercase">HAND IN PROGRESS...</span>)}
                         </div>
-                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(String(hand.rank))}</div>)}
+                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(hand.rank)}</div>)}
                     </button>
                     {expandedHands.has(hand.id) && (
                       <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
@@ -892,7 +892,7 @@ const App = () => {
                 {activeVariant?.id === 'HILOW' && (
                   <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none">
                       <span className="text-[8px] md:text-[10px] text-white/50 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                      <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
+                      <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
                       <span className="text-[13px] lg:text-[1.8vh] font-mono mt-1 text-white transition-all duration-500">
                         {Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB
                       </span>
@@ -900,7 +900,7 @@ const App = () => {
                 )}
                 <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none">
                   <span className="text-[8px] md:text-[10px] text-white/50 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-                  <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
+                  <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.strength)}</span>
                   <span className="text-[13px] lg:text-[1.8vh] font-mono mt-1 text-white transition-all duration-500">
                     {Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB
                   </span>
@@ -1066,7 +1066,7 @@ const App = () => {
                         </div>
                         {!isMuckWin && (
                           <>
-                            <div className="text-[10px] md:text-sm font-black text-white/70 tracking-widest uppercase">HOLDING <span className={themeColor}>{String(formatRank(String(winner.rank)))}</span></div>
+                            <div className="text-[10px] md:text-sm font-black text-white/70 tracking-widest uppercase">HOLDING <span className={themeColor}>{String(formatRank(winner.rank))}</span></div>
                             <div className="flex gap-1 justify-center mt-1">
                               {(winner.hand || []).map((c, ci) => (
                                 <div key={`winner-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
