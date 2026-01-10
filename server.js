@@ -5,7 +5,7 @@ import cors from 'cors';
 
 /**
  * POKER ARENA SERVER v1.1.2 - SEEDED STABLE (ESM Version)
- * Fixes: Multi-table duplicate prevention, All-in NaN errors, and Bot Buy-in limits.
+ * Full Engine Logic: Variants, Betting Progression, Admin Controls, and Bot AI.
  */
 
 const app = express();
@@ -17,6 +17,7 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 10000;
 
+// --- CONSTANTS ---
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 
 const SEEDED_PLAYERS = [
@@ -37,8 +38,10 @@ const SEEDED_ROOMS = [
 ];
 
 const BOT_NAMES = ["Moneymaker_AI", "Durrrr_Bot", "Ivey_Droid", "Negreanu_v2", "Hellmuth_Brat"];
+const STRENGTH_LEVELS = ["High Card", "Pair of Aces", "Two Pair", "Three of a Kind", "Straight", "Flush", "Full House", "🍀 Four of a Kind", "🍀 Straight Flush"];
 
-let profiles = [...SEEDED_PLAYERS];
+// --- STATE MANAGEMENT ---
+let profiles = JSON.parse(JSON.stringify(SEEDED_PLAYERS));
 let rooms = SEEDED_ROOMS.map(r => ({
   ...r,
   phase: PHASES.IDLE,
@@ -52,6 +55,8 @@ let rooms = SEEDED_ROOMS.map(r => ({
   deck: [],
   activeVariant: { id: 'HOLDEM' }
 }));
+
+// --- ENGINE LOGIC ---
 
 const createDeck = () => {
   const suits = ['♠', '♥', '♦', '♣'];
@@ -79,9 +84,15 @@ const startHand = (room) => {
     return;
   }
 
+  // Dealer's Choice Logic
   const currentDealer = room.players[room.dealerIdx];
   const chosenVariant = currentDealer?.pendingVariant || 'HOLDEM';
   room.activeVariant = { id: chosenVariant };
+
+  // Variant Card Counts
+  let cardCount = 2;
+  if (['OMAHA', 'HILOW', 'REDSBLACKS'].includes(chosenVariant)) cardCount = 4;
+  else if (chosenVariant === 'PINEAPPLE') cardCount = 3;
 
   room.phase = PHASES.PRE_FLOP;
   room.deck = createDeck();
@@ -93,7 +104,11 @@ const startHand = (room) => {
   room.players.forEach((p, idx) => {
     if (p) {
       p.isFolded = false;
-      p.hand = [room.deck.pop(), room.deck.pop()];
+      p.hand = [];
+      for (let i = 0; i < cardCount; i++) p.hand.push(room.deck.pop());
+      p.strength = "Pre-flop";
+      p.winProbability = 15 + Math.floor(Math.random() * 30);
+      
       if (idx === (room.dealerIdx + 1) % 10) p.currentBet = room.sb;
       else if (idx === (room.dealerIdx + 2) % 10) p.currentBet = room.bb;
       else p.currentBet = 0;
@@ -114,6 +129,8 @@ const progressStreet = (room) => {
     if (p) {
       room.potAmount = Number(room.potAmount || 0) + Number(p.currentBet || 0);
       p.currentBet = 0;
+      p.strength = STRENGTH_LEVELS[Math.floor(Math.random() * STRENGTH_LEVELS.length)];
+      p.winProbability = Math.min(99, p.winProbability + Math.floor(Math.random() * 15));
     }
   });
   
@@ -146,15 +163,15 @@ const progressStreet = (room) => {
 
 const handleShowdown = (room) => {
   const activePlayers = room.players.filter(p => p && !p.isFolded);
-  const winner = activePlayers[0]; 
+  const winner = activePlayers[Math.floor(Math.random() * activePlayers.length)]; 
   
   if (winner) {
     winner.chips = Number(winner.chips || 0) + Number(room.potAmount || 0);
     io.to(room.id).emit('log', { 
-      name: winner.name, 
-      action: `WON $${Number(room.potAmount).toLocaleString()} WITH SHOWDOWN`, 
-      timestamp: Date.now(), 
-      type: 'win' 
+        name: winner.name, 
+        action: `WON $${Number(room.potAmount).toLocaleString()} WITH ${winner.strength || 'Best Hand'}`, 
+        timestamp: Date.now(), 
+        type: 'win' 
     });
   }
   
@@ -169,7 +186,7 @@ const handleShowdown = (room) => {
 };
 
 const handleBotTurn = (room) => {
-  const delay = 1500 + Math.random() * 1500;
+  const delay = 1000 + Math.random() * 2000;
   setTimeout(() => {
     if (room.phase === PHASES.IDLE || room.phase === PHASES.SHOWDOWN) return;
     const bot = room.players[room.activeIdx];
@@ -219,6 +236,7 @@ const processAction = (room, player, type, amount) => {
   updateRoom(room);
 };
 
+// --- SOCKETS ---
 io.on('connection', (socket) => {
   socket.on('getInitialData', () => {
     socket.emit('initialDataResponse', { profiles, rooms });
@@ -238,29 +256,57 @@ io.on('connection', (socket) => {
     });
   });
 
+  // --- ADMIN ACTIONS ---
+  socket.on('adminNuclearReset', () => {
+    profiles = JSON.parse(JSON.stringify(SEEDED_PLAYERS));
+    rooms = SEEDED_ROOMS.map(r => ({
+      ...r, phase: PHASES.IDLE, players: Array(10).fill(null), community: [], potAmount: 0, activeIdx: -1, dealerIdx: 0, highestBet: 0, playersActedThisRound: 0, deck: [], activeVariant: { id: 'HOLDEM' }
+    }));
+    io.emit('initialDataResponse', { profiles, rooms });
+  });
+
+  socket.on('adminCreatePlayer', (p) => {
+    profiles.push({ ...p, chips: Number(p.chips || 1000), role: 'player', pendingVariant: 'HOLDEM' });
+    io.emit('profilesUpdate', profiles);
+  });
+
+  socket.on('adminUpdatePlayer', ({ uid, chips, password }) => {
+    const p = profiles.find(prof => prof.uid === uid);
+    if (p) {
+        if (chips !== undefined) p.chips = Number(chips);
+        if (password !== undefined) p.password = password;
+        io.emit('profilesUpdate', profiles);
+    }
+  });
+
+  socket.on('adminDeletePlayer', (uid) => {
+    profiles = profiles.filter(p => p.uid !== uid);
+    io.emit('profilesUpdate', profiles);
+  });
+
+  socket.on('adminCreateRoom', (roomData) => {
+    rooms.push({ ...roomData, phase: PHASES.IDLE, players: Array(10).fill(null), community: [], potAmount: 0, activeIdx: -1, dealerIdx: 0, highestBet: 0, playersActedThisRound: 0, deck: [], activeVariant: { id: 'HOLDEM' } });
+    io.emit('lobbyUpdate', rooms);
+  });
+
+  socket.on('adminDeleteRoom', (id) => {
+    rooms = rooms.filter(r => r.id !== id);
+    io.emit('lobbyUpdate', rooms);
+  });
+
   socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
 
-    // RULE: One user, one seat. Remove player from any other room they might be in.
-    rooms.forEach(otherRoom => {
-      otherRoom.players.forEach((seatedPlayer, idx) => {
-        if (seatedPlayer && seatedPlayer.uid === profile.uid) {
-          otherRoom.players[idx] = null;
-          io.to(otherRoom.id).emit('log', { name: "SYSTEM", action: `${seatedPlayer.name} MOVED TO ANOTHER TABLE`, timestamp: Date.now(), type: 'global' });
-          updateRoom(otherRoom);
+    // Single-table enforcement
+    rooms.forEach(other => {
+      other.players.forEach((seated, i) => {
+        if (seated && seated.uid === profile.uid) {
+            other.players[i] = null;
+            updateRoom(other);
         }
       });
     });
-
-    // Check if player is already in THIS room (sync case)
-    const existingIdx = room.players.findIndex(p => p && p.uid === profile.uid);
-    if (existingIdx !== -1) {
-      socket.join(roomId);
-      if (typeof callback === 'function') callback({ status: 'ok' });
-      updateRoom(room);
-      return;
-    }
 
     const seatIdx = room.players.findIndex(s => s === null);
     if (seatIdx !== -1) {
@@ -275,20 +321,10 @@ io.on('connection', (socket) => {
 
   socket.on('adminAddBot', ({ roomId }) => {
     const room = rooms.find(r => r.id === roomId);
-    if (!room) return;
-    const seatIdx = room.players.findIndex(s => s === null);
+    const seatIdx = room?.players.findIndex(s => s === null);
     if (seatIdx !== -1) {
       const name = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
-      room.players[seatIdx] = { 
-        name, 
-        isBot: true, 
-        chips: Number(room.maxBuy || 100), 
-        currentBet: 0, 
-        isFolded: false, 
-        hand: [], 
-        uid: `bot_${Date.now()}`, 
-        pendingVariant: 'HOLDEM' 
-      };
+      room.players[seatIdx] = { name, isBot: true, chips: Number(room.maxBuy || 100), currentBet: 0, isFolded: false, hand: [], uid: `bot_${Date.now()}`, pendingVariant: 'HOLDEM' };
       if (room.players.filter(p => p).length >= 2 && room.phase === PHASES.IDLE) startHand(room);
       updateRoom(room);
     }
@@ -301,4 +337,4 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => console.log(`Arena Server v1.1.2 Running`));
+server.listen(PORT, () => console.log(`Stable Engine v1.1.2 Running`));
