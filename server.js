@@ -1,10 +1,10 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
 
 /**
- * POKER ARENA SERVER v1.1.0 - SEEDED STABLE
+ * POKER ARENA SERVER v1.1.0 - SEEDED STABLE (ESM Version)
  * Handles game state, betting rounds, and multi-variant evaluation
  */
 
@@ -36,7 +36,6 @@ const SEEDED_ROOMS = [
 ];
 
 // --- STATE MANAGEMENT ---
-// Initialize with Seed Data
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 
 let profiles = [...SEEDED_PLAYERS];
@@ -69,14 +68,12 @@ io.on('connection', (socket) => {
 
   socket.on('playerLogin', ({ password }) => {
     const cleanPass = password.toLowerCase().trim();
-    // Check seeded and dynamic profiles
     let profile = profiles.find(p => p.password.toLowerCase() === cleanPass);
     
     if (profile) {
       socket.emit('loginSuccess', profile);
       io.emit('profilesUpdate', profiles);
     } else {
-      // Allow dynamic creation for others if needed, or simple fail
       socket.emit('loginError', { message: 'Invalid Credentials' });
     }
   });
@@ -85,10 +82,9 @@ io.on('connection', (socket) => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return callback({ status: 'error' });
 
-    // Prevent double joining
     const existingIdx = room.players.findIndex(p => p && p.uid === profile.uid);
     if (existingIdx !== -1) {
-      return callback({ status: 'ok' }); // Already in
+      return callback({ status: 'ok' }); 
     }
 
     const seatIdx = room.players.findIndex(p => p === null);
@@ -107,7 +103,6 @@ io.on('connection', (socket) => {
     room.players[seatIdx] = player;
     socket.join(roomId);
     
-    // Log join event
     io.to(roomId).emit('log', {
       name: "SYSTEM",
       action: `${profile.name} JOINED THE TABLE`,
@@ -142,7 +137,6 @@ io.on('connection', (socket) => {
     const player = room.players[room.activeIdx];
     if (!player) return;
 
-    // Basic logic for visual sync testing
     if (type === 'FOLD') {
       player.isFolded = true;
     } else if (type === 'RAISE') {
