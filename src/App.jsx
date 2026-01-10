@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.18
+// VERSION: v1.1.19
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.18";
+const VERSION = "v1.1.19";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -543,10 +543,10 @@ const App = () => {
             {adminTab === ADMIN_TABS.PLAYERS ? (
                 <div className="flex flex-col gap-8">
                     <h3 className="text-xl border-l-4 border-[#fbbf24] pl-4 uppercase">Registry</h3>
-                    <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10">
                         <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 uppercase"/>
                         <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 uppercase"/>
-                        <button onClick={() => { if (!newPlayer.name.trim()) return; socket.emit('adminCreatePlayer', { ...newPlayer, uid: 'p_' + Math.random().toString(36).slice(2, 7) }); setNewPlayer({ ...newPlayer, name: '', password: '' }); }} className="bg-[#fbbf24] text-black rounded-xl">CREATE</button>
+                        <button onClick={() => { if (!newPlayer.name.trim()) return; socket.emit('adminCreatePlayer', { ...newPlayer, uid: 'p_' + Math.random().toString(36).slice(2, 7) }); setNewPlayer({ ...newPlayer, name: '', password: '' }); }} className="bg-[#fbbf24] text-black rounded-xl font-black">CREATE</button>
                     </div>
                     <div className="bg-white/5 rounded-2xl border border-white/10">
                         {allProfiles.map(p => (
@@ -564,14 +564,14 @@ const App = () => {
             ) : (
                 <div className="flex flex-col gap-8">
                     <h3 className="text-xl border-l-4 border-emerald-500 pl-4 uppercase">Arenas</h3>
-                    <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-4 border border-white/10">
                         <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ARENA NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 uppercase"/>
-                        <button onClick={() => { if (!newTable.name.trim()) return; socket.emit('adminCreateRoom', { ...newTable, id: 'room_' + Date.now().toString(36) }); setNewTable({ ...newTable, name: '' }); }} className="bg-emerald-600 rounded-xl">SPAWN</button>
+                        <button onClick={() => { if (!newTable.name.trim()) return; socket.emit('adminCreateRoom', { ...newTable, id: 'room_' + Date.now().toString(36) }); setNewTable({ ...newTable, name: '' }); }} className="bg-emerald-600 text-white rounded-xl font-black">SPAWN</button>
                     </div>
                     <div className="grid grid-cols-1 gap-4">
                         {activeTables.map(t => (
                             <div key={`table-admin-${t.id}`} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10">
-                              <div className="uppercase"><h4 className="text-[#fbbf24]">{String(t.name)}</h4><p className="text-[10px] text-white/40">${t.sb}/${t.bb}</p></div>
+                              <div className="uppercase"><h4 className="text-[#fbbf24] font-black">{String(t.name)}</h4><p className="text-[10px] text-white/40">${t.sb}/${t.bb}</p></div>
                               <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="text-red-500"><Trash2 size={16}/></button>
                             </div>
                         ))}
@@ -588,11 +588,11 @@ const App = () => {
             <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-xl px-6">
               <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-emerald-500/30 rounded-3xl flex flex-col gap-10 shadow-2xl">
                 <h3 className="text-3xl text-center text-emerald-400">{String(selectedTableForJoin.name)}</h3>
-                <div className="space-y-4 text-center">
-                  <div className="flex justify-between items-center text-[10px] text-white/40 font-black"><span>BUY-IN</span><span className="text-emerald-400 text-2xl font-mono">${(Number(buyInAmount) || 0).toLocaleString()}</span></div>
+                <div className="space-y-4 text-center font-black">
+                  <div className="flex justify-between items-center text-[10px] text-white/40"><span>BUY-IN</span><span className="text-emerald-400 text-2xl font-mono">${(Number(buyInAmount) || 0).toLocaleString()}</span></div>
                   <input type="range" min={selectedTableForJoin.minBuy || 50} max={Math.min(selectedTableForJoin.maxBuy || 100, (Number(userProfile?.chips) || 100))} step={1} value={buyInAmount} onChange={(e) => setBuyInAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
                 </div>
-                <div className="flex gap-4"><button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl">CANCEL</button><button onClick={joinRoom} className="flex-2 p-4 bg-emerald-600 rounded-xl shadow-lg">CONFIRM</button></div>
+                <div className="flex gap-4"><button onClick={()=>setSelectedTableForJoin(null)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl">CANCEL</button><button onClick={joinRoom} className="flex-2 p-4 bg-emerald-600 rounded-xl font-black shadow-lg">CONFIRM</button></div>
               </div>
             </div>
         )}
@@ -609,7 +609,7 @@ const App = () => {
                     <div key={`lobby-table-${t.id}`} className="group bg-slate-900/40 border border-white/5 rounded-3xl flex flex-col p-8 shadow-2xl transition-all hover:border-emerald-500/30">
                       <h3 className="text-2xl text-white font-black mb-4 truncate">{String(t.name)}</h3>
                       <div className="flex flex-col gap-4 mb-6">
-                        <div className="flex justify-between items-end border-b border-white/5 pb-2">
+                        <div className="flex justify-between items-end border-b border-white/5 pb-2 font-black">
                             <div className="flex flex-col"><span className="text-[8px] text-white/30 uppercase">Stakes</span><span className="text-emerald-400 text-xl font-mono">${t.sb}/${t.bb}</span></div>
                             <div className="flex flex-col items-end"><span className="text-[8px] text-white/30 uppercase">Buy-in</span><span className="text-white/80 text-sm font-mono">${t.minBuy}-${t.maxBuy}</span></div>
                         </div>
@@ -617,7 +617,7 @@ const App = () => {
                             {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`seated-${p.uid || idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] flex items-center gap-1">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
                         </div>
                       </div>
-                      <button onClick={()=>{ setSelectedTableForJoin(t); setBuyInAmount(t.maxBuy); }} className="w-full py-4 bg-emerald-600 rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all">JOIN ARENA</button>
+                      <button onClick={()=>{ setSelectedTableForJoin(t); setBuyInAmount(t.maxBuy); }} className="w-full py-4 bg-emerald-600 rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all font-black uppercase">JOIN ARENA</button>
                     </div>
                 ))}
             </div>
@@ -634,11 +634,11 @@ const App = () => {
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-3xl px-6">
           <div className="w-full max-w-[400px] p-8 bg-slate-900 border border-indigo-500/30 rounded-3xl flex flex-col gap-10 shadow-2xl">
             <h3 className="text-3xl text-center text-indigo-400">TOP-UP</h3>
-            <div className="space-y-4 text-center">
+            <div className="space-y-4 text-center font-black">
               <div className="flex justify-between items-center text-[10px] text-white/50"><span>AMOUNT</span><span className="text-indigo-400 text-2xl font-mono">${(Number(rebuyAmount) || 0).toLocaleString()}</span></div>
               <input type="range" min={1} max={Number(userProfile?.chips) || 100} step={1} value={rebuyAmount} onChange={(e) => setRebuyAmount(Number(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
             </div>
-            <div className="flex gap-4"><button onClick={()=>setShowRebuyModal(false)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl">CANCEL</button><button onClick={handleRebuy} className="flex-2 p-4 bg-indigo-600 rounded-xl">INJECT</button></div>
+            <div className="flex gap-4"><button onClick={()=>setShowRebuyModal(false)} className="flex-1 p-4 bg-white/5 border border-white/10 rounded-xl">CANCEL</button><button onClick={handleRebuy} className="flex-2 p-4 bg-indigo-600 rounded-xl font-black">INJECT</button></div>
           </div>
         </div>
       )}
@@ -649,9 +649,9 @@ const App = () => {
             <button onClick={()=>setShowRulesModal(false)} className="absolute top-4 right-4 text-white/40"><X/></button>
             <h3 className="text-2xl font-black text-cyan-400 uppercase mb-4 tracking-widest flex items-center gap-2"><BookOpen size={24}/> {activeVariant?.name || 'Poker'} Rules</h3>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto mb-6 pr-2">
-              {(activeVariant?.rules || []).map((rule, ri) => (<div key={`rule-${ri}`} className="flex gap-3 text-sm text-white/80 leading-relaxed"><span className="text-cyan-500 shrink-0">•</span><span>{String(rule)}</span></div>))}
+              {(activeVariant?.rules || []).map((rule, ri) => (<div key={`rule-${ri}`} className="flex gap-3 text-sm text-white/80 leading-relaxed uppercase"><span className="text-cyan-500 shrink-0">•</span><span>{String(rule)}</span></div>))}
             </div>
-            <button onClick={()=>setShowRulesModal(false)} className="w-full py-4 bg-cyan-600 rounded-xl uppercase hover:brightness-110">Understood</button>
+            <button onClick={()=>setShowRulesModal(false)} className="w-full py-4 bg-cyan-600 rounded-xl uppercase font-black hover:brightness-110">Understood</button>
           </div>
         </div>
       )}
@@ -662,21 +662,16 @@ const App = () => {
                 <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2">
                     <div className="flex items-center gap-2 font-black tracking-widest"><Terminal size={14}/> Activity Log</div>
                     <div className="flex items-center gap-2">
-                        <button onClick={copyActivityToClipboard} className="text-indigo-400/50 hover:text-indigo-400"><Copy size={14}/></button>
+                        <button onClick={copyActivityToClipboard} className="text-indigo-400/50 hover:text-indigo-400 active:scale-90 transition-all"><Copy size={14}/></button>
                         <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 font-black">
                     {handHistory.length > 0 ? handHistory.map((hand) => (
                         <div key={`hand-log-${hand.id}`} className="border border-white/5 rounded-xl bg-white/5 p-3 animate-in fade-in slide-in-from-left-2">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-[9px] text-indigo-400 font-bold uppercase">{String(hand.variant)} HAND</span>
-                            </div>
+                            <span className="text-[9px] text-indigo-400 font-bold uppercase">{String(hand.variant)} HAND</span>
                             <div className="text-[11px] text-white/90 uppercase">{hand.winner ? <span className="text-emerald-400 flex items-center gap-2"><Trophy size={10}/> {String(hand.winner)} WON ${String(hand.amount)}</span> : <span className="italic text-white/40">In Progress...</span>}</div>
                             {hand.rank && <div className="text-[9px] text-white/40 uppercase mt-1 pl-4 border-l border-white/10">{formatRank(hand.rank)}</div>}
-                            {(hand.events || []).slice(-3).map((ev, ei) => (
-                                <div key={ei} className="text-[8px] text-white/30 truncate uppercase mt-1">• {ev.name}: {ev.action}</div>
-                            ))}
                         </div>
                     )) : <div className="flex items-center justify-center h-full text-white/10"><Activity className="animate-pulse" size={48}/></div>}
                 </div>
@@ -687,6 +682,24 @@ const App = () => {
       <div className="flex-1 flex relative overflow-hidden">
         <main className="flex-1 flex flex-col items-center justify-center relative bg-[#06080c] overflow-hidden">
             <div className="absolute inset-0 z-0" style={{ background: 'radial-gradient(circle at 50% 45%, #162033 0%, #06080c 100%)' }} />
+            
+            {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
+              <>
+                {activeVariant?.id === 'HILOW' && (
+                  <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none font-black text-center">
+                      <span className="text-[8px] md:text-[10px] text-white/50 tracking-[0.3em] uppercase">LOW STRENGTH</span>
+                      <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter shadow-lg">{phase === PHASES.PRE_FLOP ? "-" : (formatRank(heroPlayerObj?.lowStrength) || "-")}</span>
+                      <span className="text-[12px] text-white/40 font-mono mt-1">{Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB</span>
+                  </div>
+                )}
+                <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none font-black text-center">
+                  <span className="text-[8px] md:text-[10px] text-white/50 tracking-[0.3em] uppercase">STRENGTH</span>
+                  <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter shadow-lg">{phase === PHASES.PRE_FLOP ? "-" : (formatRank(heroPlayerObj?.strength) || "-")}</span>
+                  <span className="text-[12px] text-white/40 font-mono mt-1">{Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB</span>
+                </div>
+              </>
+            )}
+
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[16/9] flex items-center justify-center origin-center">
                 <div className="absolute inset-[-20px] rounded-[50%] z-0">
                     <div className="absolute inset-0 rounded-[50%] blur-[20px] opacity-40 animate-pulse" style={{ background: activeVariant?.id === 'HILOW' ? `linear-gradient(to right, ${VARIANT_COLORS.HILOW}, #bfff00)` : (VARIANT_COLORS[activeVariant?.id] || '#22d3ee') }} />
@@ -729,8 +742,8 @@ const App = () => {
                     <div className="flex-1 w-full relative flex items-center justify-center py-4">
                       <input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet))} max={Number(effectiveMaxBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer relative z-10" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
                     </div>
-                    <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl flex flex-col items-center min-w-[110px] shadow-2xl animate-in zoom-in-50">
-                      <span className="text-[8px] text-white/50 tracking-widest uppercase font-black">Raise To</span>
+                    <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl flex flex-col items-center min-w-[110px] shadow-2xl animate-in zoom-in-50 font-black text-center">
+                      <span className="text-[8px] text-white/50 tracking-widest uppercase">Raise To</span>
                       <div className="flex items-center justify-center w-full"><span className="text-emerald-500 font-mono mr-0.5">$</span><input type="number" value={raiseInput} onFocus={(e) => e.target.select()} onKeyDown={(e) => e.key === 'Enter' && handleRaiseSubmit(raiseInput)} onChange={(e) => setRaiseInput(Number(e.target.value))} className="bg-transparent text-emerald-400 font-mono text-xl font-black text-center outline-none w-full" /></div>
                     </div>
                   </div>
@@ -775,7 +788,7 @@ const App = () => {
                     <div key={`win-footer-${winner.uid || 'single'}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full mt-2">
                         <div className="flex items-center gap-3 bg-white/5 px-5 py-1 rounded-full border border-white/10 shadow-2xl">
                             <Trophy size={14} className="text-yellow-400 animate-bounce" />
-                            <div className="text-sm md:text-xl font-black flex items-center gap-2 whitespace-nowrap">
+                            <div className="text-sm md:text-xl font-black flex items-center gap-2 whitespace-nowrap uppercase">
                               <span className={getNeonNameColor(winner.name)}>{String(winner.name || '').toUpperCase()}</span>
                               {isMuckWin ? <span className="text-white ml-2">SCOOPED THE POT</span> : <><span className="text-white/50 font-black">WON</span><span className="text-emerald-400 font-mono ml-2">+${(Number(winner.amount) || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></>}
                             </div>
@@ -806,7 +819,7 @@ const App = () => {
                 {heroPlayerObj && (Number(heroPlayerObj.chips) || 0) < Number(bigBlind) && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN || heroPlayerObj.isFolded || heroPlayerObj.waitingForNextHand) ? (
                     <div className="flex flex-row items-center justify-between w-full max-w-[420px] p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl animate-pulse shadow-[0_0_30px_rgba(79,70,229,0.3)]">
                         <div className="flex flex-col items-start"><span className="text-white/50 text-[10px] uppercase font-black tracking-tighter">Insufficient Balance</span><span className="text-indigo-400 text-[12px] font-mono font-black">Wallet: ${(Number(userProfile?.chips) || 0).toLocaleString()}</span></div>
-                        <button onClick={()=>{ setRebuyAmount(100); setShowRebuyModal(true); }} className="px-5 py-3 bg-indigo-600 rounded-xl flex items-center gap-2 uppercase font-black hover:bg-indigo-500 transition-all"><Coins size={16}/> Re-buy</button>
+                        <button onClick={()=>{ setRebuyAmount(100); setShowRebuyModal(true); }} className="px-5 py-3 bg-indigo-600 rounded-xl flex items-center gap-2 uppercase font-black hover:bg-indigo-500 transition-all active:scale-95"><Coins size={16}/> Re-buy</button>
                     </div>
                 ) : heroPlayerObj && (Number(heroPlayerObj.chips) || 0) >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (
                     <div className="flex flex-row gap-2 w-full max-w-[400px] items-stretch justify-center h-16 md:h-10">
@@ -819,7 +832,7 @@ const App = () => {
                       </div>
                     </div>
                 ) : (
-                  <div className="flex flex-col items-center py-10 opacity-20 animate-pulse"><span className="text-white text-sm italic font-black tracking-[1em]">OBSERVING</span></div>
+                  <div className="flex flex-col items-center py-10 opacity-20 animate-pulse font-black uppercase"><span className="text-white text-sm italic tracking-[1em]">OBSERVING</span></div>
                 )}
             </div>
           )}
@@ -831,7 +844,7 @@ const App = () => {
           <div className="w-full max-w-[400px] bg-black/80 border border-white/20 rounded-3xl p-8 flex flex-col gap-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center border-b border-white/10 pb-4 font-black"><h3 className="text-lg text-cyan-400 uppercase flex items-center gap-2"><Settings2 size={20}/> Configuration</h3><X size={24} className="cursor-pointer text-white/40 hover:text-white" onClick={() => setShowVisualControls(false)}/></div>
             <div className="space-y-6 font-black">
-              <button onClick={() => { if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); }} className="w-full py-4 bg-white/10 border border-white/20 text-white rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/20 transition-all"><Bot size={18}/> Add Arena Bot</button>
+              <button onClick={() => { if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); }} className="w-full py-4 bg-white/10 border border-white/20 text-white rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-95"><Bot size={18}/> Add Arena Bot</button>
               <div className="flex flex-col gap-4 pt-4 border-t border-white/10">
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between">Table Zoom <span>{Math.round((visuals.tableZoom || 0) * 100)}%</span></label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between">HUD Height <span>{visuals.footerHeight || 280}px</span></label><input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
@@ -840,7 +853,7 @@ const App = () => {
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between">Hero Card Spread <span>{(Number(visuals.heroCardSpread) || 3.0).toFixed(1)}</span></label><input type="range" min="0.5" max="10.0" step="0.5" value={visuals.heroCardSpread} onChange={(e) => setVisuals({...visuals, heroCardSpread: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
               </div>
             </div>
-            <button onClick={() => setShowVisualControls(false)} className="w-full py-4 bg-cyan-600 text-black rounded-xl uppercase font-black shadow-lg">Save & Apply</button>
+            <button onClick={() => setShowVisualControls(false)} className="w-full py-4 bg-cyan-600 text-black rounded-xl uppercase font-black shadow-lg hover:brightness-110 active:scale-95">Save & Apply</button>
           </div>
         </div>
       )}
