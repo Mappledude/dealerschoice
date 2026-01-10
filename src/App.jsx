@@ -167,7 +167,7 @@ const Seat = ({
                         return (
                           <div 
                             key={`${c.id || ci}-${ci}`} 
-                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-slate-900 border-white/20'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
+                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'card-back-diamond border-white/20'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
                             style={{ 
                               transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? scaleBase * 1.1 : scaleBase})`, 
                               transformOrigin: 'bottom center', 
@@ -201,7 +201,7 @@ const Seat = ({
                             <span className="text-[12px] lg:text-[1.6vh] font-black text-white uppercase tracking-wider truncate max-w-[80px] lg:max-w-[12vh]">{String(player.name)}</span>
                           </div>
                           {phase === PHASES.SHOWDOWN && !isFoldedBool && player.strength && (
-                            <div className="text-[8px] lg:text-[1.1vh] text-cyan-400 font-bold tracking-tighter animate-in fade-in slide-in-from-bottom-1 duration-500 whitespace-nowrap overflow-hidden">
+                            <div className="text-[8px] lg:text-[1.1vh] text-white font-normal tracking-tighter whitespace-nowrap overflow-hidden">
                               {formatRank(String(player.strength))}
                             </div>
                           )}
@@ -293,7 +293,7 @@ const App = () => {
   const [visuals, setVisuals] = useState({ 
     heroCardScale: 2.0,
     heroCardY: isMobile ? 0 : -54, 
-    heroCardSpread: 3.0, // Initial hero card spread value
+    heroCardSpread: 3.0, 
     oppCardScale: 1.0, 
     oppCardY: -10, 
     commCardScale: 1.5, 
@@ -391,27 +391,6 @@ const App = () => {
     
     const cleanLabel = cleanRank.replace(/^(high|low|scoop): /i, "");
     return prefix + cleanLabel.toUpperCase();
-  };
-
-  const getStrengthClass = (strength) => {
-    if (!strength) return "";
-    const s = String(strength).toLowerCase();
-    if (s.includes("low") || s.includes("high card")) {
-      if (s.includes(" 5") || s.includes(" 6")) return "strength-hi-res-monster";
-      if (s.includes(" 7") || s.includes(" 8")) return "strength-hi-res-strong";
-      if (s.includes(" 9") || s.includes(" 10")) return "strength-hi-res-ember";
-      return "strength-hi-res-smolder";
-    }
-    if (s.includes("straight flush") || s.includes("4 of a kind") || s.includes("full house") || s.includes("5 of a kind")) {
-      return "strength-hi-res-monster";
-    }
-    if (s.includes("flush") || s.includes("straight") || s.includes("3 of a kind")) {
-      return "strength-hi-res-strong";
-    }
-    if (s.includes("pair")) {
-      return "strength-hi-res-ember";
-    }
-    return "strength-hi-res-smolder";
   };
 
   const handHistory = useMemo(() => {
@@ -709,7 +688,7 @@ const App = () => {
                 </div>
             ) : (
                 <div className="flex flex-col gap-5 md:gap-8">
-                    <h3 className="text-lg md:text-xl border-l-4 border-emerald-500 pl-4 font-black">ARENA CONTROL</h3>
+                    <h3 className="text-lg md:text-xl border-l-4 border-emerald-500 l-4 font-black">ARENA CONTROL</h3>
                     <div className="bg-white/5 p-4 md:p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border border-white/10">
                         <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ARENA NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white text-sm"/>
                         <div className="flex gap-2">
@@ -758,7 +737,7 @@ const App = () => {
             <button onClick={()=>{setCurrentView(VIEWS.LOGIN); setUserProfile(null);}} className="text-white/20 hover:text-red-500 transition-all"><LogOut size={20}/></button>
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black font-black uppercase text-center">
+        <main className="flex-1 p-4 md:p-12 overflow-y-auto floor-executive-parquet font-black uppercase text-center">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
                 {activeTables.map((t) => (
                     <div key={t.id} className="group relative bg-slate-900/40 border border-white/5 rounded-2xl md:rounded-3xl flex flex-col p-6 md:p-8 shadow-2xl transition-all hover:border-emerald-500/30 hover:bg-slate-900/60 font-black overflow-hidden text-left">
@@ -779,7 +758,7 @@ const App = () => {
   );
 
   return (
-    <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
+    <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#1c1917] text-white flex flex-col overflow-hidden relative font-black uppercase tracking-tighter select-none">
       
       {/* SVG FILTERS DEFINITION */}
       <svg style={{ visibility: 'hidden', position: 'absolute', width: 0, height: 0 }}>
@@ -832,75 +811,36 @@ const App = () => {
           </div>
         </div>
       )}
-      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[45px] md:h-[55px]">
-        <div className="flex-1 flex items-center">
-          <button 
-            onClick={()=>setShowRulesModal(true)} 
-            style={{ backgroundColor: VARIANT_COLORS[activeVariant?.id || 'HOLDEM'] || '#1e293b' }} 
-            className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'}`}
-          >
-            <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-black flex items-center gap-1 opacity-70">This Hand: <HelpCircle size={8}/></span>
-            <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-xs md:text-sm font-black truncate drop-shadow-sm">{String(activeVariant?.name)}</span>
-          </button>
-        </div>
-        <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
-          <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button>
-          <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button>
-          <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
-        </div>
-        <div className="flex-1 flex items-center justify-end">
-          <div className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}>
-            <span className="text-emerald-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">On My Deal:</span>
-            <div className="flex items-center">
-              <select 
-                value={pendingVariantId} 
-                onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} 
-                className="bg-transparent text-white text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full"
-              >
-                {Object.entries(VARIANTS).map(([k,v]) => (<option key={`opt-${k}`} value={k} className="bg-slate-900">{v.name}</option>))}
-              </select>
-              <ChevronDown size={12} className="text-white/30 pointer-events-none ml-1" />
-            </div>
-          </div>
-        </div>
-      </header>
+
+      {/* INTEL PANEL FOR MOBILE/DESKTOP */}
       {intelExpanded && (
-        <div className={`fixed bottom-[240px] left-4 w-[85vw] md:w-96 bg-black/20 border border-indigo-500/30 rounded-2xl backdrop-blur-sm z-[150] shadow-[0_0_50px_rgba(0,0,0,0.4)] animate-in slide-in-from-left duration-300 flex flex-col h-[50vh] max-h-[500px] ${!isMobile ? 'hidden' : ''}`}>
+        <div className={`fixed bottom-[320px] left-4 w-[85vw] md:w-96 bg-black/40 border border-indigo-500/30 rounded-2xl backdrop-blur-md z-[150] shadow-[0_0_50px_rgba(0,0,0,0.4)] animate-in slide-in-from-left duration-300 flex flex-col h-[40vh] max-h-[450px] ${!isMobile ? 'hidden' : ''}`}>
           <ActivityFeedContent />
         </div>
       )}
+
       <div className="flex-1 flex flex-row overflow-hidden relative">
         {intelExpanded && !isMobile && (
           <aside className="w-80 bg-black/40 border-r border-white/5 hidden lg:flex flex-col animate-in slide-in-from-left duration-300">
             <ActivityFeedContent />
           </aside>
         )}
-        <main className="flex-1 flex flex-col items-center justify-center relative bg-gradient-to-b from-slate-900 to-black overflow-hidden font-black uppercase text-center">
+        <main className="flex-1 flex flex-col items-center justify-center relative floor-executive-parquet overflow-hidden font-black uppercase text-center">
             {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
               <>
                 {activeVariant?.id === 'HILOW' && (
-                  <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
-                      <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                      <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(String(heroPlayerObj?.lowStrength))}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
-                      <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
-                            style={{ 
-                              textShadow: `0 0 ${Math.pow(heroPlayerObj.lowWinProbability / 8, 1.6)}px #fbbf24`,
-                              color: heroPlayerObj.lowWinProbability > 85 ? '#fff' : '#fbbf24',
-                              filter: `brightness(${1 + (heroPlayerObj.lowWinProbability / 30)}) drop-shadow(0 0 10px rgba(251,191,36,${heroPlayerObj.lowWinProbability/100}))`
-                            }}>
+                  <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none">
+                      <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-normal mb-1">LOW STRENGTH</span>
+                      <span className="text-white text-[14px] lg:text-[2.5vh] font-normal tracking-tighter">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
+                      <span className="text-white text-[11px] lg:text-[1.5vh] font-normal mt-1">
                         {Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB
                       </span>
                   </div>
                 )}
-                <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
-                  <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-                  <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(String(heroPlayerObj?.strength))}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-                  <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
-                        style={{ 
-                          textShadow: `0 0 ${Math.pow(heroPlayerObj.winProbability / 8, 1.6)}px #fbbf24`,
-                          color: heroPlayerObj.winProbability > 85 ? '#fff' : '#fbbf24',
-                          filter: `brightness(${1 + (heroPlayerObj.winProbability / 30)}) drop-shadow(0 0 10px rgba(251,191,36,${heroPlayerObj.winProbability/100}))`
-                        }}>
+                <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none">
+                  <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-normal mb-1">STRENGTH</span>
+                  <span className="text-white text-[14px] lg:text-[2.5vh] font-normal tracking-tighter">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
+                  <span className="text-white text-[11px] lg:text-[1.5vh] font-normal mt-1">
                     {Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB
                   </span>
                 </div>
@@ -909,7 +849,7 @@ const App = () => {
             <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center h-full origin-center">
                 <div className="absolute inset-[-20px] rounded-[50%] z-0">
                     <div 
-                        className="absolute inset-0 rounded-[50%] blur-[20px] opacity-40 animate-pulse"
+                        className="absolute inset-[-10px] rounded-[50%] blur-[30px] opacity-80 animate-pulse scale-105"
                         style={{
                             background: activeVariant?.id === 'REDSBLACKS' 
                                 ? 'conic-gradient(#ff0000 0deg 120deg, #000 120deg 180deg, #ff0000 180deg 300deg, #000 300deg 360deg)'
@@ -977,7 +917,42 @@ const App = () => {
             </div>
         </main>
       </div>
-      <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shrink-0 pb-[env(safe-area-inset-bottom)]">
+
+      {/* HEADER MOVED TO JUST ABOVE THE ACTION HUD */}
+      <header className="bg-black/90 border-t border-white/10 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black h-[50px] md:h-[60px]">
+        <div className="flex-1 flex items-center">
+          <button 
+            onClick={()=>setShowRulesModal(true)} 
+            style={{ backgroundColor: VARIANT_COLORS[activeVariant?.id || 'HOLDEM'] || '#1e293b' }} 
+            className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'}`}
+          >
+            <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-black flex items-center gap-1 opacity-70">This Hand: <HelpCircle size={8}/></span>
+            <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-xs md:text-sm font-black truncate drop-shadow-sm">{String(activeVariant?.name)}</span>
+          </button>
+        </div>
+        <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
+          <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button>
+          <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button>
+          <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
+        </div>
+        <div className="flex-1 flex items-center justify-end">
+          <div className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}>
+            <span className="text-emerald-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">On My Deal:</span>
+            <div className="flex items-center">
+              <select 
+                value={pendingVariantId} 
+                onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} 
+                className="bg-transparent text-white text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full"
+              >
+                {Object.entries(VARIANTS).map(([k,v]) => (<option key={`opt-${k}`} value={k} className="bg-slate-900">{v.name}</option>))}
+              </select>
+              <ChevronDown size={12} className="text-white/30 pointer-events-none ml-1" />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/20 flex flex-col z-[100] shrink-0 pb-[env(safe-area-inset-bottom)]">
         <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-6"> 
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
@@ -1006,7 +981,7 @@ const App = () => {
                         </div>
                         {!isMuckWin && (
                           <>
-                            <div className="text-[10px] md:text-sm font-black text-white/60 tracking-widest uppercase">HOLDING <span className={themeColor}>{String(formatRank(String(winner.rank)))}</span></div>
+                            <div className="text-[10px] md:text-sm font-normal text-white/60 tracking-widest uppercase">HOLDING <span className="text-white">{String(formatRank(String(winner.rank)))}</span></div>
                             <div className="flex gap-1 justify-center mt-1">
                               {(winner.hand || []).map((c, ci) => (
                                 <div key={`winner-card-${ci}`} className={`w-10 md:w-16 h-13 md:h-20 bg-white rounded flex flex-col items-start justify-start p-1 text-black shadow-2xl border-t-2 border-x-2 ${cardBorder} relative overflow-hidden`}>
@@ -1077,7 +1052,6 @@ const App = () => {
                   <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Hero Card Y Offset <span>{visuals.heroCardY}px</span></label>
                   <input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" />
                 </div>
-                {/* NEW: Hero Card Spread Slider */}
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Hero Card Spread <span>{visuals.heroCardSpread.toFixed(2)}</span></label>
                   <input type="range" min="0.5" max="10.0" step="0.05" value={visuals.heroCardSpread} onChange={(e) => setVisuals({...visuals, heroCardSpread: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" />
@@ -1111,29 +1085,10 @@ const App = () => {
           }
           .animate-high-prob { animation: high-prob-pulse 1s infinite ease-in-out; }
           
-          /* HI-RES STEADY BURNING TEXT EFFECTS */
-          .strength-hi-res-monster { 
+          /* TEXT EFFECTS */
+          .strength-hi-res-monster, .strength-hi-res-strong, .strength-hi-res-ember, .strength-hi-res-smolder { 
             color: #fff; 
-            font-weight: 900; 
-            filter: url(#fire-hi-res) brightness(1.4); 
-            text-shadow: 0 0 4px #fff, 0 -2px 10px #ff0, 0 -4px 15px #f90, 0 -8px 25px #f20;
-          }
-          .strength-hi-res-strong { 
-            color: #ffda44; 
-            font-weight: 800; 
-            filter: url(#fire-hi-res) brightness(1.1);
-            text-shadow: 0 0 3px #fff, 0 -1px 8px #ff0, 0 -3px 15px #f90;
-          }
-          .strength-hi-res-ember { 
-            color: #ff4d00; 
-            filter: url(#fire-hi-res) brightness(0.9);
-            text-shadow: 0 0 5px #f20, 0 0 10px #700;
-          }
-          .strength-hi-res-smolder { 
-            color: #820; 
-            filter: url(#fire-hi-res) brightness(0.7);
-            text-shadow: 0 0 2px #310;
-            opacity: 0.8;
+            font-weight: 400; 
           }
 
           @keyframes muflis-glow { 0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; } 50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; } }
@@ -1146,6 +1101,23 @@ const App = () => {
           .vertical-range { -webkit-appearance: slider-vertical; width: 32px; height: 100%; background: rgba(255, 255, 255, 0.1); outline: none; border-radius: 999px; }
           .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; cursor: pointer; }
           .vertical-range::-moz-range-thumb { width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; cursor: pointer; }
+
+          /* UPDATED VISUAL PATTERNS */
+          .floor-executive-parquet {
+            background-color: #292524;
+            background-image: 
+              linear-gradient(90deg, transparent 50%, rgba(68, 64, 60, 0.5) 50%),
+              linear-gradient(rgba(68, 64, 60, 0.5) 50%, transparent 50%);
+            background-size: 100px 50px;
+            box-shadow: inset 0 0 300px rgba(0,0,0,1);
+          }
+          
+          .card-back-diamond {
+            background-color: #991b1b;
+            background-image: 
+              repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.1) 5px, rgba(0,0,0,0.1) 10px),
+              repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(0,0,0,0.1) 5px, rgba(0,0,0,0.1) 10px);
+          }
       `}</style>
     </div>
   );
