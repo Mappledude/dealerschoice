@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.1
+// VERSION: v1.1.2
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.1";
+const VERSION = "v1.1.2";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -64,13 +64,13 @@ const getNeonNameColor = (name) => {
 };
 
 const VARIANTS = { 
-  RANDOM: { id: 'RANDOM', name: 'RANDOM', rules: ["The server will pick a different variation for you every time you deal.", "Keep your opponents guessing with dynamic rule changes."] },
+  RANDOM: { id: 'RANDOM', name: 'RANDOM Choice', rules: ["The server will pick a different variation for you every time you deal.", "Keep your opponents guessing with dynamic rule changes."] },
   HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', rules: ["Each player gets 2 hole cards.", "Standard high hand rankings apply.", "Best 5-card combination from 2 hole + 5 community cards wins."] }, 
   OMAHA: { id: 'OMAHA', name: 'Omaha', rules: ["Each player gets 4 hole cards.", "You MUST use EXACTLY 2 hole cards and 3 community cards.", "Standard high hand rankings apply."] }, 
   PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', rules: ["Each player gets 3 hole cards.", "Standard high hand rankings.", "Similar to Hold'em but with an extra card for better drawing potential."] }, 
   MUFLIS: { id: 'MUFLIS', name: 'Muflis', rules: ["Worst hand wins the pot.", "Ace is the lowest card (value 1).", "The 'best' hand is the one that would normally be the weakest.", "You MUST use BOTH hole cards and 3 board cards."] }, 
   HILOW: { id: 'HILOW', name: 'Hi-Low Split', rules: ["Pot is split 50/50 between the High hand and the Low hand.", "4 hole cards dealt.", "Must use 2 hole + 3 board cards for both halves.", "All hands qualify for the low half; straights and flushes count against you."] }, 
-  REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', rules: ["4 hole cards dealt.", "2 Red, 1 Black OR 1 Red, 2 Black cards make a joker", "Joker+1 or 2 Hole Cards Play if no Joker"] }
+  REDSBLACKS: { id: 'REDSBLACKS', name: 'Reds & Blacks', rules: ["4 hole cards dealt.", "Special Joker mechanic: If your hand contains color combinations, you may play with enhanced strength.", "Dynamic wildcards based on suit parity."] }
 };
 
 const DISPLAY_POSITIONS = [
@@ -986,7 +986,7 @@ const App = () => {
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shrink-0 pb-[env(safe-area-inset-bottom)]">
         
         <header className="bg-black/40 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-xl backdrop-blur-md shrink-0 font-black h-[45px] md:h-[55px]">
-          <div className="flex-1 flex items-center">
+          <div className="flex-1 flex items-center h-full">
             <button 
               onClick={()=>setShowRulesModal(true)} 
               style={{ backgroundColor: VARIANT_COLORS[activeVariant?.id || 'HOLDEM'] || '#1e293b' }} 
@@ -996,12 +996,12 @@ const App = () => {
               <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-xs md:text-sm font-black truncate drop-shadow-sm">{String(activeVariant?.name)}</span>
             </button>
           </div>
-          <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
+          <div className="flex-1 flex items-center justify-center gap-2 md:gap-4 h-full">
             <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button>
             <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button>
             <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
           </div>
-          <div className="flex-1 flex items-center justify-end">
+          <div className="flex-1 flex items-center justify-end h-full">
             <div 
               style={{ background: pendingVariantId === 'RANDOM' ? RAINBOW_GRADIENT : (VARIANT_COLORS[pendingVariantId] || '#0f172a') }}
               className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}
@@ -1019,7 +1019,6 @@ const App = () => {
                       key={`opt-${k}`} 
                       value={k} 
                       className="bg-slate-900 text-white" 
-                      style={k === 'RANDOM' ? { background: RAINBOW_GRADIENT, color: 'white' } : {}}
                     >
                       {v.name}
                     </option>
