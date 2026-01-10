@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.5
+// VERSION: v1.1.6
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.5";
+const VERSION = "v1.1.6";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -892,7 +892,7 @@ const App = () => {
                 {activeVariant?.id === 'HILOW' && (
                   <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none">
                       <span className="text-[8px] md:text-[10px] text-white/50 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                      <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.lowStrength)}</span>
+                      <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : (formatRank(heroPlayerObj?.lowStrength) || "-")}</span>
                       <span className="text-[13px] lg:text-[1.8vh] font-mono mt-1 text-white transition-all duration-500">
                         {Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB
                       </span>
@@ -900,7 +900,7 @@ const App = () => {
                 )}
                 <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none">
                   <span className="text-[8px] md:text-[10px] text-white/50 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-                  <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : formatRank(heroPlayerObj?.strength)}</span>
+                  <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : (formatRank(heroPlayerObj?.strength) || "-")}</span>
                   <span className="text-[13px] lg:text-[1.8vh] font-mono mt-1 text-white transition-all duration-500">
                     {Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB
                   </span>
@@ -1082,7 +1082,7 @@ const App = () => {
                 );
             })()
           ) : (
-            <div className={`flex flex-col gap-2 md:gap-4 items-center w-full h-full justify-start transition-all duration-500 pt-2`}>
+            <div className={`flex flex-col gap-2 md:gap-4 items-center w-full h-full justify-center transition-all duration-500 pt-0`}>
                 {heroPlayerObj && heroPlayerObj.chips < bigBlind && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN || heroPlayerObj.isFolded || heroPlayerObj.waitingForNextHand) ? (
                     <div className="flex flex-row items-center justify-between w-full max-w-[420px] p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl lg:flex-col lg:bg-transparent lg:border-0 lg:p-0 lg:gap-4 lg:py-6 my-2 lg:my-0">
                         <div className="flex flex-col items-start lg:items-center gap-0.5"><span className="text-white/50 tracking-wider lg:tracking-[0.2em] text-[10px] lg:text-xs font-black italic uppercase text-left lg:text-center">Broke in Arena</span><span className="text-indigo-400 text-[12px] lg:text-[10px] uppercase font-black tracking-widest font-mono">Wallet: ${userProfile?.chips.toLocaleString()}</span></div>
@@ -1090,16 +1090,16 @@ const App = () => {
                     </div>
                 ) : heroPlayerObj && heroPlayerObj.chips >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (
                   <>
-                    <div className="flex gap-2 w-full max-w-[600px] font-black text-center uppercase">
-                      <button onClick={() => { if (activeIdx !== heroIdx) return; handleAction('RAISE', highestBet + Math.floor(totalDisplayPot * 0.5)); }} className={`flex-1 h-8 md:h-9 bg-white/10 border border-white/20 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/20'}`}>1/2 POT</button>
-                      <button onClick={() => { if (activeIdx !== heroIdx) return; handleAction('RAISE', highestBet + totalDisplayPot); }} className={`flex-1 h-8 md:h-9 bg-white/10 border border-white/20 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/20'}`}>POT</button>
-                      <button onClick={handleAllIn} className={`flex-1 h-8 md:h-9 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>ALL-IN</button>
-                    </div>
-                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-12 md:h-14">
+                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-24 md:h-28">
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={20} className="text-emerald-400" />} FOLD</button>
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/10 opacity-60'}`}>{preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
                       <div className={`flex-[1.5] flex bg-black/60 border border-white/20 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
-                        <button onClick={()=> { if(activeIdx === heroIdx) handleRaiseSubmit(raiseInput); }} className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase transition-all active:scale-95"><Zap size={20} className="mr-1"/> RAISE</button>
+                        <button 
+                          onClick={()=> { if(activeIdx === heroIdx) handleRaiseSubmit(raiseInput); }} 
+                          className={`flex-1 ${raiseInput >= effectiveMaxBet ? 'bg-amber-600 border-amber-400' : 'bg-emerald-600 border-emerald-400'} border rounded-lg flex items-center justify-center font-black text-lg uppercase transition-all active:scale-95`}
+                        >
+                          {raiseInput >= effectiveMaxBet ? 'ALL IN' : 'RAISE'}
+                        </button>
                       </div>
                     </div>
                   </>
