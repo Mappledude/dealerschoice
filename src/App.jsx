@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.96
+// VERSION: v1.0.98
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.96";
+const VERSION = "v1.0.98";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -32,7 +32,7 @@ const VARIANT_COLORS = {
   HOLDEM: '#22d3ee',
   OMAHA: '#a855f7',
   PINEAPPLE: '#eab308',
-  MUFLIS: '#1f0202',
+  MUFLIS: '#39FF14',
   HILOW: '#ff007f', 
   REDSBLACKS: '#ff0000'
 };
@@ -139,8 +139,6 @@ const Seat = ({
     if (!player || !displayPos) return null;
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
-    
-    // UPDATED LOGIC: Cards reveal for everyone in the showdown unless it was a single-player muck win
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !player.isFolded && (!isMuckWin || player.isWinner));
     const cardZIndex = isHero ? 'z-[200]' : 'z-[80]';
 
@@ -148,7 +146,6 @@ const Seat = ({
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-500 ${isHero ? 'z-[100]' : 'z-20'} ${player.waitingForNextHand ? 'opacity-50' : ''}`}>
             {player.waitingForNextHand && (<div className="absolute top-[-35px] bg-slate-900 text-cyan-400 text-[8px] px-2 py-0.5 rounded-full border border-cyan-500/50 uppercase font-bold tracking-[0.2em] z-[150] backdrop-blur-md">WAITING</div>)}
             
-            {/* HOLE CARDS */}
             {player.hand && Array.isArray(player.hand) && !player.waitingForNextHand && (
                 <div 
                   className={`flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none transition-all duration-500 ${cardZIndex} ${isHero ? 'absolute' : 'relative -mb-[5.25vw] lg:-mb-[4vh]'} ${isFoldedBool ? 'opacity-30 grayscale scale-90' : 'opacity-100'}`} 
@@ -156,9 +153,7 @@ const Seat = ({
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
-                        
                         const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.75 : 2.75);
-                        
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         const scaleBase = isHero ? visuals.heroCardScale : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
@@ -184,16 +179,13 @@ const Seat = ({
                 </div>
             )}
 
-            {/* PLAYER HUD WRAPPER */}
             <div className="relative flex flex-col items-center">
                 <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/80'} ${player.isWinner && phase === PHASES.SHOWDOWN ? 'border-yellow-400 ring-2 ring-yellow-400/50' : ''}`}>
-                    
                     {isDealer && (
                         <div className="absolute top-2 right-2 z-[110] pointer-events-none">
                           <div className="w-2.5 h-2.5 bg-red-600 rounded-full border border-red-900 shadow-[0_0_8px_rgba(239,68,68,0.8),inset_0_0_2px_rgba(0,0,0,0.5)]" />
                         </div>
                     )}
-
                     <div className={`flex flex-col items-center w-full relative z-10 py-1 overflow-hidden transition-all duration-500 ${isFoldedBool ? 'opacity-40 grayscale' : 'opacity-100'}`}>
                         <div className="flex flex-col items-center gap-0.5 shrink-0 mb-1">
                           <div className="flex items-center gap-1 opacity-60">
@@ -219,7 +211,6 @@ const Seat = ({
                                     </span>
                                 )}
                             </div>
-
                             {ghostAction && (
                                 <div key={`action-${ghostAction.text}`} className={`absolute inset-0 flex items-center justify-center transition-all duration-300 animate-action-status-in`}>
                                     <span className={`text-[14px] lg:text-[2.4vh] font-black italic uppercase tracking-tighter text-center drop-shadow-md whitespace-nowrap ${ghostAction.color}`}>
@@ -234,6 +225,54 @@ const Seat = ({
             </div>
         </div>
     );
+};
+
+const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
+  // Aggregate winners to handle "Scoops" (High + Low) visually
+  const aggregated = useMemo(() => {
+    const map = {};
+    winners.forEach(w => {
+      if (!map[w.uid]) map[w.uid] = { ...w, payouts: [] };
+      map[w.uid].payouts.push({ amount: w.amount, rank: w.rank, hand: w.hand });
+    });
+    return Object.values(map);
+  }, [winners]);
+
+  return (
+    <div className="w-full max-w-[600px] bg-black/40 border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full">
+      <div className="bg-white/5 px-4 py-1.5 border-b border-white/10 flex justify-between items-center shrink-0">
+        <span className="text-[10px] tracking-[0.2em] font-black text-indigo-400 uppercase flex items-center gap-2"><Trophy size={12}/> Arena Distribution Ledger</span>
+      </div>
+      <div className="flex-1 overflow-y-auto scrollbar-hide p-2 space-y-1">
+        {aggregated.map((player, idx) => (
+          <div key={`ledger-${player.uid}-${idx}`} style={{ animationDelay: `${idx * 150}ms` }} className="bg-white/5 rounded-lg p-2 flex flex-col gap-1 animate-in fade-in slide-in-from-left-2 duration-300">
+            <div className="flex justify-between items-center">
+              <span className={`text-xs font-black uppercase ${getNeonNameColor(player.name)}`}>{String(player.name)}</span>
+              <span className="text-emerald-400 font-mono text-sm font-black">
+                +${player.payouts.reduce((sum, p) => sum + p.amount, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {player.payouts.map((p, pi) => (
+                <div key={`payout-${pi}`} className="flex items-center justify-between opacity-80">
+                   <div className="flex items-center gap-2">
+                     <span className="text-[8px] text-white/40 uppercase tracking-tighter">{formatRank(String(p.rank))}</span>
+                     <div className="flex gap-0.5">
+                        {p.hand?.map((c, ci) => (
+                          <span key={`micro-${ci}`} className={`text-[9px] px-0.5 rounded ${c.suit === '♥' || c.suit === '♦' ? 'bg-red-500/20 text-red-500' : 'bg-white/10 text-white'}`}>
+                            {String(c.value)}{String(c.suit)}
+                          </span>
+                        ))}
+                     </div>
+                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const App = () => {
@@ -316,6 +355,15 @@ const App = () => {
   }, [players, userProfile]);
 
   const heroPlayerObj = useMemo(() => heroIdx !== -1 ? players[heroIdx] : null, [players, heroIdx]);
+
+  // NEW: Calculate the effective maximum we can raise to, based on other players' stack depths
+  const effectiveMaxBet = useMemo(() => {
+    if (!heroPlayerObj) return 0;
+    const activeOpponents = players.filter(p => p && !p.isFolded && p.uid !== heroPlayerObj.uid && !p.waitingForNextHand);
+    if (activeOpponents.length === 0) return heroPlayerObj.chips + heroPlayerObj.currentBet;
+    const maxOpponentCapacity = Math.max(...activeOpponents.map(p => p.chips + p.currentBet));
+    return Math.min(heroPlayerObj.chips + heroPlayerObj.currentBet, maxOpponentCapacity);
+  }, [players, heroPlayerObj]);
   
   const totalDisplayPot = useMemo(() => {
     const currentBetsSum = players.reduce((acc, p) => acc + (Number(p?.currentBet) || 0), 0);
@@ -339,8 +387,9 @@ const App = () => {
 
   const handleAllIn = useCallback(() => {
     if (!heroPlayerObj) return;
-    handleAction('RAISE', Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet));
-  }, [heroPlayerObj, handleAction]);
+    // UPDATED: Use effectiveMaxBet for All-In logic
+    handleAction('RAISE', Number(effectiveMaxBet));
+  }, [effectiveMaxBet, handleAction, heroPlayerObj]);
 
   const handleRebuy = useCallback(() => {
     if (!currentRoomId || !userProfile) return;
@@ -377,7 +426,6 @@ const App = () => {
     });
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
-  // UPDATED: Standardizing rank formatting, removed "No Qualifier" text
   const formatRank = (rank) => {
     if (!rank || typeof rank !== 'string' || rank === "null") return rank || "";
     const cleanRank = String(rank);
@@ -509,15 +557,6 @@ const App = () => {
             currentHandId.current = Date.now();
         }
         if (isPhaseTransition && [PHASES.FLOP, PHASES.TURN, PHASES.RIVER].includes(d.phase)) {
-            const cardString = d.community?.map(c => `${c.value}${c.suit}`).join(' ') || "";
-            setLogs(prev => [{ 
-              name: "SYSTEM", 
-              action: `${d.phase} DEALT [ ${cardString} ]`, 
-              type: 'phase', 
-              handId: currentHandId.current, 
-              timestamp: Date.now(), 
-              uniqueKey: `board-${Date.now()}` 
-            }, ...prev]);
             setHandAttention(true);
             setTimeout(() => { 
               setHandAttention(false); 
@@ -586,18 +625,12 @@ const App = () => {
       setAllProfiles(pList); 
       setActiveTables(rList); 
     });
-    
     socket.on('loginSuccess', (p) => { 
         const prof = p.profile || p; 
         setUserProfile(prof); 
         setPendingVariantId(prof.pendingVariant || 'HOLDEM'); 
         socket.emit('getInitialData'); 
-
-        if (prof.role === 'admin') {
-            setCurrentView(VIEWS.ADMIN);
-            return;
-        }
-
+        if (prof.role === 'admin') { setCurrentView(VIEWS.ADMIN); return; }
         if (p.activeRoomId) { 
             setCurrentRoomId(p.activeRoomId); 
             socket.emit('joinRoom', { roomId: p.activeRoomId, profile: prof, buyIn: 0 }, (res) => { 
@@ -606,7 +639,6 @@ const App = () => {
             }); 
         } else setCurrentView(VIEWS.LOBBY); 
     });
-    
     return () => { 
       socket.off('roomUpdate'); 
       socket.off('lobbyUpdate'); 
@@ -621,7 +653,8 @@ const App = () => {
     if (activeIdx === heroIdx && heroPlayerObj && turnInitializedRef.current !== activeIdx) {
       turnInitializedRef.current = activeIdx;
       const min = minRaiseAmount || (highestBet + bigBlind);
-      setRaiseInput(Math.min(min, Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)));
+      // UPDATED: Standardize raiseInput logic for effective stack capping
+      setRaiseInput(Math.min(min, Number(effectiveMaxBet)));
       if (preAction === 'FOLD') { 
         handleAction('FOLD'); 
         setPreAction(null); 
@@ -632,7 +665,7 @@ const App = () => {
     } else if (activeIdx !== heroIdx) { 
       turnInitializedRef.current = -1; 
     }
-  }, [activeIdx, heroIdx, heroPlayerObj, highestBet, bigBlind, minRaiseAmount, preAction, handleAction]);
+  }, [activeIdx, heroIdx, heroPlayerObj, highestBet, bigBlind, minRaiseAmount, preAction, handleAction, effectiveMaxBet]);
 
   if (currentView === VIEWS.LOGIN) return (
     <div style={{ height: 'calc(var(--vh, 1vh) * 100)' }} className="bg-[#06080c] flex items-center justify-center p-6 text-white uppercase font-black">
@@ -898,7 +931,8 @@ const App = () => {
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
                   <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                     <div className="flex-1 w-full relative flex items-center justify-center py-4">
-                      <input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet))} max={Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
+                      {/* UPDATED: Slider max is now effectiveMaxBet */}
+                      <input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet))} max={Number(effectiveMaxBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
                     </div>
                     <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]">
                       <span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span>
@@ -907,7 +941,7 @@ const App = () => {
                         <input type="number" value={raiseInput} onChange={(e) => { 
                           const val = Number(e.target.value); 
                           const min = minRaiseAmount || (highestBet + bigBlind); 
-                          const max = Number(heroPlayerObj.chips) + Number(heroPlayerObj.currentBet); 
+                          const max = Number(effectiveMaxBet); 
                           setRaiseInput(Math.max(min, Math.min(val, max))); 
                         }} className="bg-transparent text-emerald-400 font-mono text-xl md:text-3xl font-black text-center outline-none w-full" />
                       </div>
@@ -919,7 +953,6 @@ const App = () => {
       </div>
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shrink-0 pb-[env(safe-area-inset-bottom)]">
         
-        {/* HEADER SITUATED ABOVE ACTIONS HUD */}
         <header className="bg-black/40 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-xl backdrop-blur-md shrink-0 font-black h-[45px] md:h-[55px]">
           <div className="flex-1 flex items-center">
             <button 
@@ -957,10 +990,15 @@ const App = () => {
           </div>
         </header>
 
-        <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-6"> 
+        <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-6 overflow-hidden"> 
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
-                const winner = showdownWinners[currentShowdownIdx];
+                // MODIFIED: Use Ledger if more than one winner, else use banner
+                if (showdownWinners.length > 1) {
+                  return <ShowdownLedger winners={showdownWinners} formatRank={formatRank} isMobile={isMobile} />;
+                }
+
+                const winner = showdownWinners[0];
                 if (!winner) return null;
                 const isHiLo = activeVariant?.id === 'HILOW'; 
                 const isLowWin = String(winner.rank).includes("LOW:"); 
@@ -968,7 +1006,7 @@ const App = () => {
                 const themeColor = isLowWin ? "text-emerald-400" : (isHiLo ? "text-amber-400" : "text-white");
                 const cardBorder = isLowWin ? "border-emerald-400/50" : (isHiLo ? "border-amber-400/50" : "border-white/20");
                 return (
-                    <div key={`winner-disp-${winner.name}-${currentShowdownIdx}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div key={`winner-disp-${winner.name}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className={`flex items-center gap-3 bg-white/5 px-5 py-1 rounded-full border border-white/10 max-w-full overflow-hidden shadow-2xl`}>
                             <Trophy size={14} className={themeColor + " animate-bounce shrink-0"} />
                             <div className="text-sm md:text-xl font-black tracking-tighter flex items-center gap-2 leading-none whitespace-nowrap">
@@ -1047,7 +1085,6 @@ const App = () => {
                   <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">HUD Action Height <span>{visuals.footerHeight}px</span></label>
                   <input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" />
                 </div>
-                
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] text-white/60 uppercase tracking-widest font-black flex justify-between">Hero Card Scale <span>{visuals.heroCardScale.toFixed(2)}</span></label>
                   <input type="range" min="1.0" max="15.0" step="0.01" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" />
@@ -1069,19 +1106,15 @@ const App = () => {
       <style>{`
           @keyframes announcement-pop { 0% { transform: scale(0.5); opacity: 0; filter: blur(10px); } 30% { transform: scale(1.1); opacity: 1; filter: blur(0px); } 70% { transform: scale(1); opacity: 1; filter: blur(0px); } 100% { transform: scale(1.3); opacity: 0; filter: blur(20px); } }
           .animate-announcement-pop { animation: announcement-pop 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-          
-          /* Unified Action Animation */
           @keyframes action-status-in {
             0% { opacity: 0; transform: translateY(10px) scale(0.9); filter: blur(4px); }
             50% { opacity: 1; transform: translateY(-2px) scale(1.1); filter: blur(0px); }
             100% { opacity: 1; transform: translateY(0) scale(1); }
           }
           .animate-action-status-in { animation: action-status-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-
           @keyframes attention-trigger { 0% { box-shadow: 0 0px 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); transform: scale(1); } 30% { box-shadow: 0 0 40px rgba(255,255,255,0.9), inset 0 0 10px rgba(255,255,255,0.5); border-color: rgba(255,255,255,1); transform: scale(1.08); } 100% { box-shadow: 0 0 0px rgba(255,255,255,0); border-color: rgba(255,255,255,0.1); transform: scale(1); } }
           .animate-hand-trigger { animation: attention-trigger 3s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
           .animate-deal-trigger { animation: attention-trigger 1s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
-          
           @keyframes muflis-glow { 0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; } 50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; } }
           .animate-muflis-glow { animation: muflis-glow 4s infinite ease-in-out; }
           @keyframes omaha-swirl { 0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } 25% { box-shadow: 0 0 35px #a855f744, inset -20px 20px 50px #a855f722; border-color: #a855f755; } 50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; } 75% { box-shadow: 0 0 35px #a855f744, inset 20px -20px 50px #a855f722; border-color: #a855f755; } 100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } }
