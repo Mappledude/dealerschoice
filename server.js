@@ -13,7 +13,7 @@ const io = new Server(server, {
   pingInterval: 25000  
 });
 
-const VERSION = "v1.0.98";
+const VERSION = "v1.1.1";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -42,15 +42,15 @@ const BOT_PERSONALITIES = {
 };
 
 const SEEDED_PLAYERS = [
-  { name: 'Vivek', password: 'sablani', uid: 'u_vivek', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
-  { name: 'Aroosa', password: 'saeed', uid: 'u_aroosa', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
-  { name: 'Ram', password: 'shahani', uid: 'u_ram', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
-  { name: 'Brij', password: 'lulla', uid: 'u_brij', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
-  { name: 'Thashaan', password: '222', uid: 'u_thashaan', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
-  { name: 'Nish', password: 'sevkani', uid: 'u_nish', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
-  { name: 'Marlon', password: 'king', uid: 'u_marlon', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
-  { name: 'Tarun', password: 'shroff', uid: 'u_tarun', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
-  { name: 'P1', password: 'p1', uid: 'u_p1', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' }
+  { name: 'Vivek', password: 'sablani', uid: 'u_vivek', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Aroosa', password: 'saeed', uid: 'u_aroosa', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Ram', password: 'shahani', uid: 'u_ram', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Brij', password: 'lulla', uid: 'u_brij', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Thashaan', password: '222', uid: 'u_thashaan', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Nish', password: 'sevkani', uid: 'u_nish', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Marlon', password: 'king', uid: 'u_marlon', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Tarun', password: 'shroff', uid: 'u_tarun', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'P1', password: 'p1', uid: 'u_p1', chips: 10000, role: 'player', pendingVariant: 'RANDOM' }
 ];
 
 const SEEDED_ROOMS_DATA = [
@@ -356,12 +356,14 @@ const runIgnition = (roomId) => {
   }
   
   const dealerSeat = room.players[room.dealerIdx];
-  if (dealerSeat.isBot) {
+
+  // --- v1.1.1 RANDOM Dealer Choice Logic ---
+  let variantId = dealerSeat.pendingVariant || 'RANDOM';
+  if (variantId === 'RANDOM' || dealerSeat.isBot) {
       const vIds = Object.keys(variantNames);
-      dealerSeat.pendingVariant = vIds[Math.floor(Math.random() * vIds.length)];
+      variantId = vIds[Math.floor(Math.random() * vIds.length)];
   }
 
-  const variantId = dealerSeat.pendingVariant || 'HOLDEM';
   room.activeVariant = { id: variantId, name: variantNames[variantId], holeCards: holeCardsMap[variantId] };
   room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
   room.community = []; 
@@ -421,15 +423,13 @@ const performAction = (roomId, type, amount) => {
     } else if (type === 'RAISE') { 
         const min = room.highestBet + room.lastRaiseIncrement; 
         
-        // --- NEW: Effective Stack Capping Logic ---
-        // Calculate the maximum any other player can possibly call/match
+        // --- Effective Stack Capping Logic ---
         const others = room.players.filter(p => p && !p.isFolded && p.uid !== player.uid && !p.waitingForNextHand);
         const maxOtherCanMatch = others.length > 0 ? Math.max(...others.map(o => o.chips + o.currentBet)) : 0;
         
         let cappedAmount = Math.max(amount, min); 
-        cappedAmount = Math.min(cappedAmount, player.chips + player.currentBet); // Caps by own stack
+        cappedAmount = Math.min(cappedAmount, player.chips + player.currentBet); 
         
-        // Cap by Effective Max if others have less
         if (cappedAmount > maxOtherCanMatch && others.length > 0) {
             const refund = cappedAmount - maxOtherCanMatch;
             io.to(roomId).emit('log', { name: player.name, action: `RAISED to $${maxOtherCanMatch.toFixed(2)} ($${refund.toFixed(2)} returned)`, type: 'bet' });
@@ -629,7 +629,7 @@ io.on('connection', (socket) => {
     globalProfile.chips -= Number(buyIn);
     const emptyIdx = room.players.findIndex(p => p === null); if (emptyIdx === -1) { if (typeof callback === 'function') callback({ status: 'error' }); return; }
     seatedUid = profile.uid;
-    room.players[emptyIdx] = { ...profile, chips: Number(buyIn), seatIdx: emptyIdx, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: profile.pendingVariant || 'HOLDEM', isDisconnected: false };
+    room.players[emptyIdx] = { ...profile, chips: Number(buyIn), seatIdx: emptyIdx, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: profile.pendingVariant || 'RANDOM', isDisconnected: false };
     socket.join(roomId); 
     io.to(roomId).emit('log', { name: String(profile.name), action: 'JOINED ARENA', type: 'phase' }); 
     if (typeof callback === 'function') callback({ status: 'ok' }); 
@@ -648,7 +648,7 @@ io.on('connection', (socket) => {
     const emptyIdx = room.players.findIndex(p => p === null); if (emptyIdx === -1) return;
     const botName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
     const botId = Math.random().toString(36).slice(2, 7);
-    room.players[emptyIdx] = { uid: `bot_${botId}`, name: botName, isBot: true, chips: Number(room.maxBuy), seatIdx: emptyIdx, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: 'HOLDEM', isDisconnected: false };
+    room.players[emptyIdx] = { uid: `bot_${botId}`, name: botName, isBot: true, chips: Number(room.maxBuy), seatIdx: emptyIdx, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: 'RANDOM', isDisconnected: false };
     io.to(roomId).emit('log', { name: "SYSTEM", action: `${botName} ENTERED`, type: 'phase' }); io.to(roomId).emit('roomUpdate', serializeRoom(room)); 
     const seated = room.players.filter(p => p && p.chips > 0);
     if (room.phase === PHASES.IDLE && seated.length >= 2 && !room.ignitionTimer && !room.gameInProgress) {
