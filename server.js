@@ -41,7 +41,6 @@ const BOT_PERSONALITIES = {
     "Laddoo": "PASSIVE", "Chhotu": "PASSIVE", "Piddi": "PASSIVE"
 };
 
-// --- SEEDED DATA ---
 const SEEDED_PLAYERS = [
   { name: 'Vivek', password: 'sablani', uid: 'u_vivek', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
   { name: 'Aroosa', password: 'saeed', uid: 'u_aroosa', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
@@ -64,7 +63,6 @@ const SEEDED_ROOMS_DATA = [
 let profiles = [...SEEDED_PLAYERS]; 
 let rooms = {};
 
-// Initialize seeded rooms
 SEEDED_ROOMS_DATA.forEach(data => {
   rooms[data.id] = { 
     ...data, 
@@ -205,7 +203,10 @@ const updateRoomStrengths = (roomId) => {
                     p.lowStrengthPower = evaluation.low.power;
                     const rawLowProb = 100 - ((p.lowStrengthPower / (Math.pow(15, 6) * 13)) * 100);
                     p.lowWinProbability = Math.min(100, Math.max(5, rawLowProb * 1.5));
-                } else { p.lowWinProbability = 0; p.lowStrength = variantId === 'HILOW' ? "No Qualifier" : null; }
+                } else { 
+                    p.lowWinProbability = 0; 
+                    p.lowStrength = null; 
+                }
             }
         }
     });
@@ -214,7 +215,7 @@ const updateRoomStrengths = (roomId) => {
 const processShowdown = (roomId) => {
     const room = rooms[roomId]; if (!room) return;
     room.activeIdx = -1;
-    room.gameInProgress = false; // Reset early so next ignition isn't blocked
+    room.gameInProgress = false; 
     if (room.timer) clearInterval(room.timer);
     
     const activePlayers = room.players.filter(p => p !== null && !p.waitingForNextHand);
@@ -252,6 +253,8 @@ const processShowdown = (roomId) => {
         if (variantId === 'HILOW') {
             const lowHalf = Math.floor((pot.amount * 100) / 2) / 100;
             const highHalf = ((pot.amount * 100) - (lowHalf * 100)) / 100;
+            
+            // Per instructions: Hi-Low ALWAYS has a low winner
             const eligibleLow = evals.filter(e => e.res && e.res.low);
             if (eligibleLow.length > 0) {
                 const lowSorted = [...eligibleLow].sort((a, b) => a.res.low.power - b.res.low.power);
@@ -417,7 +420,14 @@ const performAction = (roomId, type, amount) => {
         const min = room.highestBet + room.lastRaiseIncrement; const actualRaise = Math.max(amount, min); const capped = Math.min(actualRaise, player.chips + player.currentBet); 
         const diff = capped - player.currentBet; const increment = capped - room.highestBet;
         player.chips -= diff; player.currentBet = capped; player.totalContribution += diff; room.highestBet = capped; player.lastAction = "RAISE"; 
-        if (increment >= room.lastRaiseIncrement) { room.lastRaiseIncrement = increment; room.players.forEach(p => { if (p && p.uid !== player.uid) p.actedThisStreet = false; }); } 
+        
+        // UPDATED: Only reset actedThisStreet for players who still have chips
+        if (increment >= room.lastRaiseIncrement) { 
+          room.lastRaiseIncrement = increment; 
+          room.players.forEach(p => { 
+            if (p && p.uid !== player.uid && p.chips > 0) p.actedThisStreet = false; 
+          }); 
+        } 
         io.to(roomId).emit('log', { name: player.name, action: `RAISED to $${capped.toFixed(2)}`, type: 'bet' }); 
     }
     moveToNextPlayer(roomId);
@@ -426,16 +436,38 @@ const performAction = (roomId, type, amount) => {
 const moveToNextPlayer = (roomId) => {
     const room = rooms[roomId]; if (!room) return;
     updateRoomStrengths(roomId);
+    
+    // Players who are All-In (chips <= 0) should be skipped in action turns
     const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
+    const playersAbleToAct = active.filter(p => p.chips > 0);
+    
     const allMatched = active.every(p => p.chips < 0.01 || p.currentBet === room.highestBet);
     const allActed = active.every(p => p.chips < 0.01 || p.actedThisStreet);
-    if (active.length <= 1) { room.activeIdx = -1; collectBets(room); io.to(roomId).emit('roomUpdate', serializeRoom(room)); setTimeout(() => processShowdown(roomId), 500); } 
-    else if (allMatched && allActed) { room.activeIdx = -1; collectBets(room); io.to(roomId).emit('roomUpdate', serializeRoom(room)); setTimeout(() => nextPhase(roomId), 1000); } 
+    
+    if (playersAbleToAct.length <= 1 && allMatched) { 
+        room.activeIdx = -1; 
+        collectBets(room); 
+        io.to(roomId).emit('roomUpdate', serializeRoom(room)); 
+        setTimeout(() => nextPhase(roomId), 1000); 
+    }
+    else if (allMatched && allActed) { 
+        room.activeIdx = -1; 
+        collectBets(room); 
+        io.to(roomId).emit('roomUpdate', serializeRoom(room)); 
+        setTimeout(() => nextPhase(roomId), 1000); 
+    } 
     else { 
         let nextIdx = (room.activeIdx + 1) % TOTAL_SEATS;
         for (let i = 0; i < TOTAL_SEATS; i++) {
             const p = room.players[nextIdx];
-            if (p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected) { room.activeIdx = nextIdx; startTurnTimer(room.id); io.to(room.id).emit('roomUpdate', serializeRoom(room)); triggerBotTurn(room.id); return; }
+            // UPDATED: Added chip check to skip All-In players
+            if (p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected && p.chips > 0) { 
+                room.activeIdx = nextIdx; 
+                startTurnTimer(room.id); 
+                io.to(room.id).emit('roomUpdate', serializeRoom(room)); 
+                triggerBotTurn(room.id); 
+                return; 
+            }
             nextIdx = (nextIdx + 1) % TOTAL_SEATS;
         }
     }
