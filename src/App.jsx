@@ -390,13 +390,14 @@ const App = () => {
     else if (lower.startsWith("scoop: ")) prefix = "SCOOP: ";
     
     const cleanLabel = cleanRank.replace(/^(high|low|scoop): /i, "");
-    return prefix + cleanLabel.toUpperCase().replace(/\(NATURAL\)/g, "✨").replace(/\(JOKER\)/g, "🃏");
+    return prefix + cleanLabel.toUpperCase().replace(/\(NATURAL\)/g, "🍀").replace(/\(JOKER\)/g, "🃏");
   };
 
   const handHistory = useMemo(() => {
     const hands = []; 
     let currentHand = null;
     ([...logs].reverse()).forEach(log => {
+        // Group events into Hands based on Dealing logs
         if (String(log.action).includes("IS DEALING") || String(log.action).includes("PRE_FLOP DEALT")) {
             if (currentHand) hands.push(currentHand);
             currentHand = { 
@@ -405,7 +406,8 @@ const App = () => {
               rank: null, 
               amount: null, 
               events: [], 
-              variant: String(log.action).split('DEALING ')[1] || "Poker" 
+              variant: String(log.action).split('DEALING ')[1] || "Poker",
+              timestamp: log.timestamp 
             };
         }
         if (currentHand) {
@@ -423,15 +425,29 @@ const App = () => {
                   currentHand.rank = "Muck/Default"; 
                 }
             }
+        } else {
+            // Standalone events (Joins, variation updates between hands)
+            hands.push({
+              id: `event-${log.timestamp}-${Math.random()}`,
+              isStandalone: true,
+              events: [log],
+              timestamp: log.timestamp
+            });
         }
     });
     if (currentHand) hands.push(currentHand);
-    return hands.reverse();
+    return hands.sort((a, b) => b.timestamp - a.timestamp);
   }, [logs]);
 
   const copyActivityToClipboard = () => {
     let logTextExport = "--- DEALER'S CHOICE POKER ARENA LOG ---\n\n";
     handHistory.forEach(hand => {
+      if (hand.isStandalone) {
+        hand.events.forEach(ev => {
+           logTextExport += `[GLOBAL] ${ev.name}: ${ev.action}\n`;
+        });
+        return;
+      }
       logTextExport += `[${hand.variant.toUpperCase()} HAND]\n`;
       hand.events.forEach(ev => { 
         logTextExport += `[${new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}] ${ev.name}: ${ev.action}\n`; 
@@ -452,40 +468,64 @@ const App = () => {
         <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2 font-black tracking-[0.2em] uppercase">
             <div className="flex items-center gap-2"><Terminal size={14}/> Activity Log</div>
             <div className="flex items-center gap-2">
-                <button onClick={copyActivityToClipboard} className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/30 flex items-center gap-1 transition-all active:scale-95"><Copy size={10} /> Copy</button>
+                <button onClick={copyActivityToClipboard} className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/30 flex items-center gap-1 transition-all active:scale-95"><Copy size={10} /> Export</button>
                 {isMobile && <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>}
             </div>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
-            {handHistory.length > 0 ? handHistory.map((hand) => (
-                <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
-                    <button onClick={() => { 
-                      const n = new Set(expandedHands); 
-                      if (n.has(hand.id)) n.delete(hand.id); 
-                      else n.add(hand.id); 
-                      setExpandedHands(n); 
-                    }} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
-                        <div className="flex items-center justify-between w-full">
-                            <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span>
-                            <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
-                        </div>
-                        <div className="text-[11px] text-white/90 text-left">
-                            {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400 uppercase"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic uppercase">HAND IN PROGRESS...</span>)}
-                        </div>
-                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(String(hand.rank))}</div>)}
-                    </button>
-                    {expandedHands.has(hand.id) && (
-                      <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
-                        {hand.events.map((ev, i) => (
-                          <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-indigo-500/5'}`}>
-                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
-                            <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
+            {handHistory.length > 0 ? handHistory.map((hand) => {
+                if (hand.isStandalone) {
+                  return hand.events.map((ev, ei) => (
+                    <div key={`standalone-${ev.uniqueKey || ei}`} className="text-[9px] md:text-[10px] leading-tight py-2 border-l-2 pl-2 border-slate-500 bg-white/5 rounded-r-lg">
+                      <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
+                      <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
+                    </div>
+                  ));
+                }
+
+                const isExpanded = expandedHands.has(hand.id);
+                return (
+                  <div key={hand.id} className="border border-white/10 rounded-xl overflow-hidden bg-black/40">
+                      <button onClick={() => { 
+                        const n = new Set(expandedHands); 
+                        if (n.has(hand.id)) n.delete(hand.id); 
+                        else n.add(hand.id); 
+                        setExpandedHands(n); 
+                      }} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5 text-left">
+                          <div className="flex items-center justify-between w-full">
+                              <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span>
+                              <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${isExpanded ? 'rotate-90' : ''}`} />
                           </div>
-                        ))}
-                      </div>
-                    )}
-                </div>
-            )) : (<div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3"><Activity size={32} className="animate-pulse" /><span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span></div>)}
+                          <div className="text-[11px] text-white/90 font-black flex items-center gap-2 flex-wrap uppercase leading-tight">
+                              {hand.winner ? (
+                                <><span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> <span className="text-white/40">-</span> <span className="text-emerald-400">${String(hand.amount)}</span> <span className="text-white/40">-</span> <span className="text-cyan-400 text-[10px]">{formatRank(String(hand.rank))}</span></>
+                              ) : (
+                                <span className="text-white/40 italic">HAND IN PROGRESS...</span>
+                              )}
+                          </div>
+                      </button>
+                      {isExpanded && (
+                        <div className="px-3 pb-3 border-t border-white/5 bg-black/20 space-y-1.5 pt-2">
+                          {hand.events.map((ev, i) => (
+                            <div key={ev.uniqueKey || `ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1.5 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : ev.type === 'phase' ? 'border-cyan-500 bg-cyan-500/5' : 'border-indigo-500/30'}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <span className="text-white/30 font-mono mr-2 text-[8px]">[{new Date(ev.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}]</span> 
+                                  <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                  </div>
+                );
+            }) : (
+              <div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3">
+                <Activity size={32} className="animate-pulse" />
+                <span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span>
+              </div>
+            )}
         </div>
     </div>
   );
@@ -570,7 +610,7 @@ const App = () => {
     };
     socket.on('roomUpdate', handleRoomUpdate);
     socket.on('lobbyUpdate', setActiveTables);
-    socket.on('log', (l) => setLogs(prev => [{...l, handId: currentHandId.current, timestamp: Date.now(), uniqueKey: `${Date.now()}-${Math.random()}`}, ...prev].slice(0, 100)));
+    socket.on('log', (l) => setLogs(prev => [{...l, handId: l.handId || currentHandId.current, timestamp: Date.now(), uniqueKey: `${Date.now()}-${Math.random()}`}, ...prev].slice(0, 500)));
     socket.on('profilesUpdate', (list) => { 
       setAllProfiles(list); 
       setUserProfile(prev => { 
