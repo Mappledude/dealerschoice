@@ -4,8 +4,8 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 
 /**
- * POKER ARENA SERVER v1.1.1 - SEEDED STABLE
- * Engine Fix: Full Betting Loop, Phase Progression, and Showdown
+ * POKER ARENA SERVER v1.1.2 - SEEDED STABLE (ESM Version)
+ * Fixes: Multi-table duplicate prevention, All-in NaN errors, and Bot Buy-in limits.
  */
 
 const app = express();
@@ -17,18 +17,17 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 10000;
 
-// --- CONSTANTS ---
 const PHASES = { IDLE: 'IDLE', PRE_FLOP: 'PRE_FLOP', FLOP: 'FLOP', TURN: 'TURN', RIVER: 'RIVER', SHOWDOWN: 'SHOWDOWN' };
 
 const SEEDED_PLAYERS = [
-  { name: 'Vivek', password: 'sablani', uid: 'u_vivek', chips: 10000, role: 'player' },
-  { name: 'Aroosa', password: 'saeed', uid: 'u_aroosa', chips: 10000, role: 'player' },
-  { name: 'Ram', password: 'shahani', uid: 'u_ram', chips: 10000, role: 'player' },
-  { name: 'Brij', password: 'lulla', uid: 'u_brij', chips: 10000, role: 'player' },
-  { name: 'Thashaan', password: '222', uid: 'u_thashaan', chips: 10000, role: 'player' },
-  { name: 'Nish', password: 'sevkani', uid: 'u_nish', chips: 10000, role: 'player' },
-  { name: 'Marlon', password: 'king', uid: 'u_marlon', chips: 10000, role: 'player' },
-  { name: 'Tarun', password: 'shroff', uid: 'u_tarun', chips: 10000, role: 'player' }
+  { name: 'Vivek', password: 'sablani', uid: 'u_vivek', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Aroosa', password: 'saeed', uid: 'u_aroosa', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Ram', password: 'shahani', uid: 'u_ram', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Brij', password: 'lulla', uid: 'u_brij', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Thashaan', password: '222', uid: 'u_thashaan', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Nish', password: 'sevkani', uid: 'u_nish', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Marlon', password: 'king', uid: 'u_marlon', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Tarun', password: 'shroff', uid: 'u_tarun', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' }
 ];
 
 const SEEDED_ROOMS = [
@@ -39,7 +38,6 @@ const SEEDED_ROOMS = [
 
 const BOT_NAMES = ["Moneymaker_AI", "Durrrr_Bot", "Ivey_Droid", "Negreanu_v2", "Hellmuth_Brat"];
 
-// --- STATE ---
 let profiles = [...SEEDED_PLAYERS];
 let rooms = SEEDED_ROOMS.map(r => ({
   ...r,
@@ -50,12 +48,10 @@ let rooms = SEEDED_ROOMS.map(r => ({
   activeIdx: -1,
   dealerIdx: 0,
   highestBet: 0,
-  lastRaiserIdx: -1,
   playersActedThisRound: 0,
-  deck: []
+  deck: [],
+  activeVariant: { id: 'HOLDEM' }
 }));
-
-// --- ENGINE ---
 
 const createDeck = () => {
   const suits = ['♠', '♥', '♦', '♣'];
@@ -69,8 +65,6 @@ const createDeck = () => {
 
 const updateRoom = (room) => {
   io.to(room.id).emit('roomUpdate', { ...room, deck: undefined });
-  
-  // Bot auto-play trigger
   const activePlayer = room.players[room.activeIdx];
   if (activePlayer && activePlayer.isBot && room.phase !== PHASES.IDLE && room.phase !== PHASES.SHOWDOWN) {
     handleBotTurn(room);
@@ -78,26 +72,28 @@ const updateRoom = (room) => {
 };
 
 const startHand = (room) => {
-  const activePlayers = room.players.filter(p => p !== null);
-  if (activePlayers.length < 2) {
+  const seatedPlayers = room.players.filter(p => p !== null);
+  if (seatedPlayers.length < 2) {
     room.phase = PHASES.IDLE;
     updateRoom(room);
     return;
   }
+
+  const currentDealer = room.players[room.dealerIdx];
+  const chosenVariant = currentDealer?.pendingVariant || 'HOLDEM';
+  room.activeVariant = { id: chosenVariant };
 
   room.phase = PHASES.PRE_FLOP;
   room.deck = createDeck();
   room.community = [];
   room.potAmount = 0;
   room.highestBet = room.bb;
-  room.lastRaiserIdx = (room.dealerIdx + 2) % 10; // Big Blind normally starts as raiser
   room.playersActedThisRound = 0;
 
   room.players.forEach((p, idx) => {
     if (p) {
       p.isFolded = false;
       p.hand = [room.deck.pop(), room.deck.pop()];
-      // Post Blinds
       if (idx === (room.dealerIdx + 1) % 10) p.currentBet = room.sb;
       else if (idx === (room.dealerIdx + 2) % 10) p.currentBet = room.bb;
       else p.currentBet = 0;
@@ -109,21 +105,20 @@ const startHand = (room) => {
     room.activeIdx = (room.activeIdx + 1) % 10;
   }
 
-  io.to(room.id).emit('log', { name: "SYSTEM", action: `NEW HAND STARTED - ${room.name}`, timestamp: Date.now(), type: 'phase' });
+  io.to(room.id).emit('log', { name: "SYSTEM", action: `IS DEALING ${chosenVariant}`, timestamp: Date.now(), type: 'phase' });
   updateRoom(room);
 };
 
 const progressStreet = (room) => {
-  // Collect bets into pot
   room.players.forEach(p => {
     if (p) {
-      room.potAmount += p.currentBet;
+      room.potAmount = Number(room.potAmount || 0) + Number(p.currentBet || 0);
       p.currentBet = 0;
     }
   });
+  
   room.highestBet = 0;
   room.playersActedThisRound = 0;
-  room.lastRaiserIdx = -1;
 
   if (room.phase === PHASES.PRE_FLOP) {
     room.phase = PHASES.FLOP;
@@ -134,13 +129,12 @@ const progressStreet = (room) => {
   } else if (room.phase === PHASES.TURN) {
     room.phase = PHASES.RIVER;
     room.community.push(room.deck.pop());
-  } else if (room.phase === PHASES.RIVER) {
+  } else {
     room.phase = PHASES.SHOWDOWN;
     handleShowdown(room);
     return;
   }
 
-  // Action post-flop starts with first active player after dealer
   room.activeIdx = (room.dealerIdx + 1) % 10;
   while (!room.players[room.activeIdx] || room.players[room.activeIdx].isFolded) {
     room.activeIdx = (room.activeIdx + 1) % 10;
@@ -152,78 +146,78 @@ const progressStreet = (room) => {
 
 const handleShowdown = (room) => {
   const activePlayers = room.players.filter(p => p && !p.isFolded);
-  // Simplified: first non-folded player wins (Add real poker solver logic here)
-  const winner = activePlayers[0];
+  const winner = activePlayers[0]; 
+  
   if (winner) {
-    winner.chips += room.potAmount;
-    io.to(room.id).emit('log', { name: winner.name, action: `WON $${room.potAmount} AT SHOWDOWN`, timestamp: Date.now(), type: 'win' });
+    winner.chips = Number(winner.chips || 0) + Number(room.potAmount || 0);
+    io.to(room.id).emit('log', { 
+      name: winner.name, 
+      action: `WON $${Number(room.potAmount).toLocaleString()} WITH SHOWDOWN`, 
+      timestamp: Date.now(), 
+      type: 'win' 
+    });
   }
   
   room.dealerIdx = (room.dealerIdx + 1) % 10;
-  updateRoom(room);
+  while (!room.players[room.dealerIdx]) { room.dealerIdx = (room.dealerIdx + 1) % 10; }
 
-  // Auto-restart hand
-  setTimeout(() => startHand(room), 6000);
+  updateRoom(room);
+  setTimeout(() => {
+    room.phase = PHASES.IDLE;
+    startHand(room);
+  }, 6000);
 };
 
 const handleBotTurn = (room) => {
-  const delay = 1500 + Math.random() * 2000;
+  const delay = 1500 + Math.random() * 1500;
   setTimeout(() => {
     if (room.phase === PHASES.IDLE || room.phase === PHASES.SHOWDOWN) return;
     const bot = room.players[room.activeIdx];
     if (!bot || !bot.isBot) return;
 
-    let type = 'CALL';
-    if (room.highestBet === bot.currentBet) type = 'CHECK';
-    else if (Math.random() < 0.1) type = 'FOLD';
+    let type = room.highestBet > bot.currentBet ? 'CALL' : 'CHECK';
+    if (room.highestBet > bot.currentBet && Math.random() < 0.05) type = 'FOLD';
 
     processAction(room, bot, type, room.highestBet);
   }, delay);
 };
 
 const processAction = (room, player, type, amount) => {
+  const amt = Number(amount || 0);
+  
   if (type === 'FOLD') {
     player.isFolded = true;
     io.to(room.id).emit('log', { name: player.name, action: `FOLDED`, timestamp: Date.now(), type: 'fold' });
   } else if (type === 'RAISE') {
-    const diff = amount - player.currentBet;
-    player.chips -= diff;
-    player.currentBet = amount;
-    room.highestBet = amount;
-    room.lastRaiserIdx = room.activeIdx;
-    room.playersActedThisRound = 1; // Restart acted count on raise
-    io.to(room.id).emit('log', { name: player.name, action: `RAISED TO $${amount}`, timestamp: Date.now(), type: 'bet' });
+    const diff = amt - (player.currentBet || 0);
+    player.chips = Number(player.chips) - diff;
+    player.currentBet = amt;
+    room.highestBet = amt;
+    room.playersActedThisRound = 1; 
+    io.to(room.id).emit('log', { name: player.name, action: `RAISED TO $${amt}`, timestamp: Date.now(), type: 'bet' });
   } else {
-    const callAmt = room.highestBet - player.currentBet;
-    player.chips -= callAmt;
-    player.currentBet = room.highestBet;
+    const callAmt = Number(room.highestBet || 0) - Number(player.currentBet || 0);
+    player.chips = Number(player.chips) - callAmt;
+    player.currentBet = Number(room.highestBet);
     room.playersActedThisRound++;
     io.to(room.id).emit('log', { name: player.name, action: callAmt > 0 ? `CALLS $${callAmt}` : `CHECKS`, timestamp: Date.now(), type: 'bet' });
   }
 
-  // Check if round is finished
-  const activePlayers = room.players.filter(p => p && !p.isFolded);
-  const everyoneActed = room.playersActedThisRound >= activePlayers.length;
+  const active = room.players.filter(p => p && !p.isFolded);
+  if (active.length === 1) { handleShowdown(room); return; }
 
-  if (activePlayers.length === 1) {
-    handleShowdown(room);
-    return;
-  }
-
-  if (everyoneActed && (room.highestBet === 0 || player.currentBet === room.highestBet)) {
+  const finished = room.playersActedThisRound >= active.length;
+  if (finished && (room.highestBet === 0 || player.currentBet === room.highestBet)) {
     progressStreet(room);
     return;
   }
 
-  // Move Turn
   room.activeIdx = (room.activeIdx + 1) % 10;
   while (!room.players[room.activeIdx] || room.players[room.activeIdx].isFolded) {
     room.activeIdx = (room.activeIdx + 1) % 10;
   }
   updateRoom(room);
 };
-
-// --- SOCKETS ---
 
 io.on('connection', (socket) => {
   socket.on('getInitialData', () => {
@@ -235,15 +229,45 @@ io.on('connection', (socket) => {
     if (p) socket.emit('loginSuccess', p);
   });
 
+  socket.on('updatePlayerSettings', ({ uid, pendingVariant }) => {
+    const profile = profiles.find(p => p.uid === uid);
+    if (profile) profile.pendingVariant = pendingVariant;
+    rooms.forEach(room => {
+      const seated = room.players.find(p => p && p.uid === uid);
+      if (seated) seated.pendingVariant = pendingVariant;
+    });
+  });
+
   socket.on('joinRoom', ({ roomId, profile, buyIn }, callback) => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
+
+    // RULE: One user, one seat. Remove player from any other room they might be in.
+    rooms.forEach(otherRoom => {
+      otherRoom.players.forEach((seatedPlayer, idx) => {
+        if (seatedPlayer && seatedPlayer.uid === profile.uid) {
+          otherRoom.players[idx] = null;
+          io.to(otherRoom.id).emit('log', { name: "SYSTEM", action: `${seatedPlayer.name} MOVED TO ANOTHER TABLE`, timestamp: Date.now(), type: 'global' });
+          updateRoom(otherRoom);
+        }
+      });
+    });
+
+    // Check if player is already in THIS room (sync case)
+    const existingIdx = room.players.findIndex(p => p && p.uid === profile.uid);
+    if (existingIdx !== -1) {
+      socket.join(roomId);
+      if (typeof callback === 'function') callback({ status: 'ok' });
+      updateRoom(room);
+      return;
+    }
+
     const seatIdx = room.players.findIndex(s => s === null);
     if (seatIdx !== -1) {
-      room.players[seatIdx] = { ...profile, chips: buyIn || 1000, currentBet: 0, isFolded: false, hand: [] };
+      room.players[seatIdx] = { ...profile, chips: Number(buyIn || 1000), currentBet: 0, isFolded: false, hand: [] };
       socket.join(roomId);
-      if (callback) callback({ status: 'ok' });
-      io.to(roomId).emit('log', { name: "SYSTEM", action: `${profile.name} JOINED`, timestamp: Date.now(), type: 'global' });
+      if (typeof callback === 'function') callback({ status: 'ok' });
+      io.to(roomId).emit('log', { name: "SYSTEM", action: `${profile.name} JOINED THE TABLE`, timestamp: Date.now(), type: 'global' });
       if (room.players.filter(p => p).length >= 2 && room.phase === PHASES.IDLE) startHand(room);
       updateRoom(room);
     }
@@ -251,10 +275,20 @@ io.on('connection', (socket) => {
 
   socket.on('adminAddBot', ({ roomId }) => {
     const room = rooms.find(r => r.id === roomId);
-    const seatIdx = room?.players.findIndex(s => s === null);
+    if (!room) return;
+    const seatIdx = room.players.findIndex(s => s === null);
     if (seatIdx !== -1) {
       const name = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
-      room.players[seatIdx] = { name, isBot: true, chips: 10000, currentBet: 0, isFolded: false, hand: [], uid: `bot_${Date.now()}` };
+      room.players[seatIdx] = { 
+        name, 
+        isBot: true, 
+        chips: Number(room.maxBuy || 100), 
+        currentBet: 0, 
+        isFolded: false, 
+        hand: [], 
+        uid: `bot_${Date.now()}`, 
+        pendingVariant: 'HOLDEM' 
+      };
       if (room.players.filter(p => p).length >= 2 && room.phase === PHASES.IDLE) startHand(room);
       updateRoom(room);
     }
@@ -267,4 +301,4 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => console.log(`Server v1.1.1 on ${PORT}`));
+server.listen(PORT, () => console.log(`Arena Server v1.1.2 Running`));
