@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.3
+// VERSION: v1.1.4
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.3";
+const VERSION = "v1.1.4";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -987,18 +987,19 @@ const App = () => {
       </div>
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/20 flex flex-col z-[100] shrink-0 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
         
-        <header className="bg-black/40 border-b border-white/10 flex items-center justify-between px-4 z-[80] shadow-xl backdrop-blur-3xl shrink-0 font-black h-[42px] md:h-[52px]">
+        {/* Minimized Header Bar */}
+        <header className="bg-black/40 border-b border-white/10 flex items-center justify-between px-4 z-[80] shadow-xl backdrop-blur-3xl shrink-0 font-black h-[48px] md:h-[52px]">
           <div className="flex-1 flex items-center h-full">
             <button 
               onClick={()=>setShowRulesModal(true)} 
               style={{ backgroundColor: VARIANT_COLORS[activeVariant?.id || 'HOLDEM'] || '#1e293b' }} 
-              className={`border px-3 h-[32px] md:h-[40px] rounded-lg flex items-center gap-2 transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'}`}
+              className={`border px-3 h-[36px] md:h-[42px] rounded-lg flex flex-col justify-center gap-0 transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'}`}
             >
-              <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-[8px] md:text-[10px] tracking-widest uppercase font-black opacity-70 whitespace-nowrap">This Hand:</span>
-              <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-xs md:text-sm font-black truncate drop-shadow-sm">{String(activeVariant?.name)}</span>
+              <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-[7px] md:text-[9px] leading-tight uppercase font-black opacity-70 whitespace-nowrap">This Hand:</span>
+              <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-[10px] md:text-sm font-black truncate leading-tight drop-shadow-sm">{String(activeVariant?.name)}</span>
             </button>
           </div>
-          <div className="flex-1 flex items-center justify-center gap-2 md:gap-4 h-full">
+          <div className="flex-1 flex items-center justify-center gap-3 md:gap-4 h-full">
             <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/10 border-white/20'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button>
             <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/10 border-white/20'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button>
             <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/10 border border-white/20 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
@@ -1006,15 +1007,15 @@ const App = () => {
           <div className="flex-1 flex items-center justify-end h-full">
             <div 
               style={{ background: pendingVariantId === 'RANDOM' ? RAINBOW_GRADIENT : (VARIANT_COLORS[pendingVariantId] || '#0f172a') }}
-              className={`border px-3 h-[32px] md:h-[40px] rounded-lg flex items-center gap-2 relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}
+              className={`border px-3 h-[36px] md:h-[42px] rounded-lg flex flex-col justify-center gap-0 relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}
             >
-              <span style={{ color: 'black' }} className="text-[8px] md:text-[10px] tracking-widest uppercase font-black opacity-80 whitespace-nowrap">On My Deal:</span>
-              <div className="flex items-center">
+              <span style={{ color: 'black' }} className="text-[7px] md:text-[9px] leading-tight uppercase font-black opacity-80 whitespace-nowrap">On My Deal:</span>
+              <div className="flex items-center leading-tight">
                 <select 
                   value={pendingVariantId} 
                   onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} 
                   style={{ color: 'black' }}
-                  className="bg-transparent text-xs md:text-sm outline-none font-black appearance-none cursor-pointer z-10 w-full"
+                  className="bg-transparent text-[10px] md:text-sm outline-none font-black appearance-none cursor-pointer z-10 w-full"
                 >
                   {Object.entries(VARIANTS).map(([k,v]) => (
                     <option 
@@ -1026,13 +1027,14 @@ const App = () => {
                     </option>
                   ))}
                 </select>
-                <ChevronDown size={12} style={{ color: 'black' }} className="pointer-events-none ml-1 opacity-50" />
+                <ChevronDown size={10} style={{ color: 'black' }} className="pointer-events-none ml-1 opacity-50" />
               </div>
             </div>
           </div>
         </header>
 
-        <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-2 overflow-hidden"> 
+        {/* Action HUD Area - Tightened Spacing */}
+        <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-0 overflow-hidden"> 
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
                 if (showdownWinners.length > 1) {
@@ -1047,7 +1049,7 @@ const App = () => {
                 const themeColor = isLowWin ? "text-emerald-400" : (isHiLo ? "text-amber-400" : "text-white");
                 const cardBorder = isLowWin ? "border-emerald-400/50" : (isHiLo ? "border-amber-400/50" : "border-white/20");
                 return (
-                    <div key={`winner-disp-${winner.name}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full">
+                    <div key={`winner-disp-${winner.name}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full mt-2">
                         <div className={`flex items-center gap-3 bg-white/5 px-5 py-1 rounded-full border border-white/10 max-w-full overflow-hidden shadow-2xl`}>
                             <Trophy size={14} className={themeColor + " animate-bounce shrink-0"} />
                             <div className="text-sm md:text-xl font-black tracking-tighter flex items-center gap-2 leading-none whitespace-nowrap">
@@ -1080,7 +1082,7 @@ const App = () => {
                 );
             })()
           ) : (
-            <div className={`flex flex-col gap-3 md:gap-4 items-center w-full h-full justify-center transition-all duration-500`}>
+            <div className={`flex flex-col gap-2 md:gap-4 items-center w-full h-full justify-start transition-all duration-500 pt-2`}>
                 {heroPlayerObj && heroPlayerObj.chips < bigBlind && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN || heroPlayerObj.isFolded || heroPlayerObj.waitingForNextHand) ? (
                     <div className="flex flex-row items-center justify-between w-full max-w-[420px] p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl lg:flex-col lg:bg-transparent lg:border-0 lg:p-0 lg:gap-4 lg:py-6 my-2 lg:my-0">
                         <div className="flex flex-col items-start lg:items-center gap-0.5"><span className="text-white/50 tracking-wider lg:tracking-[0.2em] text-[10px] lg:text-xs font-black italic uppercase text-left lg:text-center">Broke in Arena</span><span className="text-indigo-400 text-[12px] lg:text-[10px] uppercase font-black tracking-widest font-mono">Wallet: ${userProfile?.chips.toLocaleString()}</span></div>
@@ -1093,7 +1095,7 @@ const App = () => {
                       <button onClick={() => { if (activeIdx !== heroIdx) return; handleAction('RAISE', highestBet + totalDisplayPot); }} className={`flex-1 h-8 md:h-9 bg-white/10 border border-white/20 rounded-xl text-[10px] font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : 'hover:bg-white/20'}`}>POT</button>
                       <button onClick={handleAllIn} className={`flex-1 h-8 md:h-9 bg-red-900/30 border border-red-500/50 rounded-xl text-[10px] text-red-500 font-black transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>ALL-IN</button>
                     </div>
-                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-12 md:h-14 mb-2">
+                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-12 md:h-14">
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={20} className="text-emerald-400" />} FOLD</button>
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/10 opacity-60'}`}>{preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
                       <div className={`flex-[1.5] flex bg-black/60 border border-white/20 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
