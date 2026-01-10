@@ -38,15 +38,22 @@ const SEEDED_PLAYERS = [
   { name: 'Vivek', password: 'sablani', uid: 'u_vivek', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
   { name: 'Aroosa', password: 'saeed', uid: 'u_aroosa', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
   { name: 'Ram', password: 'shahani', uid: 'u_ram', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
-  { name: 'Brij', password: 'lulla', uid: 'u_brij', chips: 10000, role: 'player', pendingVariant: 'RANDOM' }
+  { name: 'Brij', password: 'lulla', uid: 'u_brij', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Thashaan', password: '222', uid: 'u_thashaan', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Nish', password: 'sevkani', uid: 'u_nish', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Marlon', password: 'king', uid: 'u_marlon', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Tarun', password: 'shroff', uid: 'u_tarun', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'P1', password: 'p1', uid: 'u_p1', chips: 10000, role: 'player', pendingVariant: 'RANDOM' }
 ];
 
 let profiles = [...SEEDED_PLAYERS]; 
 let rooms = {};
 
 const SEEDED_ROOMS_DATA = [
-    { id: 'room_q1', name: 'Elite Arena', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 },
-    { id: 'room_10', name: '$10 Arena', sb: 0.25, bb: 0.5, minBuy: 5, maxBuy: 10 }
+    { id: 'room_q1', name: 'Q1', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 },
+    { id: 'room_10', name: '$10 Arena', sb: 0.25, bb: 0.5, minBuy: 5, maxBuy: 10 },
+    { id: 'room_100', name: '$100 Arena', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 },
+    { id: 'room_500', name: '$500 Arena', sb: 2, bb: 5, minBuy: 200, maxBuy: 500 }
 ];
 
 SEEDED_ROOMS_DATA.forEach(data => {
@@ -234,7 +241,10 @@ const runIgnition = (roomId) => {
   let variantId = room.players[room.dealerIdx].pendingVariant || 'RANDOM';
   if (variantId === 'RANDOM') { const vIds = Object.keys(variantNames); variantId = vIds[Math.floor(Math.random() * vIds.length)]; }
   
-  room.activeVariant = { id: variantId, name: variantNames[variantId], holeCards: holeCardsMap[variantId] };
+  // Initialize full object first to prevent log crashes
+  const vName = variantNames[variantId] || "Poker";
+  room.activeVariant = { id: variantId, name: vName, holeCards: holeCardsMap[variantId] };
+  
   room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
   room.community = []; room.potData = [{ amount: 0 }]; room.highestBet = room.bb; room.lastRaiseIncrement = room.bb; room.phase = PHASES.PRE_FLOP;
   
@@ -244,7 +254,7 @@ const runIgnition = (roomId) => {
   room.players[sbIdx].chips -= room.sb; room.players[sbIdx].currentBet = room.sb; room.players[sbIdx].totalContribution = room.sb;
   room.players[bbIdx].chips -= room.bb; room.players[bbIdx].currentBet = room.bb; room.players[bbIdx].totalContribution = room.bb;
   
-  io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.players[room.dealerIdx].name.toUpperCase()} DEALING ${room.activeVariant.name.toUpperCase()}`, type: 'phase' });
+  io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.players[room.dealerIdx].name.toUpperCase()} DEALING ${vName.toUpperCase()}`, type: 'phase' });
   
   updateRoomStrengths(roomId);
   room.activeIdx = seated[(seated.indexOf(bbIdx) + 1) % seated.length];
@@ -316,6 +326,10 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     if (room.phase === PHASES.IDLE && room.players.filter(p => p && p.chips > 0).length >= 2) runIgnition(roomId);
   });
+  socket.on('playerRebuy', ({ roomId, uid, amount }) => {
+    const room = rooms[roomId], p = room.players.find(x => x && x.uid === uid), prof = profiles.find(x => x.uid === uid);
+    if (p && prof && prof.chips >= amount) { prof.chips -= amount; p.chips += amount; io.to(roomId).emit('roomUpdate', serializeRoom(room)); io.emit('profilesUpdate', profiles); }
+  });
   socket.on('playerAction', ({ roomId, type, amount }) => performAction(roomId, type, amount));
   socket.on('updatePlayerSettings', ({ uid, pendingVariant }) => {
     const p = profiles.find(x => x.uid === uid); if (p) p.pendingVariant = pendingVariant;
@@ -323,4 +337,4 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(10000, '0.0.0.0', () => console.log(`Dealers Choice Server Running`));
+server.listen(10000, '0.0.0.0', () => console.log(`Dealers Choice Server v${VERSION}`));
