@@ -352,7 +352,7 @@ const App = () => {
     betScale: 1.5, 
     betY: 0, 
     badgeY: 0, 
-    footerHeight: 250, 
+    footerHeight: 270, 
     tableZoom: 0.9, 
     holeCardFan: 35 
   });
@@ -1146,7 +1146,7 @@ const App = () => {
                 ) : heroPlayerObj && heroPlayerObj.chips >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (
                   <>
                     {/* Rescaled Action Row - 50% Reduction in Height and Max-Width */}
-                    <div className="flex flex-row gap-2 w-full max-w-[400px] items-stretch justify-center font-black h-8 md:h-10 mt-2">
+                    <div className="flex flex-row gap-2 w-full max-w-[400px] items-stretch justify-center font-black h-12 md:h-10 mt-2">
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase flex items-center justify-center gap-1 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-1 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={10} className="text-emerald-400" />} FOLD</button>
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-[11px] md:text-sm font-black truncate px-2 flex items-center justify-center gap-1 transition-all ${activeIdx === heroIdx ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-1 ring-emerald-400/50' : 'border-white/10 opacity-60'}`}>{preAction === 'CHECK' && <Check size={10} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
                       <div className={`flex-[1.5] flex bg-black/60 border border-white/20 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
