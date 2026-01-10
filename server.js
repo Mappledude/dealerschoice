@@ -41,8 +41,44 @@ const BOT_PERSONALITIES = {
     "Laddoo": "PASSIVE", "Chhotu": "PASSIVE", "Piddi": "PASSIVE"
 };
 
-let profiles = []; 
+// --- SEEDED DATA ---
+const SEEDED_PLAYERS = [
+  { name: 'Vivek', password: 'sablani', uid: 'u_vivek', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Aroosa', password: 'saeed', uid: 'u_aroosa', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Ram', password: 'shahani', uid: 'u_ram', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Brij', password: 'lulla', uid: 'u_brij', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Thashaan', password: '222', uid: 'u_thashaan', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Nish', password: 'sevkani', uid: 'u_nish', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Marlon', password: 'king', uid: 'u_marlon', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'Tarun', password: 'shroff', uid: 'u_tarun', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' },
+  { name: 'P1', password: 'p1', uid: 'u_p1', chips: 10000, role: 'player', pendingVariant: 'HOLDEM' }
+];
+
+const SEEDED_ROOMS_DATA = [
+  { id: 'room_q1', name: 'Q1', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 },
+  { id: 'room_10', name: '$10 Arena', sb: 0.25, bb: 0.5, minBuy: 5, maxBuy: 10 },
+  { id: 'room_100', name: '$100 Arena', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 },
+  { id: 'room_500', name: '$500 Arena', sb: 2, bb: 5, minBuy: 200, maxBuy: 500 }
+];
+
+let profiles = [...SEEDED_PLAYERS]; 
 let rooms = {};
+
+// Initialize seeded rooms
+SEEDED_ROOMS_DATA.forEach(data => {
+  rooms[data.id] = { 
+    ...data, 
+    players: Array(TOTAL_SEATS).fill(null), 
+    phase: PHASES.IDLE, 
+    community: [], 
+    potData: [{amount:0}], 
+    dealerIdx: 0, 
+    timeRemaining: 20, 
+    gameInProgress: false, 
+    lastRaiseIncrement: data.bb 
+  };
+});
+
 let disconnectTimeouts = {}; 
 
 const serializeRoom = (room) => {
