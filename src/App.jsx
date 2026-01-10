@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.0.99
+// VERSION: v1.1.1
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.0.99";
+const VERSION = "v1.1.1";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -37,10 +37,13 @@ const VARIANT_COLORS = {
   REDSBLACKS: '#ff0000'
 };
 
+const RAINBOW_GRADIENT = 'linear-gradient(to right, #22d3ee, #a855f7, #eab308, #39FF14, #ff007f, #ff0000)';
+
 const HILOW_SECONDARY_COLOR = '#bfff00'; 
 const TABLE_FELT_COLOR = '#0f172a'; 
 
 const getContrastColor = (hex) => {
+  if (hex === 'RANDOM') return 'white';
   if (!hex) return 'white';
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -61,6 +64,7 @@ const getNeonNameColor = (name) => {
 };
 
 const VARIANTS = { 
+  RANDOM: { id: 'RANDOM', name: 'RANDOM Choice', rules: ["The server will pick a different variation for you every time you deal.", "Keep your opponents guessing with dynamic rule changes."] },
   HOLDEM: { id: 'HOLDEM', name: 'Texas Hold\'em', rules: ["Each player gets 2 hole cards.", "Standard high hand rankings apply.", "Best 5-card combination from 2 hole + 5 community cards wins."] }, 
   OMAHA: { id: 'OMAHA', name: 'Omaha', rules: ["Each player gets 4 hole cards.", "You MUST use EXACTLY 2 hole cards and 3 community cards.", "Standard high hand rankings apply."] }, 
   PINEAPPLE: { id: 'PINEAPPLE', name: 'Pineapple', rules: ["Each player gets 3 hole cards.", "Standard high hand rankings.", "Similar to Hold'em but with an extra card for better drawing potential."] }, 
@@ -140,7 +144,7 @@ const Seat = ({
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
     
-    // UPDATED LOGIC: Cards reveal for everyone in the showdown unless it was a single-player muck win
+    // Cards reveal for everyone in the showdown unless it was a single-player muck win
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !player.isFolded && (!isMuckWin || player.isWinner));
     const cardZIndex = isHero ? 'z-[200]' : 'z-[80]';
 
@@ -294,7 +298,7 @@ const App = () => {
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
   const [phase, setPhase] = useState(PHASES.IDLE);
   const [activeVariant, setActiveVariant] = useState(VARIANTS.HOLDEM);
-  const [pendingVariantId, setPendingVariantId] = useState('HOLDEM');
+  const [pendingVariantId, setPendingVariantId] = useState('RANDOM'); // v1.1.1 Default
   const [community, setCommunity] = useState([]);
   const [activeIdx, setActiveIdx] = useState(-1);
   const [dealerIdx, setDealerIdx] = useState(-1);
@@ -328,7 +332,7 @@ const App = () => {
   const [handAttention, setHandAttention] = useState(false);
   const [dealAttention, setDealAttention] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 1000, password: '' });
-  const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'HOLDEM' });
+  const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'RANDOM' });
   const [noiseSeed, setNoiseSeed] = useState(1);
 
   const joinLock = useRef(false);
@@ -367,7 +371,7 @@ const App = () => {
 
   const heroPlayerObj = useMemo(() => heroIdx !== -1 ? players[heroIdx] : null, [players, heroIdx]);
 
-  // NEW: Calculate the effective maximum we can raise to, based on other players' stack depths
+  // Calculate the effective maximum we can raise to, based on other players' stack depths
   const effectiveMaxBet = useMemo(() => {
     if (!heroPlayerObj) return 0;
     const activeOpponents = players.filter(p => p && !p.isFolded && p.uid !== heroPlayerObj.uid && !p.waitingForNextHand);
@@ -396,9 +400,17 @@ const App = () => {
     }
   }, [currentRoomId, raiseInput]);
 
+  // Unified clamping logic for manual raises
+  const handleRaiseSubmit = useCallback((inputValue) => {
+    if (activeIdx !== heroIdx) return;
+    const min = minRaiseAmount || (highestBet + bigBlind);
+    const max = Number(effectiveMaxBet);
+    const finalAmt = Math.max(min, Math.min(Number(inputValue), max));
+    handleAction('RAISE', finalAmt);
+  }, [activeIdx, heroIdx, minRaiseAmount, highestBet, bigBlind, effectiveMaxBet, handleAction]);
+
   const handleAllIn = useCallback(() => {
     if (!heroPlayerObj) return;
-    // UPDATED: Use effectiveMaxBet for All-In logic
     handleAction('RAISE', Number(effectiveMaxBet));
   }, [effectiveMaxBet, handleAction, heroPlayerObj]);
 
@@ -437,7 +449,6 @@ const App = () => {
     });
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
-  // UPDATED: Standardizing rank formatting, removed "No Qualifier" text
   const formatRank = (rank) => {
     if (!rank || typeof rank !== 'string' || rank === "null") return rank || "";
     const cleanRank = String(rank);
@@ -640,7 +651,7 @@ const App = () => {
     socket.on('loginSuccess', (p) => { 
         const prof = p.profile || p; 
         setUserProfile(prof); 
-        setPendingVariantId(prof.pendingVariant || 'HOLDEM'); 
+        setPendingVariantId(prof.pendingVariant || 'RANDOM'); 
         socket.emit('getInitialData'); 
         if (prof.role === 'admin') { setCurrentView(VIEWS.ADMIN); return; }
         if (p.activeRoomId) { 
@@ -665,7 +676,6 @@ const App = () => {
     if (activeIdx === heroIdx && heroPlayerObj && turnInitializedRef.current !== activeIdx) {
       turnInitializedRef.current = activeIdx;
       const min = minRaiseAmount || (highestBet + bigBlind);
-      // UPDATED: Standardize raiseInput logic for effective stack capping
       setRaiseInput(Math.min(min, Number(effectiveMaxBet)));
       if (preAction === 'FOLD') { 
         handleAction('FOLD'); 
@@ -946,14 +956,12 @@ const App = () => {
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
                   <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto">
                     <div className="flex-1 w-full relative flex items-center justify-center py-4">
-                      {/* UPDATED: Slider max is now effectiveMaxBet */}
                       <input type="range" min={Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet))} max={Number(effectiveMaxBet)} step={1} value={raiseInput} onChange={(e) => setRaiseInput(Number(e.target.value))} className="vertical-range appearance-none bg-white/10 w-8 md:w-10 h-full rounded-full accent-emerald-500 cursor-pointer" style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
                     </div>
                     <div className="mt-4 bg-black/95 border-2 border-emerald-400 px-3 py-2 rounded-xl animate-in zoom-in duration-300 flex flex-col items-center min-w-[110px]">
                       <span className="text-[8px] text-white/40 tracking-widest mb-1 font-bold uppercase text-center">Raise To</span>
                       <div className="flex items-center justify-center w-full">
                         <span className="text-emerald-500 font-mono text-lg md:text-2xl mr-0.5">$</span>
-                        {/* UPDATED INPUT: numeric pad, select-on-focus, enter-to-bet */}
                         <input 
                           type="number" 
                           inputMode="decimal"
@@ -961,10 +969,7 @@ const App = () => {
                           onFocus={(e) => e.target.select()}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                              const min = minRaiseAmount || (highestBet + bigBlind);
-                              const max = Number(effectiveMaxBet);
-                              const finalAmt = Math.max(min, Math.min(Number(raiseInput), max));
-                              handleAction('RAISE', finalAmt);
+                              handleRaiseSubmit(raiseInput);
                               e.target.blur();
                             }
                           }}
@@ -998,20 +1003,29 @@ const App = () => {
           </div>
           <div className="flex-1 flex items-center justify-end">
             <div 
-              style={{ backgroundColor: VARIANT_COLORS[pendingVariantId] || '#0f172a' }}
+              style={{ background: pendingVariantId === 'RANDOM' ? RAINBOW_GRADIENT : (VARIANT_COLORS[pendingVariantId] || '#0f172a') }}
               className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}
             >
-              <span style={{ color: getContrastColor(VARIANT_COLORS[pendingVariantId]) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold opacity-80">On My Deal:</span>
+              <span style={{ color: getContrastColor(pendingVariantId === 'RANDOM' ? 'RANDOM' : pendingVariantId) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold opacity-80">On My Deal:</span>
               <div className="flex items-center">
                 <select 
                   value={pendingVariantId} 
                   onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} 
-                  style={{ color: getContrastColor(VARIANT_COLORS[pendingVariantId]) }}
+                  style={{ color: getContrastColor(pendingVariantId === 'RANDOM' ? 'RANDOM' : pendingVariantId) }}
                   className="bg-transparent text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full"
                 >
-                  {Object.entries(VARIANTS).map(([k,v]) => (<option key={`opt-${k}`} value={k} className="bg-slate-900 text-white">{v.name}</option>))}
+                  {Object.entries(VARIANTS).map(([k,v]) => (
+                    <option 
+                      key={`opt-${k}`} 
+                      value={k} 
+                      className="bg-slate-900 text-white" 
+                      style={k === 'RANDOM' ? { background: RAINBOW_GRADIENT, color: 'white' } : {}}
+                    >
+                      {v.name}
+                    </option>
+                  ))}
                 </select>
-                <ChevronDown size={12} style={{ color: getContrastColor(VARIANT_COLORS[pendingVariantId]) }} className="pointer-events-none ml-1 opacity-50" />
+                <ChevronDown size={12} style={{ color: getContrastColor(pendingVariantId === 'RANDOM' ? 'RANDOM' : pendingVariantId) }} className="pointer-events-none ml-1 opacity-50" />
               </div>
             </div>
           </div>
@@ -1082,7 +1096,7 @@ const App = () => {
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={20} className="text-emerald-400" />} FOLD</button>
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/5 opacity-60'}`}>{preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
                       <div className={`flex-[1.5] flex bg-black/40 border border-white/10 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
-                        <button onClick={()=> { if(activeIdx === heroIdx) handleAction('RAISE', Number(raiseInput)); }} className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase transition-all active:scale-95"><Zap size={20} className="mr-1"/> RAISE</button>
+                        <button onClick={()=> { if(activeIdx === heroIdx) handleRaiseSubmit(raiseInput); }} className="flex-1 bg-emerald-600 border border-emerald-400 rounded-lg flex items-center justify-center font-black text-lg uppercase transition-all active:scale-95"><Zap size={20} className="mr-1"/> RAISE</button>
                       </div>
                     </div>
                   </>
