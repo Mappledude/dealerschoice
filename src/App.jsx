@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.8
+// VERSION: v1.1.10
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.8";
+const VERSION = "v1.1.10";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -118,7 +118,7 @@ const Seat = ({
         if (isFoldedBool) return { text: "FOLDED", color: "text-red-500", glow: "shadow-[0_0_20px_rgba(239,68,68,0.6)]" };
         if (phase === PHASES.PRE_FLOP && currentBetNum > 0 && !lastActionStr) {
             if (currentBetNum === bigBlind) return { text: `BB $${currentBetNum}`, color: "text-indigo-400", glow: "shadow-[0_0_20px_rgba(129,140,248,0.4)]" };
-            return { text: `SB $${currentBetNum}`, color: "text-purple-400", glow: "shadow-[0_0_20px_rgba(168,85,247,0.4)]" };
+            return { text: `SB $${currentBetNum}`, color: "text-purple-400", glow: "shadow-[0_0_30px_rgba(168,85,247,0.4)]" };
         }
         if (!lastActionStr) return null;
         switch (lastActionStr) {
@@ -1088,7 +1088,7 @@ const App = () => {
           </div>
         </header>
 
-        {/* Action HUD Area - Optimized Button Sizing */}
+        {/* Action HUD Area - Tightened Spacing and START Alignment */}
         <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-0 overflow-hidden"> 
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
@@ -1137,7 +1137,7 @@ const App = () => {
                 );
             })()
           ) : (
-            <div className={`flex flex-col gap-2 md:gap-4 items-center w-full h-full justify-center transition-all duration-500 pt-0`}>
+            <div className={`flex flex-col gap-2 md:gap-4 items-center w-full h-full justify-start transition-all duration-500 pt-0`}>
                 {heroPlayerObj && heroPlayerObj.chips < bigBlind && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN || heroPlayerObj.isFolded || heroPlayerObj.waitingForNextHand) ? (
                     <div className="flex flex-row items-center justify-between w-full max-w-[420px] p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl lg:flex-col lg:bg-transparent lg:border-0 lg:p-0 lg:gap-4 lg:py-6 my-2 lg:my-0">
                         <div className="flex flex-col items-start lg:items-center gap-0.5"><span className="text-white/50 tracking-wider lg:tracking-[0.2em] text-[10px] lg:text-xs font-black italic uppercase text-left lg:text-center">Broke in Arena</span><span className="text-indigo-400 text-[12px] lg:text-[10px] uppercase font-black tracking-widest font-mono">Wallet: ${userProfile?.chips.toLocaleString()}</span></div>
@@ -1145,13 +1145,14 @@ const App = () => {
                     </div>
                 ) : heroPlayerObj && heroPlayerObj.chips >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (
                   <>
-                    <div className="flex flex-row gap-2 w-full max-w-[800px] items-stretch justify-center font-black h-16 md:h-20">
-                      <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-lg font-black tracking-widest uppercase flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={20} className="text-emerald-400" />} FOLD</button>
-                      <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-xl font-black truncate px-2 flex items-center justify-center gap-2 transition-all ${activeIdx === heroIdx ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-2 ring-emerald-400/50' : 'border-white/10 opacity-60'}`}>{preAction === 'CHECK' && <Check size={20} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
+                    {/* Rescaled Action Row - 50% Reduction in Height and Max-Width */}
+                    <div className="flex flex-row gap-2 w-full max-w-[400px] items-stretch justify-center font-black h-8 md:h-10 mt-2">
+                      <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase flex items-center justify-center gap-1 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-1 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={10} className="text-emerald-400" />} FOLD</button>
+                      <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-[11px] md:text-sm font-black truncate px-2 flex items-center justify-center gap-1 transition-all ${activeIdx === heroIdx ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-1 ring-emerald-400/50' : 'border-white/10 opacity-60'}`}>{preAction === 'CHECK' && <Check size={10} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
                       <div className={`flex-[1.5] flex bg-black/60 border border-white/20 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
                         <button 
                           onClick={()=> { if(activeIdx === heroIdx) handleRaiseSubmit(raiseInput); }} 
-                          className={`flex-1 ${raiseInput >= effectiveMaxBet ? 'bg-amber-600 border-amber-400' : 'bg-emerald-600 border-emerald-400'} border rounded-lg flex items-center justify-center font-black text-lg uppercase transition-all active:scale-95`}
+                          className={`flex-1 ${raiseInput >= effectiveMaxBet ? 'bg-amber-600 border-amber-400' : 'bg-emerald-600 border-emerald-400'} border rounded-lg flex items-center justify-center font-black text-[10px] md:text-xs uppercase transition-all active:scale-95`}
                         >
                           {(() => {
                             if (raiseInput >= effectiveMaxBet) return 'ALL IN';
