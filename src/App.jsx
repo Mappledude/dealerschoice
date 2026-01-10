@@ -167,11 +167,12 @@ const Seat = ({
                         return (
                           <div 
                             key={`${c.id || ci}-${ci}`} 
-                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-slate-900 border-white/20'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
+                            className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-red-700 border-2 border-white'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
                             style={{ 
                               transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? scaleBase * 1.1 : scaleBase})`, 
                               transformOrigin: 'bottom center', 
-                              zIndex: isHighlighted ? 350 : 100 + ci 
+                              zIndex: isHighlighted ? 350 : 100 + ci,
+                              backgroundImage: !shouldRevealCards ? 'url("data:image/svg+xml,%3Csvg width=\'12\' height=\'12\' viewBox=\'0 0 12 12\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M6 0l6 6-6 6-6-6z\' fill=\'%23ffffff\' fill-opacity=\'0.15\' fill-rule=\'evenodd\'/%3E%3C/svg%3E")' : 'none'
                             }}
                           >
                               {shouldRevealCards && (<><span className={`text-[10px] lg:text-[1.4vh] font-black leading-tight ${isRed ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span><span className={`text-[12px] lg:text-[2vh] leading-tight ${isRed ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span></>)}
@@ -832,38 +833,7 @@ const App = () => {
           </div>
         </div>
       )}
-      <header className="bg-black/80 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-2xl backdrop-blur-md shrink-0 font-black pt-[env(safe-area-inset-top)] h-[45px] md:h-[55px]">
-        <div className="flex-1 flex items-center">
-          <button 
-            onClick={()=>setShowRulesModal(true)} 
-            style={{ backgroundColor: VARIANT_COLORS[activeVariant?.id || 'HOLDEM'] || '#1e293b' }} 
-            className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'}`}
-          >
-            <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-black flex items-center gap-1 opacity-70">This Hand: <HelpCircle size={8}/></span>
-            <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-xs md:text-sm font-black truncate drop-shadow-sm">{String(activeVariant?.name)}</span>
-          </button>
-        </div>
-        <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
-          <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button>
-          <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button>
-          <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
-        </div>
-        <div className="flex-1 flex items-center justify-end">
-          <div className={`bg-slate-900 border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}>
-            <span className="text-emerald-400 text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold">On My Deal:</span>
-            <div className="flex items-center">
-              <select 
-                value={pendingVariantId} 
-                onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} 
-                className="bg-transparent text-white text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full"
-              >
-                {Object.entries(VARIANTS).map(([k,v]) => (<option key={`opt-${k}`} value={k} className="bg-slate-900">{v.name}</option>))}
-              </select>
-              <ChevronDown size={12} className="text-white/30 pointer-events-none ml-1" />
-            </div>
-          </div>
-        </div>
-      </header>
+      
       {intelExpanded && (
         <div className={`fixed bottom-[240px] left-4 w-[85vw] md:w-96 bg-black/20 border border-indigo-500/30 rounded-2xl backdrop-blur-sm z-[150] shadow-[0_0_50px_rgba(0,0,0,0.4)] animate-in slide-in-from-left duration-300 flex flex-col h-[50vh] max-h-[500px] ${!isMobile ? 'hidden' : ''}`}>
           <ActivityFeedContent />
@@ -879,28 +849,18 @@ const App = () => {
             {heroPlayerObj && !heroPlayerObj.isFolded && phase !== PHASES.IDLE && (
               <>
                 {activeVariant?.id === 'HILOW' && (
-                  <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none animate-in fade-in slide-in-from-left duration-700">
+                  <div className="absolute top-6 left-6 z-[90] flex flex-col items-start pointer-events-none">
                       <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">LOW STRENGTH</span>
-                      <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(String(heroPlayerObj?.lowStrength))}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
-                      <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
-                            style={{ 
-                              textShadow: `0 0 ${Math.pow(heroPlayerObj.lowWinProbability / 8, 1.6)}px #fbbf24`,
-                              color: heroPlayerObj.lowWinProbability > 85 ? '#fff' : '#fbbf24',
-                              filter: `brightness(${1 + (heroPlayerObj.lowWinProbability / 30)}) drop-shadow(0 0 10px rgba(251,191,36,${heroPlayerObj.lowWinProbability/100}))`
-                            }}>
+                      <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.lowStrength))}</span>
+                      <span className="text-[13px] lg:text-[1.8vh] font-mono mt-1 text-white transition-all duration-500">
                         {Math.round(heroPlayerObj?.lowWinProbability || 0)}% WIN PROB
                       </span>
                   </div>
                 )}
-                <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none animate-in fade-in slide-in-from-right duration-700">
+                <div className="absolute top-6 right-6 z-[90] flex flex-col items-end pointer-events-none">
                   <span className="text-[8px] md:text-[10px] text-white/30 tracking-[0.3em] font-black mb-1">STRENGTH</span>
-                  <span className={`text-[14px] lg:text-[2.5vh] font-black tracking-tighter transition-all duration-500 ${getStrengthClass(String(heroPlayerObj?.strength))}`}>{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
-                  <span className={`text-[11px] lg:text-[1.5vh] font-mono mt-1 transition-all duration-500`}
-                        style={{ 
-                          textShadow: `0 0 ${Math.pow(heroPlayerObj.winProbability / 8, 1.6)}px #fbbf24`,
-                          color: heroPlayerObj.winProbability > 85 ? '#fff' : '#fbbf24',
-                          filter: `brightness(${1 + (heroPlayerObj.winProbability / 30)}) drop-shadow(0 0 10px rgba(251,191,36,${heroPlayerObj.winProbability/100}))`
-                        }}>
+                  <span className="text-[17px] lg:text-[3vh] text-white tracking-tighter transition-all duration-500">{phase === PHASES.PRE_FLOP ? "-" : formatRank(String(heroPlayerObj?.strength))}</span>
+                  <span className="text-[13px] lg:text-[1.8vh] font-mono mt-1 text-white transition-all duration-500">
                     {Math.round(heroPlayerObj?.winProbability || 0)}% WIN PROB
                   </span>
                 </div>
@@ -978,6 +938,45 @@ const App = () => {
         </main>
       </div>
       <footer style={{ height: `calc(${visuals.footerHeight}px + env(safe-area-inset-bottom))` }} className="bg-black border-t border-white/10 flex flex-col z-[100] shrink-0 pb-[env(safe-area-inset-bottom)]">
+        
+        {/* HEADER MOVED DOWN TO JUST ABOVE ACTIONS HUD */}
+        <header className="bg-black/40 border-b border-white/5 flex items-center justify-between px-4 z-[80] shadow-xl backdrop-blur-md shrink-0 font-black h-[45px] md:h-[55px]">
+          <div className="flex-1 flex items-center">
+            <button 
+              onClick={()=>setShowRulesModal(true)} 
+              style={{ backgroundColor: VARIANT_COLORS[activeVariant?.id || 'HOLDEM'] || '#1e293b' }} 
+              className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] transition-all duration-500 relative overflow-hidden group active:scale-95 shadow-lg ${handAttention ? 'animate-hand-trigger border-white' : 'border-black/20'}`}
+            >
+              <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-black flex items-center gap-1 opacity-70">This Hand: <HelpCircle size={8}/></span>
+              <span style={{ color: getContrastColor(VARIANT_COLORS[activeVariant?.id || 'HOLDEM']) }} className="text-xs md:text-sm font-black truncate drop-shadow-sm">{String(activeVariant?.name)}</span>
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center gap-2 md:gap-4">
+            <button onClick={() => setIntelExpanded(!intelExpanded)} className={`${intelExpanded ? 'text-white bg-indigo-600 border-indigo-400' : 'text-indigo-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Activity Log"><Eye size={16}/></button>
+            <button onClick={() => setShowVisualControls(!showVisualControls)} className={`${showVisualControls ? 'text-white bg-cyan-600 border-cyan-400' : 'text-cyan-400 bg-white/5 border-white/10'} p-1.5 border rounded-lg transition-all shadow-lg active:scale-95`} title="Settings"><Settings size={16}/></button>
+            <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
+          </div>
+          <div className="flex-1 flex items-center justify-end">
+            <div 
+              style={{ backgroundColor: VARIANT_COLORS[pendingVariantId] || '#0f172a' }}
+              className={`border px-3 py-1 rounded-lg flex flex-col min-w-[120px] relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}
+            >
+              <span style={{ color: getContrastColor(VARIANT_COLORS[pendingVariantId]) }} className="text-[8px] tracking-widest leading-none mb-0.5 uppercase font-bold opacity-80">On My Deal:</span>
+              <div className="flex items-center">
+                <select 
+                  value={pendingVariantId} 
+                  onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} 
+                  style={{ color: getContrastColor(VARIANT_COLORS[pendingVariantId]) }}
+                  className="bg-transparent text-[10px] md:text-xs outline-none font-black appearance-none cursor-pointer z-10 w-full"
+                >
+                  {Object.entries(VARIANTS).map(([k,v]) => (<option key={`opt-${k}`} value={k} className="bg-slate-900 text-white">{v.name}</option>))}
+                </select>
+                <ChevronDown size={12} style={{ color: getContrastColor(VARIANT_COLORS[pendingVariantId]) }} className="pointer-events-none ml-1 opacity-50" />
+              </div>
+            </div>
+          </div>
+        </header>
+
         <div className="flex-1 flex flex-col items-center justify-start px-4 relative pt-6"> 
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
