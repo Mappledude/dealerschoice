@@ -329,7 +329,8 @@ const App = () => {
     socket.disconnect().connect();
     socket.emit('getInitialData');
     if (currentRoomId && userProfile) {
-      socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 });
+      // FIX: Added explicit empty callback to prevent Render/Node.js crash
+      socket.emit('joinRoom', { roomId: currentRoomId, profile: userProfile, buyIn: 0 }, () => {});
     }
   }, [currentRoomId, userProfile]);
 
@@ -1142,7 +1143,7 @@ const App = () => {
 
           @keyframes muflis-glow { 0%, 100% { box-shadow: 0 0 30px #39FF1444, inset 0 0 50px #39FF1466; border-color: #39FF1466; } 50% { box-shadow: 0 0 40px #1a5a0699, inset 0 0 60px #1a5a0699; border-color: #1a5a0666; } }
           .animate-muflis-glow { animation: muflis-glow 4s infinite ease-in-out; }
-          @keyframes omaha-swirl { 0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } 25% { box-shadow: 0 0 35px #a855f744, inset -20px 20px 50px #a855f722; border-color: #a855f755; } 50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; } 75% { box-shadow: 0 0 35px #a855f744, inset 20px -20px 50px #a855f722; border-color: #a855f755; } 100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } }
+          @keyframes omaha-swirl { 0% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } 25% { box-shadow: 0 0 35px #a855f744, inset -20px 20px 50px #a855f722; border-color: #a855f755; } 50% { box-shadow: 0 0 30px #a855f744, inset -20px -20px 50px #a855f722; border-color: #a855f744; } 75% { box-shadow: 0 0 35px #a855f744, inset -20px 20px 50px #a855f722; border-color: #a855f755; } 100% { box-shadow: 0 0 30px #a855f744, inset 20px 20px 50px #a855f722; border-color: #a855f744; } }
           .animate-omaha-swirl { animation: omaha-swirl 8s infinite linear; }
           html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #000; }
           input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
