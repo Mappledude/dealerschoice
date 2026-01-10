@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.10
+// VERSION: v1.1.11
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.10";
+const VERSION = "v1.1.11";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -243,7 +243,7 @@ const Seat = ({
 };
 
 const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
-  // Aggregate winners to handle "Scoops" (High + Low) visually
+  // Group winners by uid to handle split pots (Scoops/Hi-Lo) without card redundancy
   const aggregated = useMemo(() => {
     const map = {};
     winners.forEach(w => {
@@ -258,30 +258,34 @@ const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
       <div className="bg-white/5 px-4 py-1.5 border-b border-white/10 flex justify-between items-center shrink-0">
         <span className="text-[10px] tracking-[0.2em] font-black text-indigo-400 uppercase flex items-center gap-2"><Trophy size={12}/> Arena Distribution Ledger</span>
       </div>
-      <div className="flex-1 overflow-y-auto scrollbar-hide p-2 space-y-1">
+      <div className="flex-1 overflow-y-auto scrollbar-hide p-2 space-y-1.5">
         {aggregated.map((player, idx) => (
-          <div key={`ledger-${player.uid}-${idx}`} style={{ animationDelay: `${idx * 150}ms` }} className="bg-white/5 rounded-lg p-2 flex flex-col gap-1 animate-in fade-in slide-in-from-left-2 duration-300">
-            <div className="flex justify-between items-center">
-              <span className={`text-xs font-black uppercase ${getNeonNameColor(player.name)}`}>{String(player.name)}</span>
-              <span className="text-emerald-400 font-mono text-sm font-black">
+          <div key={`ledger-${player.uid}-${idx}`} style={{ animationDelay: `${idx * 150}ms` }} className="bg-white/5 rounded-xl p-1.5 flex flex-col gap-1 animate-in fade-in slide-in-from-left-2 duration-300">
+            <div className="flex justify-between items-center px-1">
+              <span className={`text-[11px] font-black uppercase ${getNeonNameColor(player.name)}`}>{String(player.name)}</span>
+              <span className="text-emerald-400 font-mono text-xs font-black">
                 +${player.payouts.reduce((sum, p) => sum + p.amount, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
               </span>
             </div>
-            <div className="flex flex-col gap-0.5">
-              {player.payouts.map((p, pi) => (
-                <div key={`payout-${pi}`} className="flex items-center justify-between opacity-80">
-                   <div className="flex items-center gap-2">
-                     <span className="text-[8px] text-white/40 uppercase tracking-tighter">{formatRank(p.rank)}</span>
-                     <div className="flex gap-0.5">
-                        {p.hand?.map((c, ci) => (
-                          <span key={`micro-${ci}`} className={`text-[9px] px-0.5 rounded ${c.suit === '♥' || c.suit === '♦' ? 'bg-red-500/20 text-red-500' : 'bg-white/10 text-white'}`}>
-                            {String(c.value)}{String(c.suit)}
-                          </span>
-                        ))}
-                     </div>
-                   </div>
-                </div>
-              ))}
+            
+            <div className="flex flex-col gap-1">
+              {/* List Payout Ranks Separately */}
+              <div className="flex flex-col gap-0.5 px-1">
+                {player.payouts.map((p, pi) => (
+                  <div key={`payout-rank-${pi}`} className="text-[9px] text-white/60 uppercase font-bold leading-tight">
+                    {formatRank(p.rank)}
+                  </div>
+                ))}
+              </div>
+
+              {/* Show cards only once per player entry in the ledger */}
+              <div className="flex gap-1 justify-center flex-wrap">
+                {(player.payouts[0].hand || []).map((c, ci) => (
+                  <div key={`micro-${ci}`} className={`text-[9px] px-1 py-0.5 rounded font-black border border-white/10 ${c.suit === '♥' || c.suit === '♦' ? 'bg-red-500/20 text-red-500' : 'bg-white/10 text-white'}`}>
+                    {String(c.value)}{String(c.suit)}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ))}
@@ -352,7 +356,7 @@ const App = () => {
     betScale: 1.5, 
     betY: 0, 
     badgeY: 0, 
-    footerHeight: 270, 
+    footerHeight: 250, 
     tableZoom: 0.9, 
     holeCardFan: 35 
   });
@@ -1146,7 +1150,7 @@ const App = () => {
                 ) : heroPlayerObj && heroPlayerObj.chips >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (
                   <>
                     {/* Rescaled Action Row - 50% Reduction in Height and Max-Width */}
-                    <div className="flex flex-row gap-2 w-full max-w-[400px] items-stretch justify-center font-black h-12 md:h-10 mt-2">
+                    <div className="flex flex-row gap-2 w-full max-w-[400px] items-stretch justify-center font-black h-8 md:h-10 mt-2">
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase flex items-center justify-center gap-1 transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-1 ring-emerald-400/50' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={10} className="text-emerald-400" />} FOLD</button>
                       <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-[11px] md:text-sm font-black truncate px-2 flex items-center justify-center gap-1 transition-all ${activeIdx === heroIdx ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.1)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-1 ring-emerald-400/50' : 'border-white/10 opacity-60'}`}>{preAction === 'CHECK' && <Check size={10} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (heroPlayerObj?.currentBet || 0) + 0.005 ? `CALL $${(highestBet - (heroPlayerObj?.currentBet || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
                       <div className={`flex-[1.5] flex bg-black/60 border border-white/20 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale cursor-default' : ''}`}>
