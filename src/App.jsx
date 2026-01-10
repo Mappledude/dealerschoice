@@ -390,7 +390,7 @@ const App = () => {
     else if (lower.startsWith("scoop: ")) prefix = "SCOOP: ";
     
     const cleanLabel = cleanRank.replace(/^(high|low|scoop): /i, "");
-    return prefix + cleanLabel.toUpperCase();
+    return prefix + cleanLabel.toUpperCase().replace(/\(NATURAL\)/g, "✨").replace(/\(JOKER\)/g, "🃏");
   };
 
   const handHistory = useMemo(() => {
