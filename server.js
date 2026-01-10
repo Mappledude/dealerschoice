@@ -119,6 +119,25 @@ const getBestHand = (hole, comm, variantId) => {
   return { high: bestHigh, low: bestLow };
 };
 
+const updateRoomStrengths = (roomId) => {
+    const room = rooms[roomId]; if (!room) return;
+    const variantId = room.activeVariant?.id || 'HOLDEM';
+    room.players.forEach(p => {
+        if (p && p.hand && !p.isFolded && !p.waitingForNextHand) {
+            const evaluation = getBestHand(p.hand, room.community, variantId);
+            p.strength = evaluation.high.name;
+            p.strengthPower = evaluation.high.power;
+            const maxPower = 9 * Math.pow(15, 7);
+            const rawProb = (p.strengthPower / maxPower) * 100;
+            p.winProbability = variantId === 'MUFLIS' ? Math.max(5, 100 - rawProb) : Math.min(99, Math.max(5, rawProb));
+            if (evaluation.low) {
+                p.lowStrength = evaluation.low.name;
+                p.lowWinProbability = 100 - ((evaluation.low.power / (Math.pow(15, 6) * 13)) * 100);
+            } else { p.lowStrength = null; p.lowWinProbability = 0; }
+        }
+    });
+};
+
 const triggerBotTurn = (roomId) => {
     const room = rooms[roomId]; if (!room || room.activeIdx === -1) return;
     const p = room.players[room.activeIdx]; if (!p || !p.isBot) return;
@@ -213,14 +232,9 @@ const runIgnition = (roomId) => {
   if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
   
   let variantId = room.players[room.dealerIdx].pendingVariant || 'RANDOM';
-  if (variantId === 'RANDOM') { 
-    const vIds = Object.keys(variantNames); 
-    variantId = vIds[Math.floor(Math.random() * vIds.length)]; 
-  }
+  if (variantId === 'RANDOM') { const vIds = Object.keys(variantNames); variantId = vIds[Math.floor(Math.random() * vIds.length)]; }
   
-  // FIX: Ensure activeVariant is fully defined before usage
   room.activeVariant = { id: variantId, name: variantNames[variantId], holeCards: holeCardsMap[variantId] };
-  
   room.deck = VALUES.flatMap(v => SUITS.map(s => ({ id: `${v}${s}-${Math.random()}`, value: v, suit: s }))).sort(() => Math.random() - 0.5);
   room.community = []; room.potData = [{ amount: 0 }]; room.highestBet = room.bb; room.lastRaiseIncrement = room.bb; room.phase = PHASES.PRE_FLOP;
   
@@ -232,6 +246,7 @@ const runIgnition = (roomId) => {
   
   io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.players[room.dealerIdx].name.toUpperCase()} DEALING ${room.activeVariant.name.toUpperCase()}`, type: 'phase' });
   
+  updateRoomStrengths(roomId);
   room.activeIdx = seated[(seated.indexOf(bbIdx) + 1) % seated.length];
   startTurnTimer(roomId); triggerBotTurn(roomId);
   io.to(roomId).emit('roomUpdate', serializeRoom(room));
@@ -245,6 +260,7 @@ const performAction = (roomId, type, amount) => {
     if (type === 'FOLD') { player.isFolded = true; player.lastAction = "FOLD"; io.to(roomId).emit('log', { name: player.name, action: 'FOLDED', type: 'fold' }); }
     else if (type === 'CALL') { const diff = room.highestBet - player.currentBet; const act = Math.min(diff, player.chips); player.chips -= act; player.currentBet += act; player.totalContribution += act; player.lastAction = act > 0 ? "CALL" : "CHECK"; io.to(roomId).emit('log', { name: player.name, action: act > 0 ? `CALLED $${act.toFixed(2)}` : 'CHECKED', type: 'bet' }); }
     else if (type === 'RAISE') { const diff = amount - player.currentBet; player.chips -= diff; player.currentBet = amount; player.totalContribution += diff; room.highestBet = amount; player.lastAction = "RAISE"; io.to(roomId).emit('log', { name: player.name, action: `RAISED to $${amount.toFixed(2)}`, type: 'bet' }); }
+    updateRoomStrengths(roomId);
     moveToNextPlayer(roomId);
 };
 
@@ -262,6 +278,7 @@ const moveToNextPlayer = (roomId) => {
         else if (room.phase === PHASES.TURN) { room.phase = PHASES.RIVER; room.community.push(...room.deck.splice(0, 1)); }
         else { processShowdown(roomId); return; }
         io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.phase} DEALT`, type: 'phase' });
+        updateRoomStrengths(roomId);
         room.activeIdx = (room.dealerIdx + 1) % TOTAL_SEATS;
         while (!room.players[room.activeIdx] || room.players[room.activeIdx].isFolded) room.activeIdx = (room.activeIdx + 1) % TOTAL_SEATS;
         startTurnTimer(roomId); triggerBotTurn(roomId);
