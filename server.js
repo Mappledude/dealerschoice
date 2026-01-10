@@ -13,7 +13,7 @@ const io = new Server(server, {
   pingInterval: 25000  
 });
 
-const VERSION = "v1.0.79";
+const VERSION = "v1.0.98";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -73,6 +73,7 @@ SEEDED_ROOMS_DATA.forEach(data => {
     dealerIdx: 0, 
     timeRemaining: 20, 
     gameInProgress: false, 
+    highestBet: 0,
     lastRaiseIncrement: data.bb 
   };
 });
@@ -254,7 +255,6 @@ const processShowdown = (roomId) => {
             const lowHalf = Math.floor((pot.amount * 100) / 2) / 100;
             const highHalf = ((pot.amount * 100) - (lowHalf * 100)) / 100;
             
-            // Per instructions: Hi-Low ALWAYS has a low winner
             const eligibleLow = evals.filter(e => e.res && e.res.low);
             if (eligibleLow.length > 0) {
                 const lowSorted = [...eligibleLow].sort((a, b) => a.res.low.power - b.res.low.power);
@@ -410,25 +410,46 @@ const performAction = (roomId, type, amount) => {
     const player = room.players[room.activeIdx]; if (!player || player.isFolded) { moveToNextPlayer(roomId); return; }
     if (room.timer) clearInterval(room.timer);
     player.actedThisStreet = true;
-    if (type === 'FOLD') { player.isFolded = true; player.lastAction = "FOLD"; io.to(roomId).emit('log', { name: player.name, action: `FOLDED`, type: 'fold' }); } 
-    else if (type === 'CALL') { 
+
+    if (type === 'FOLD') { 
+        player.isFolded = true; player.lastAction = "FOLD"; io.to(roomId).emit('log', { name: player.name, action: `FOLDED`, type: 'fold' }); 
+    } else if (type === 'CALL') { 
         const diff = room.highestBet - player.currentBet; const actual = Math.min(diff, player.chips); 
         player.chips -= actual; player.currentBet += actual; player.totalContribution += actual; 
         player.lastAction = actual > 0 ? "CALL" : "CHECK"; 
         io.to(roomId).emit('log', { name: player.name, action: actual > 0 ? `CALLED $${actual.toFixed(2)}` : `CHECKED`, type: 'bet' }); 
     } else if (type === 'RAISE') { 
-        const min = room.highestBet + room.lastRaiseIncrement; const actualRaise = Math.max(amount, min); const capped = Math.min(actualRaise, player.chips + player.currentBet); 
-        const diff = capped - player.currentBet; const increment = capped - room.highestBet;
-        player.chips -= diff; player.currentBet = capped; player.totalContribution += diff; room.highestBet = capped; player.lastAction = "RAISE"; 
+        const min = room.highestBet + room.lastRaiseIncrement; 
         
-        // UPDATED: Only reset actedThisStreet for players who still have chips
+        // --- NEW: Effective Stack Capping Logic ---
+        // Calculate the maximum any other player can possibly call/match
+        const others = room.players.filter(p => p && !p.isFolded && p.uid !== player.uid && !p.waitingForNextHand);
+        const maxOtherCanMatch = others.length > 0 ? Math.max(...others.map(o => o.chips + o.currentBet)) : 0;
+        
+        let cappedAmount = Math.max(amount, min); 
+        cappedAmount = Math.min(cappedAmount, player.chips + player.currentBet); // Caps by own stack
+        
+        // Cap by Effective Max if others have less
+        if (cappedAmount > maxOtherCanMatch && others.length > 0) {
+            const refund = cappedAmount - maxOtherCanMatch;
+            io.to(roomId).emit('log', { name: player.name, action: `RAISED to $${maxOtherCanMatch.toFixed(2)} ($${refund.toFixed(2)} returned)`, type: 'bet' });
+            cappedAmount = maxOtherCanMatch;
+        } else {
+            io.to(roomId).emit('log', { name: player.name, action: `RAISED to $${cappedAmount.toFixed(2)}`, type: 'bet' }); 
+        }
+
+        const diff = cappedAmount - player.currentBet; 
+        const increment = cappedAmount - room.highestBet;
+        
+        player.chips -= diff; player.currentBet = cappedAmount; player.totalContribution += diff; 
+        room.highestBet = cappedAmount; player.lastAction = "RAISE"; 
+        
         if (increment >= room.lastRaiseIncrement) { 
           room.lastRaiseIncrement = increment; 
           room.players.forEach(p => { 
             if (p && p.uid !== player.uid && p.chips > 0) p.actedThisStreet = false; 
           }); 
         } 
-        io.to(roomId).emit('log', { name: player.name, action: `RAISED to $${capped.toFixed(2)}`, type: 'bet' }); 
     }
     moveToNextPlayer(roomId);
 };
@@ -437,18 +458,17 @@ const moveToNextPlayer = (roomId) => {
     const room = rooms[roomId]; if (!room) return;
     updateRoomStrengths(roomId);
     
-    // Players who are All-In (chips <= 0) should be skipped in action turns
     const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
     const playersAbleToAct = active.filter(p => p.chips > 0);
     
     const allMatched = active.every(p => p.chips < 0.01 || p.currentBet === room.highestBet);
     const allActed = active.every(p => p.chips < 0.01 || p.actedThisStreet);
     
-    if (playersAbleToAct.length <= 1 && allMatched) { 
+    if (active.length <= 1) { 
         room.activeIdx = -1; 
         collectBets(room); 
         io.to(roomId).emit('roomUpdate', serializeRoom(room)); 
-        setTimeout(() => nextPhase(roomId), 1000); 
+        setTimeout(() => processShowdown(roomId), 500); 
     }
     else if (allMatched && allActed) { 
         room.activeIdx = -1; 
@@ -460,7 +480,6 @@ const moveToNextPlayer = (roomId) => {
         let nextIdx = (room.activeIdx + 1) % TOTAL_SEATS;
         for (let i = 0; i < TOTAL_SEATS; i++) {
             const p = room.players[nextIdx];
-            // UPDATED: Added chip check to skip All-In players
             if (p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected && p.chips > 0) { 
                 room.activeIdx = nextIdx; 
                 startTurnTimer(room.id); 
@@ -478,14 +497,25 @@ const collectBets = (room) => { room.players.forEach(p => { if (p) { room.potDat
 const nextPhase = (roomId) => {
     const room = rooms[roomId]; if (!room) return;
     room.players.forEach(p => { if(p) p.lastAction = null; });
+    
     const active = room.players.filter(p => p && !p.isFolded && !p.waitingForNextHand && !p.isDisconnected);
     
-    if (active.length <= 1 || (room.players.filter(p => p && !p.isFolded && p.chips > 0.01).length <= 1 && room.phase !== PHASES.RIVER)) {
+    if (active.length <= 1) {
+        processShowdown(roomId);
+        return;
+    }
+
+    if (active.filter(p => p.chips > 0.01).length <= 1 && room.phase !== PHASES.RIVER) {
         if (room.phase === PHASES.PRE_FLOP) { room.phase = PHASES.FLOP; room.community = room.deck.splice(0, 3); }
         else if (room.phase === PHASES.FLOP) { room.phase = PHASES.TURN; room.community.push(...room.deck.splice(0, 1)); }
         else if (room.phase === PHASES.TURN) { room.phase = PHASES.RIVER; room.community.push(...room.deck.splice(0, 1)); }
         else { processShowdown(roomId); return; }
-        io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.phase} DEALT`, type: 'phase' }); updateRoomStrengths(roomId); io.to(roomId).emit('roomUpdate', serializeRoom(room)); setTimeout(() => nextPhase(roomId), 800); return;
+        
+        io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.phase} DEALT`, type: 'phase' }); 
+        updateRoomStrengths(roomId); 
+        io.to(roomId).emit('roomUpdate', serializeRoom(room)); 
+        setTimeout(() => nextPhase(roomId), 800); 
+        return;
     }
 
     if (room.phase === PHASES.PRE_FLOP) { room.phase = PHASES.FLOP; room.community = room.deck.splice(0, 3); }
