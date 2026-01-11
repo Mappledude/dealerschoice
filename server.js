@@ -13,7 +13,7 @@ const io = new Server(server, {
   pingInterval: 25000  
 });
 
-const VERSION = "v1.1.1";
+const VERSION = "v1.1.2";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -319,9 +319,10 @@ const processShowdown = (roomId) => {
       });
     });
 
+    // --- v1.1.2 SERVER SHOWDOWN TIMING ---
+    // Muck wins remain 2s. All other ranked distributions total 8s as per Client logic.
     const muckOnly = room.showdownWinners.every(w => w.rank === "!");
-    const cycleTime = muckOnly ? 1500 : 3500;
-    const totalDelay = Math.max(cycleTime, room.showdownWinners.length * cycleTime);
+    const totalDelay = muckOnly ? 2000 : 8000;
     
     setTimeout(() => {
         room.players.forEach(p => { 
