@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.32
+// VERSION: v1.1.33
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.32";
+const VERSION = "v1.1.33";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -140,8 +140,6 @@ const Seat = ({
     if (!player || !displayPos) return null;
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
-    
-    // Cards reveal for everyone in the showdown unless it was a single-player muck win
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !player.isFolded && (!isMuckWin || player.isWinner));
     const cardZIndex = isHero ? 'z-[200]' : 'z-[80]';
 
@@ -184,9 +182,9 @@ const Seat = ({
                 </div>
             )}
 
+            {/* PLAYER HUD WRAPPER */}
             <div className="relative flex flex-col items-center">
                 <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-3xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/60'} ${(player.isWinner && phase === PHASES.SHOWDOWN) || isSpotlighted ? 'border-yellow-400 ring-4 ring-yellow-400/50' : ''}`}>
-                    
                     {isDealer && (
                         <div className="absolute top-2 right-2 z-[110] pointer-events-none">
                           <div className="w-2.5 h-2.5 bg-red-600 rounded-full border border-red-900 shadow-[0_0_8px_rgba(239,68,68,0.8),inset_0_0_2px_rgba(0,0,0,0.5)]" />
@@ -525,7 +523,7 @@ const App = () => {
         if (!log) return;
         if (String(log.action).includes("DEALING") || String(log.action).includes("PRE_FLOP DEALT")) {
             if (currentHand) hands.push(currentHand);
-            currentHand = { id: log.handId || `h-${idx}`, winner: null, amount: null, rank: null, events: [], variant: String(log.action).split('DEALING ')[1] || "Poker" };
+            currentHand = { id: log.handId || `history-${idx}`, winner: null, amount: null, rank: null, events: [], variant: String(log.action).split('DEALING ')[1] || "Poker" };
         }
         if (currentHand) {
             currentHand.events.push(log);
@@ -551,12 +549,8 @@ const App = () => {
       if (hand.winner) logTextExport += `RESULT: ${hand.winner} WON $${hand.amount} with ${hand.rank}\n`;
       logTextExport += "---------------------------------------\n\n";
     });
-    const textArea = document.createElement("textarea"); 
-    textArea.value = logTextExport; 
-    document.body.appendChild(textArea); 
-    textArea.select();
-    try { document.execCommand('copy'); } catch (err) {} 
-    document.body.removeChild(textArea);
+    const textArea = document.createElement("textarea"); textArea.value = logTextExport; document.body.appendChild(textArea); textArea.select();
+    try { document.execCommand('copy'); } catch (err) {} document.body.removeChild(textArea);
   };
 
   useEffect(() => {
@@ -669,8 +663,8 @@ const App = () => {
                 <div className="flex flex-col gap-8">
                     <h3 className="text-xl border-l-4 border-[#fbbf24] pl-4 uppercase font-black tracking-widest">Registry</h3>
                     <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10">
-                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white"/>
-                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white"/>
+                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase outline-none text-white"/>
+                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase outline-none text-white"/>
                         <button onClick={() => { if (!newPlayer.name.trim()) return; socket.emit('adminCreatePlayer', { ...newPlayer, uid: 'p_' + Math.random().toString(36).slice(2, 7) }); setNewPlayer({ ...newPlayer, name: '', password: '' }); }} className="bg-[#fbbf24] text-black rounded-xl font-black">CREATE PLAYER</button>
                     </div>
                     <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
@@ -704,7 +698,7 @@ const App = () => {
                     </div>
                     <div className="grid grid-cols-1 gap-4">
                         {activeTables.map(t => (
-                            <div key={`table-admin-${t.id}`} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10">
+                            <div key={`table-entry-admin-${t.id}`} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10">
                               <div className="uppercase"><h4 className="text-[#fbbf24] font-black">{String(t.name)}</h4><p className="text-[10px] text-white/40 font-black">${t.sb}/${t.bb}</p></div>
                               <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="text-red-500"><Trash2 size={16}/></button>
                             </div>
@@ -748,7 +742,7 @@ const App = () => {
                             <div className="flex flex-col items-end"><span className="text-[8px] text-white/30 uppercase tracking-widest">Buy-in</span><span className="text-white/80 text-sm font-mono leading-none">${t.minBuy}-${t.maxBuy}</span></div>
                         </div>
                         <div className="flex flex-wrap gap-1.5 p-2 bg-black/40 rounded-xl min-h-[40px] border border-white/5">
-                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`seated-lobby-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] flex items-center gap-1 font-black uppercase">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
+                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`seated-p-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] flex items-center gap-1 font-black uppercase">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
                         </div>
                       </div>
                       <button onClick={()=>{ setSelectedTableForJoin(t); setBuyInAmount(t.maxBuy); }} className="w-full py-4 bg-emerald-600 rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all font-black uppercase tracking-widest">JOIN ARENA</button>
@@ -802,6 +796,25 @@ const App = () => {
                 isMobile={isMobile}
                 setIntelExpanded={setIntelExpanded}
             />
+        </div>
+      )}
+
+      {showVisualControls && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-3xl p-6" onClick={() => setShowVisualControls(false)}>
+          <div className="w-full max-w-[400px] bg-black/80 border border-white/20 rounded-3xl p-8 flex flex-col gap-6 shadow-2xl uppercase" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b border-white/10 pb-4 font-black"><h3 className="text-lg text-cyan-400 uppercase flex items-center gap-2 tracking-widest font-black"><Settings2 size={20}/> Configuration</h3><X size={24} className="cursor-pointer text-white/40 hover:text-white" onClick={() => setShowVisualControls(false)}/></div>
+            <div className="space-y-6 font-black uppercase">
+              <button onClick={() => { if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); }} className="w-full py-4 bg-white/10 border border-white/20 text-white rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-95 font-black"><Bot size={18}/> Add Arena Bot</button>
+              <div className="flex flex-col gap-4 pt-4 border-t border-white/10">
+                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Table Zoom <span>{Math.round((visuals.tableZoom || 0) * 100)}%</span></label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
+                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">HUD Height <span>{visuals.footerHeight || 280}px</span></label><input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
+                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Scale <span>{(Number(visuals.heroCardScale) || 2.0).toFixed(2)}</span></label><input type="range" min="1.0" max="5.0" step="0.1" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-emerald-400 cursor-pointer" /></div>
+                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Y Offset <span>{visuals.heroCardY}px</span></label><input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
+                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Spread <span>{(Number(visuals.heroCardSpread) || 3.0).toFixed(1)}</span></label><input type="range" min="0.5" max="10.0" step="0.5" value={visuals.heroCardSpread} onChange={(e) => setVisuals({...visuals, heroCardSpread: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
+              </div>
+            </div>
+            <button onClick={() => setShowVisualControls(false)} className="w-full py-4 bg-cyan-600 text-black rounded-xl uppercase font-black shadow-lg hover:brightness-110 active:scale-95 tracking-widest">Save & Apply</button>
+          </div>
         </div>
       )}
 
@@ -867,7 +880,6 @@ const App = () => {
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
                   <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto uppercase">
                     <div className="flex-1 w-full relative flex items-center justify-center py-4">
-                      {/* Betting Slider with Pot Markers and Snap Logic */}
                       <div className="relative h-full w-8 md:w-10">
                         {(() => {
                            const min = Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet));
@@ -988,15 +1000,21 @@ const App = () => {
                         <div className="flex flex-col items-start"><span className="text-white/50 text-[10px] uppercase font-black tracking-tighter">Insufficient Balance</span><span className="text-indigo-400 text-[12px] font-mono font-black uppercase">Wallet: ${(Number(userProfile?.chips) || 0).toLocaleString()}</span></div>
                         <button onClick={()=>{ setRebuyAmount(100); setShowRebuyModal(true); }} className="px-5 py-3 bg-indigo-600 border border-indigo-400 rounded-xl flex items-center gap-2 uppercase font-black hover:bg-indigo-500 transition-all active:scale-95 shadow-lg"><Coins size={16}/> Re-buy</button>
                     </div>
-                ) : heroPlayerObj && (Number(heroPlayerObj.chips) || 0) >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (
+                ) : heroPlayerObj && (Number(heroPlayerObj.chips) || 0) >= bigBlind * 0.01 ? (
                     <div className="flex flex-row gap-2 w-full max-w-[400px] items-stretch justify-center h-16 md:h-10 uppercase font-black">
-                      <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-[14px] md:text-xs font-black transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-1' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={10} className="text-emerald-400" />} FOLD</button>
-                      <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-[14px] md:text-sm font-black transition-all px-2 flex items-center justify-center gap-1 ${activeIdx === heroIdx ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-1' : 'border-white/10 opacity-60'}`}>{preAction === 'CHECK' && <Check size={10} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (Number(heroPlayerObj?.currentBet) || 0) + 0.005 ? `CALL $${(Number(highestBet) - (Number(heroPlayerObj?.currentBet) || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
-                      <div className={`flex-[1.5] flex bg-black/60 border border-white/20 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale' : ''}`}>
-                        <button onClick={()=> { if(activeIdx === heroIdx) handleRaiseSubmit(raiseInput); }} className={`flex-1 ${Number(raiseInput) >= Number(effectiveMaxBet) ? 'bg-amber-600 border-amber-400' : 'bg-emerald-600 border-emerald-400'} border rounded-lg font-black text-[14px] md:text-xs active:scale-95 transition-all shadow-xl uppercase`}>
-                          {Number(raiseInput) >= Number(effectiveMaxBet) ? 'ALL IN' : 'RAISE'}
-                        </button>
-                      </div>
+                      {phase === PHASES.IDLE ? (
+                         <div className="flex items-center py-4 opacity-50"><span className="text-white text-xs italic tracking-widest">WAITING FOR NEXT HAND...</span></div>
+                      ) : (
+                        <>
+                          <button onClick={() => { if (activeIdx === heroIdx) handleAction('FOLD'); else setPreAction(preAction === 'FOLD' ? null : 'FOLD'); }} className={`flex-1 bg-red-950/60 border rounded-xl text-[14px] md:text-xs font-black transition-all ${activeIdx === heroIdx ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : preAction === 'FOLD' ? 'border-emerald-400 ring-1' : 'border-red-500/20 opacity-60'}`}>{preAction === 'FOLD' && <Check size={10} className="text-emerald-400" />} FOLD</button>
+                          <button onClick={() => { if (activeIdx === heroIdx) handleAction('CALL'); else setPreAction(preAction === 'CHECK' ? null : 'CHECK'); }} className={`flex-1 bg-white/10 border rounded-xl text-[14px] md:text-sm font-black transition-all px-2 flex items-center justify-center gap-1 ${activeIdx === heroIdx ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : preAction === 'CHECK' ? 'border-emerald-400 ring-1' : 'border-white/10 opacity-60'}`}>{preAction === 'CHECK' && <Check size={10} className="text-emerald-400" />} {activeIdx === heroIdx ? (highestBet > (Number(heroPlayerObj?.currentBet) || 0) + 0.005 ? `CALL $${(Number(highestBet) - (Number(heroPlayerObj?.currentBet) || 0)).toLocaleString()}` : 'CHECK') : 'CHECK'}</button>
+                          <div className={`flex-[1.5] flex bg-black/60 border border-white/20 rounded-xl overflow-hidden transition-all ${activeIdx !== heroIdx ? 'opacity-20 grayscale' : ''}`}>
+                            <button onClick={()=> { if(activeIdx === heroIdx) handleRaiseSubmit(raiseInput); }} className={`flex-1 ${Number(raiseInput) >= Number(effectiveMaxBet) ? 'bg-amber-600 border-amber-400' : 'bg-emerald-600 border-emerald-400'} border rounded-lg font-black text-[14px] md:text-xs active:scale-95 transition-all shadow-xl uppercase`}>
+                              {Number(raiseInput) >= Number(effectiveMaxBet) ? 'ALL IN' : 'RAISE'}
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                 ) : (
                   <div className="flex flex-col items-center py-10 opacity-20 animate-pulse font-black uppercase"><span className="text-white text-sm italic tracking-[1em]">OBSERVING</span></div>
@@ -1005,25 +1023,6 @@ const App = () => {
           )}
         </div>
       </footer>
-
-      {showVisualControls && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-3xl p-6" onClick={() => setShowVisualControls(false)}>
-          <div className="w-full max-w-[400px] bg-black/80 border border-white/20 rounded-3xl p-8 flex flex-col gap-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center border-b border-white/10 pb-4 font-black"><h3 className="text-lg text-cyan-400 uppercase flex items-center gap-2 tracking-widest"><Settings2 size={20}/> Configuration</h3><X size={24} className="cursor-pointer text-white/40 hover:text-white" onClick={() => setShowVisualControls(false)}/></div>
-            <div className="space-y-6 font-black uppercase">
-              <button onClick={() => { if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); }} className="w-full py-4 bg-white/10 border border-white/20 text-white rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-95 font-black"><Bot size={18}/> Add Arena Bot</button>
-              <div className="flex flex-col gap-4 pt-4 border-t border-white/10">
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Table Zoom <span>{Math.round((visuals.tableZoom || 0) * 100)}%</span></label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">HUD Height <span>{visuals.footerHeight || 280}px</span></label><input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Scale <span>{(Number(visuals.heroCardScale) || 2.0).toFixed(2)}</span></label><input type="range" min="1.0" max="5.0" step="0.1" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-emerald-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Y Offset <span>{visuals.heroCardY}px</span></label><input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Spread <span>{(Number(visuals.heroCardSpread) || 3.0).toFixed(1)}</span></label><input type="range" min="0.5" max="10.0" step="0.5" value={visuals.heroCardSpread} onChange={(e) => setVisuals({...visuals, heroCardSpread: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
-              </div>
-            </div>
-            <button onClick={() => setShowVisualControls(false)} className="w-full py-4 bg-cyan-600 text-black rounded-xl uppercase font-black shadow-lg hover:brightness-110 active:scale-95 tracking-widest">Save & Apply</button>
-          </div>
-        </div>
-      )}
 
       <style>{`
           @keyframes announcement-pop { 0% { transform: scale(0.5); opacity: 0; filter: blur(10px); } 30% { transform: scale(1.1); opacity: 1; filter: blur(0px); } 70% { transform: scale(1); opacity: 1; filter: blur(0px); } 100% { transform: scale(1.3); opacity: 0; filter: blur(20px); } }
