@@ -32,7 +32,7 @@ const variantNames = {
   MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks"
 };
 
-const BOT_NAMES = ["Ram", "Bipin", "Brij", "Manoj", "Aneesh", "Priya", "Jyoti", "Nandu", "Hardevi", "Lalit", "Sona"];
+const BOT_NAMES = ["Ram", "Bipin", "Brij", "Manoj", "Aneesh", "Priya L.", "Jyoti", "Nandu", "Hardevi", "Lalit", "Sona"];
 
 const BOT_PERSONALITIES = {
   "Ram": "AGGRESSIVE", "Bipin": "TIGHT", "Brij": "CALCULATED", "Manoj": "PASSIVE", "Aneesh": "AGGRESSIVE",
