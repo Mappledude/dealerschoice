@@ -298,7 +298,7 @@ const moveToNextPlayer = (roomId) => {
         startTurnTimer(roomId); triggerBotTurn(roomId);
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
     } else {
-        room.activeIdx = (room.activeIdx + 1) % TOTAL_SEATS;
+        room.activeIdx = (room.dealerIdx + 1) % TOTAL_SEATS;
         while (!room.players[room.activeIdx] || room.players[room.activeIdx].isFolded) room.activeIdx = (room.activeIdx + 1) % TOTAL_SEATS;
         startTurnTimer(roomId); triggerBotTurn(roomId);
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
@@ -317,6 +317,14 @@ io.on('connection', (socket) => {
   });
   socket.on('joinRoom', ({ roomId, profile, buyIn }, cb) => {
     const room = rooms[roomId]; if (!room) return;
+    
+    // Rule: One player, one seat, across ALL rooms
+    const alreadySeated = Object.values(rooms).some(r => r.players.some(p => p && p.uid === profile.uid));
+    if (alreadySeated) {
+        if (cb) cb({ status: 'error', message: 'ALREADY_SEATED' });
+        return;
+    }
+
     const empty = room.players.findIndex(p => p === null); if (empty === -1) return;
     room.players[empty] = { ...profile, chips: buyIn, seatIdx: empty, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: profile.pendingVariant || 'RANDOM' };
     socket.join(roomId); io.to(roomId).emit('roomUpdate', serializeRoom(room));
@@ -341,4 +349,4 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(10000, '0.0.0.0', () => console.log(`Dealers Choice Server Running`));
+server.listen(10000, '0.0.0.0', () => console.log(`Dealers Choice Server Running v${VERSION}`));
