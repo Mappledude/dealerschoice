@@ -228,7 +228,7 @@ const Seat = ({
     );
 };
 
-const ShowdownLedger = ({ winners, formatRank, isHiLo, revealCards }) => {
+const ShowdownLedger = ({ winners, formatRank, isMobile, isHiLo, revealCards }) => {
   const hiLoItems = useMemo(() => {
     if (!isHiLo) return null;
     const items = { low: null, high: null };
@@ -366,12 +366,12 @@ const App = () => {
   const [showRebuyModal, setShowRebuyModal] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [preAction, setPreAction] = useState(null);
-  const [noiseSeed, setNoiseSeed] = useState(1);
-  const [revealShowdownCards, setRevealShowdownCards] = useState(false);
   const [handAttention, setHandAttention] = useState(false);
   const [dealAttention, setDealAttention] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 1000, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'RANDOM' });
+  const [noiseSeed, setNoiseSeed] = useState(1);
+  const [revealShowdownCards, setRevealShowdownCards] = useState(false);
 
   const joinLock = useRef(false);
   const phaseRef = useRef(PHASES.IDLE); 
@@ -461,7 +461,7 @@ const App = () => {
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
   const formatRank = (rank) => {
-    if (!rank || rank === "null") return "";
+    if (!rank || rank === "null" || rank === "undefined") return "";
     const rankStr = String(rank);
     const cleanRank = rankStr.replace(/^(high|low|scoop): /i, "");
     const prefixMatch = rankStr.match(/^(high|low|scoop): /i);
@@ -496,12 +496,18 @@ const App = () => {
     let logTextExport = "--- DEALER'S CHOICE POKER ARENA LOG ---\n\n";
     handHistory.forEach(hand => {
       logTextExport += `[${hand.variant.toUpperCase()} HAND]\n`;
-      (hand.events || []).forEach(ev => { logTextExport += `[${new Date(ev.timestamp).toLocaleTimeString()}] ${ev.name}: ${ev.action}\n`; });
+      (hand.events || []).forEach(ev => { 
+        logTextExport += `[${new Date(ev.timestamp).toLocaleTimeString()}] ${ev.name}: ${ev.action}\n`; 
+      });
       if (hand.winner) logTextExport += `RESULT: ${hand.winner} WON $${hand.amount} with ${hand.rank}\n`;
       logTextExport += "---------------------------------------\n\n";
     });
-    const textArea = document.createElement("textarea"); textArea.value = logTextExport; document.body.appendChild(textArea); textArea.select();
-    try { document.execCommand('copy'); } catch (err) {} document.body.removeChild(textArea);
+    const textArea = document.createElement("textarea"); 
+    textArea.value = logTextExport; 
+    document.body.appendChild(textArea); 
+    textArea.select();
+    try { document.execCommand('copy'); } catch (err) {} 
+    document.body.removeChild(textArea);
   };
 
   const ActivityFeedContent = () => (
@@ -656,7 +662,7 @@ const App = () => {
         <main className="flex-1 p-5 overflow-y-auto uppercase font-black">
             {adminTab === ADMIN_TABS.PLAYERS ? (
                 <div className="flex flex-col gap-8">
-                    <h3 className="text-xl border-l-4 border-[#fbbf24] pl-4 uppercase font-black tracking-widest">Registry</h3>
+                    <h3 className="text-xl border-l-4 border-[#fbbf24] pl-4 font-black tracking-widest">Registry</h3>
                     <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10">
                         <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase outline-none text-white"/>
                         <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase outline-none text-white"/>
@@ -688,7 +694,7 @@ const App = () => {
                     </div>
                     <div className="grid grid-cols-1 gap-4">
                         {activeTables.map(t => (
-                            <div key={`table-admin-${t.id}`} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10">
+                            <div key={`table-entry-${t.id}`} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10">
                               <div className="uppercase"><h4 className="text-[#fbbf24] font-black">{String(t.name)}</h4><p className="text-[10px] text-white/40 font-black">${t.sb}/${t.bb}</p></div>
                               <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="text-red-500"><Trash2 size={16}/></button>
                             </div>
@@ -732,7 +738,7 @@ const App = () => {
                             <div className="flex flex-col items-end"><span className="text-[8px] text-white/30 uppercase tracking-widest">Buy-in</span><span className="text-white/80 text-sm font-mono leading-none">${t.minBuy}-${t.maxBuy}</span></div>
                         </div>
                         <div className="flex flex-wrap gap-1.5 p-2 bg-black/40 rounded-xl min-h-[40px] border border-white/5">
-                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`seated-lobby-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] flex items-center gap-1 font-black uppercase">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
+                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`player-seated-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] flex items-center gap-1 font-black uppercase">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
                         </div>
                       </div>
                       <button onClick={()=>{ setSelectedTableForJoin(t); setBuyInAmount(t.maxBuy); }} className="w-full py-4 bg-emerald-600 rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all font-black uppercase tracking-widest">JOIN ARENA</button>
@@ -801,7 +807,7 @@ const App = () => {
               </>
             )}
 
-            <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center origin-center">
+            <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[3/4] md:aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center origin-center">
                 <div className="absolute inset-[-20px] rounded-[50%] z-0">
                     <div className="absolute inset-0 rounded-[50%] blur-[20px] opacity-40 animate-pulse" style={{ background: activeVariant?.id === 'HILOW' ? `linear-gradient(to right, ${VARIANT_COLORS.HILOW}, #bfff00)` : (VARIANT_COLORS[activeVariant?.id] || '#22d3ee') }} />
                     <div className="absolute inset-0 rounded-[50%] border-[24px] border-[#0a0a0a] shadow-2xl" />
@@ -813,8 +819,9 @@ const App = () => {
                 <div className="absolute inset-0 pointer-events-none z-20">
                     {(players || []).map((p, i) => { 
                         if (!p) return null; 
+                        const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; 
                         const isThisPlayerWinningShowdown = phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners[currentShowdownIdx]?.uid === p.uid;
-                        return (<Seat key={`seat-pos-${i}`} player={p} displayPos={DISPLAY_POSITIONS[(i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={i} visuals={visuals} bigBlind={bigBlind} showdownWinners={showdownWinners} isCollectingBets={potTransferring} timeRemaining={timeRemaining} formatRank={formatRank} isSpotlighted={isThisPlayerWinningShowdown} />); 
+                        return (<Seat key={`seat-idx-${i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={i} visuals={visuals} bigBlind={bigBlind} showdownWinners={showdownWinners} isCollectingBets={potTransferring} timeRemaining={timeRemaining} formatRank={formatRank} isSpotlighted={isThisPlayerWinningShowdown} />); 
                     })}
                 </div>
                 <div className="absolute top-[45%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full uppercase">
@@ -841,6 +848,7 @@ const App = () => {
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
                   <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto uppercase">
                     <div className="flex-1 w-full relative flex items-center justify-center py-4">
+                      {/* Betting Slider with Pot Markers and Snap Logic */}
                       <div className="relative h-full w-8 md:w-10">
                         {(() => {
                            const min = Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet));
@@ -930,7 +938,7 @@ const App = () => {
                             <Trophy size={14} className="text-yellow-400 animate-bounce" />
                             <div className="text-sm md:text-xl font-black flex items-center gap-2 whitespace-nowrap uppercase">
                               <span className={getNeonNameColor(winner.name)}>{String(winner.name || '').toUpperCase()}</span>
-                              {isMuckWin ? <span className="text-white ml-2">SCOOPED THE POT</span> : <><span className="text-white/50 font-black">WON TOTAL</span><span className="text-emerald-400 font-mono ml-2">+${(Number(winner.amount) || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></>}
+                              {isMuckWin ? <span className="text-white ml-2">SCOOPED THE POT</span> : <><span className="text-white/50 font-black">WON</span><span className="text-emerald-400 font-mono ml-2">+${(Number(winner.amount) || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></>}
                             </div>
                         </div>
                         {!isMuckWin && (
@@ -959,7 +967,7 @@ const App = () => {
                 {heroPlayerObj && (Number(heroPlayerObj.chips) || 0) < Number(bigBlind) && (phase === PHASES.IDLE || phase === PHASES.SHOWDOWN || heroPlayerObj.isFolded || heroPlayerObj.waitingForNextHand) ? (
                     <div className="flex flex-row items-center justify-between w-full max-w-[420px] p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl animate-pulse shadow-[0_0_30px_rgba(79,70,229,0.3)] font-black">
                         <div className="flex flex-col items-start"><span className="text-white/50 text-[10px] uppercase font-black tracking-tighter">Insufficient Balance</span><span className="text-indigo-400 text-[12px] font-mono font-black uppercase">Wallet: ${(Number(userProfile?.chips) || 0).toLocaleString()}</span></div>
-                        <button onClick={()=>{ setRebuyAmount(100); setShowRebuyModal(true); }} className="px-5 py-3 bg-indigo-600 border border-indigo-400 rounded-xl font-black text-xs hover:scale-105 transition-transform flex items-center gap-2 uppercase shrink-0 shadow-lg active:scale-95"><Coins size={16}/> Re-buy</button>
+                        <button onClick={()=>{ setRebuyAmount(100); setShowRebuyModal(true); }} className="px-5 py-3 bg-indigo-600 border border-indigo-400 rounded-xl flex items-center gap-2 uppercase font-black hover:bg-indigo-500 transition-all active:scale-95 shadow-lg"><Coins size={16}/> Re-buy</button>
                     </div>
                 ) : heroPlayerObj && (Number(heroPlayerObj.chips) || 0) >= bigBlind * 0.01 && phase !== PHASES.IDLE ? (
                     <div className="flex flex-row gap-2 w-full max-w-[400px] items-stretch justify-center h-16 md:h-10 uppercase font-black">
