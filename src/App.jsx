@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.14
+// VERSION: v1.1.16
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.14";
+const VERSION = "v1.1.16";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -243,40 +243,55 @@ const Seat = ({
 };
 
 const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
-  // Group winners by uid to handle split pots (Scoops/Hi-Lo) without card redundancy
+  // Group winners by uid to handle split pots, and deduplicate identical hands per player
   const aggregated = useMemo(() => {
-    const map = {};
+    const playerMap = {};
+    
     winners.forEach(w => {
-      if (!map[w.uid]) map[w.uid] = { ...w, payouts: [] };
-      map[w.uid].payouts.push({ amount: w.amount, rank: w.rank, hand: w.hand });
+      if (!playerMap[w.uid]) {
+        playerMap[w.uid] = { 
+          uid: w.uid, 
+          name: w.name, 
+          totalAmount: 0, 
+          distinctPayouts: {} 
+        };
+      }
+      
+      playerMap[w.uid].totalAmount += w.amount;
+      
+      // Deduplication: Group by the rank string (e.g. "Three of a Kind", "LOW: 7-6")
+      const rankKey = w.rank;
+      if (!playerMap[w.uid].distinctPayouts[rankKey]) {
+        playerMap[w.uid].distinctPayouts[rankKey] = { amount: 0, rank: w.rank, hand: w.hand };
+      }
+      playerMap[w.uid].distinctPayouts[rankKey].amount += w.amount;
     });
-    // Ensure "LOW" hand is visually first for consistent tabular orientation
-    return Object.values(map).map(player => ({
-        ...player,
-        payouts: [...player.payouts].sort((a, b) => {
-            const aLow = String(a.rank).toLowerCase().includes("low:");
-            const bLow = String(b.rank).toLowerCase().includes("low:");
-            if (aLow && !bLow) return -1;
-            if (!aLow && bLow) return 1;
-            return 0;
-        })
-    }));
+
+    return Object.values(playerMap).map(player => {
+      const sortedPayouts = Object.values(player.distinctPayouts).sort((a, b) => {
+        const aLow = String(a.rank).toLowerCase().includes("low:");
+        const bLow = String(b.rank).toLowerCase().includes("low:");
+        if (aLow && !bLow) return -1;
+        if (!aLow && bLow) return 1;
+        return 0;
+      });
+      return { ...player, payouts: sortedPayouts };
+    });
   }, [winners]);
 
   return (
-    <div className="w-full max-w-[95vw] bg-black/40 border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+    <div className="w-full max-w-[98vw] bg-black/40 border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
       <div className="flex-1 overflow-x-auto scrollbar-hide p-2 flex flex-row items-start justify-center gap-2 md:gap-4">
         {aggregated.map((player, idx) => (
-          <div key={`ledger-${player.uid}-${idx}`} style={{ animationDelay: `${idx * 150}ms` }} className="min-w-[180px] md:min-w-[320px] flex-shrink-0 bg-white/5 border border-white/5 rounded-xl p-2 flex flex-col gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+          <div key={`ledger-${player.uid}-${idx}`} style={{ animationDelay: `${idx * 150}ms` }} className={`flex-shrink-0 bg-white/5 border border-white/5 rounded-xl p-2 flex flex-col gap-2 animate-in fade-in slide-in-from-left-2 duration-300 ${aggregated.length > 1 ? 'min-w-[180px] md:min-w-[320px]' : 'min-w-[200px] w-auto max-w-full'}`}>
             {/* Header: Name and Combined Win Amount */}
             <div className="flex justify-between items-center px-1 border-b border-white/5 pb-1 gap-2">
               <span className={`text-[11px] md:text-sm font-black uppercase tracking-tight truncate ${getNeonNameColor(player.name)}`}>{String(player.name)}</span>
               <span className="text-emerald-400 font-mono text-[12px] md:text-[16px] font-black whitespace-nowrap">
-                  +${player.payouts.reduce((sum, p) => sum + p.amount, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  +${player.totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}
               </span>
             </div>
             
-            {/* Tabular side-by-side for Scoop / Split hands */}
             <div className={`grid ${player.payouts.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
               {player.payouts.map((p, pi) => {
                   const label = String(p.rank).toUpperCase();
@@ -293,12 +308,10 @@ const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
 
                   return (
                       <div key={`payout-col-${pi}`} className="flex flex-col gap-1.5 items-center">
-                          {/* Rank Label Column */}
                           <div className={`w-full px-1 py-1 rounded-lg border border-white/10 ${bgColor} ${textColor} text-[8px] md:text-[10px] font-black tracking-tighter flex items-center justify-center gap-1 uppercase text-center min-h-[28px]`}>
                               {isScoop && <Sparkles size={8}/>}
                               {formatRank(p.rank)}
                           </div>
-                          {/* Specific Cards for this winning hand */}
                           <div className="flex gap-0.5 justify-center flex-wrap">
                             {(p.hand || []).map((c, ci) => (
                               <div key={`micro-${pi}-${ci}`} className={`text-[9px] md:text-[10px] w-6 md:w-8 h-8 md:h-10 rounded-sm flex flex-col items-center justify-center font-black border ${c.suit === '♥' || c.suit === '♦' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-slate-900 border-slate-200'}`}>
@@ -399,7 +412,6 @@ const App = () => {
 
   const heroPlayerObj = useMemo(() => heroIdx !== -1 ? players[heroIdx] : null, [players, heroIdx]);
 
-  // Calculate the effective maximum we can raise to, based on other players' stack depths
   const effectiveMaxBet = useMemo(() => {
     if (!heroPlayerObj) return 0;
     const activeOpponents = players.filter(p => p && !p.isFolded && p.uid !== heroPlayerObj.uid && !p.waitingForNextHand);
@@ -428,7 +440,6 @@ const App = () => {
     }
   }, [currentRoomId, raiseInput]);
 
-  // Unified clamping logic for manual raises
   const handleRaiseSubmit = useCallback((inputValue) => {
     if (activeIdx !== heroIdx) return;
     const min = minRaiseAmount || (highestBet + bigBlind);
@@ -644,11 +655,7 @@ const App = () => {
             const rawWinners = d.showdownWinners || []; 
             setShowdownWinners(rawWinners); 
             setWinning5Ids(rawWinners[0]?.winning5Ids || d.winning5Ids || []);
-            
-            // --- v1.1.13 CLIENT SHOWDOWN TIMING ---
-            // Muck wins remain 2s. All other ranked distributions total 8s.
             const dur = rawWinners.some(w => w.rank === "!") ? 2000 : (8000 / Math.max(1, rawWinners.length));
-            
             if (rawWinners.length > 1) { 
                 for (let i = 1; i < rawWinners.length; i++) { 
                     setTimeout(() => { 
@@ -1092,17 +1099,25 @@ const App = () => {
             <button onClick={() => {socket.emit('leaveRoom', { uid: userProfile.uid }); setCurrentView(VIEWS.LOBBY);}} className="text-red-500 p-1.5 bg-white/10 border border-white/20 rounded-lg shadow-lg active:scale-95 hover:bg-red-500/10 transition-all" title="Exit Arena"><LogOut size={16}/></button>
           </div>
           <div className="flex-1 flex items-center justify-end h-full">
+            {/* SUBTLE DROPDOWN DESIGN START */}
             <div 
-              style={{ background: pendingVariantId === 'RANDOM' ? RAINBOW_GRADIENT : (VARIANT_COLORS[pendingVariantId] || '#0f172a') }}
-              className={`border px-3 h-[36px] md:h-[42px] rounded-lg flex flex-col justify-center gap-0 relative transition-all duration-300 group ${dealAttention ? 'animate-deal-trigger border-white' : 'border-white/10'}`}
+              style={{ 
+                borderLeft: `4px solid ${pendingVariantId === 'RANDOM' ? '#fbbf24' : (VARIANT_COLORS[pendingVariantId] || '#fff')}`,
+                backgroundColor: 'rgba(15, 23, 42, 0.9)' // Dark Slate 900 base
+              }}
+              className={`px-3 h-[36px] md:h-[42px] rounded-lg flex flex-col justify-center gap-0 relative transition-all duration-300 group border border-white/10 shadow-inner ${dealAttention ? 'animate-deal-trigger border-white' : ''}`}
             >
-              <span style={{ color: 'black' }} className="text-[7px] md:text-[9px] leading-tight uppercase font-black opacity-80 whitespace-nowrap">On My Deal:</span>
+              {/* Subtle tint background if random */}
+              {pendingVariantId === 'RANDOM' && (
+                  <div className="absolute inset-0 opacity-[0.08] rounded-lg pointer-events-none" style={{ background: RAINBOW_GRADIENT }} />
+              )}
+              
+              <span className="text-[7px] md:text-[9px] leading-tight uppercase font-black text-slate-400 tracking-wider">Next Hand Choice:</span>
               <div className="flex items-center leading-tight">
                 <select 
                   value={pendingVariantId} 
                   onChange={(e) => { setPendingVariantId(e.target.value); socket.emit('updatePlayerSettings', {uid: userProfile.uid, pendingVariant: e.target.value}); }} 
-                  style={{ color: 'black' }}
-                  className="bg-transparent text-[10px] md:text-sm outline-none font-black appearance-none cursor-pointer z-10 w-full"
+                  className="bg-transparent text-[10px] md:text-sm text-white outline-none font-black appearance-none cursor-pointer z-10 w-full pr-4"
                 >
                   {Object.entries(VARIANTS).map(([k,v]) => (
                     <option 
@@ -1114,9 +1129,12 @@ const App = () => {
                     </option>
                   ))}
                 </select>
-                <ChevronDown size={10} style={{ color: 'black' }} className="pointer-events-none ml-1 opacity-50" />
+                <div className="absolute right-2 pointer-events-none flex items-center justify-center">
+                    <ChevronDown size={14} className="text-slate-500 group-hover:text-white transition-colors" />
+                </div>
               </div>
             </div>
+            {/* SUBTLE DROPDOWN DESIGN END */}
           </div>
         </header>
 
