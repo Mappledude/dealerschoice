@@ -32,36 +32,51 @@ const variantNames = {
   MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks"
 };
 
-const BOT_NAMES = ["Baabu Shona", "Laddoo", "Chikku", "Guddu", "Kalia", "Chinky", "Bunty", "Babli", "Chhotu", "Motu", "Jadiya", "Piddi"];
+const BOT_NAMES = ["Ram", "Bipin", "Brij", "Manoj", "Aneesh", "Priya", "Jyoti", "Nandu", "Hardevi", "Lalit", "Sona"];
 
 const BOT_PERSONALITIES = {
-    "Baabu Shona": "CALCULATED", "Chinky": "CALCULATED", "Motu": "CALCULATED",
-    "Kalia": "AGGRESSIVE", "Chikku": "AGGRESSIVE", "Bunty": "AGGRESSIVE",
-    "Jadiya": "TIGHT", "Guddu": "TIGHT", "Babli": "TIGHT",
-    "Laddoo": "PASSIVE", "Chhotu": "PASSIVE", "Piddi": "PASSIVE"
+  "Ram": "AGGRESSIVE", "Bipin": "TIGHT", "Brij": "CALCULATED", "Manoj": "PASSIVE", "Aneesh": "AGGRESSIVE",
+  "Priya": "CALCULATED", "Jyoti": "TIGHT", "Nandu": "PASSIVE", "Hardevi": "CALCULATED", "Lalit": "AGGRESSIVE", "Sona": "TIGHT"
 };
 
 const SEEDED_PLAYERS = [
   { name: 'Vivek', password: 'sablani', uid: 'u_vivek', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
   { name: 'Aroosa', password: 'saeed', uid: 'u_aroosa', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
   { name: 'Ram', password: 'shahani', uid: 'u_ram', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Divya', password: 'shahani2', uid: 'u_divya', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
   { name: 'Brij', password: 'lulla', uid: 'u_brij', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
-  { name: 'Thashaan', password: '222', uid: 'u_thashaan', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Priya L', password: 'lulla2', uid: 'u_priyal', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Thashaan', password: 'lulla3', uid: 'u_thashaan', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
   { name: 'Nish', password: 'sevkani', uid: 'u_nish', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
   { name: 'Marlon', password: 'king', uid: 'u_marlon', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
   { name: 'Tarun', password: 'shroff', uid: 'u_tarun', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Kavita', password: 'shroff2', uid: 'u_kavita', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Manoj', password: 'gulrajani', uid: 'u_manoj', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Namrata', password: 'gulrajani2', uid: 'u_namrata', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Aneesh', password: 'mittal', uid: 'u_aneesh', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Monika', password: 'mittal2', uid: 'u_monika', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Sanjay N', password: 'nariani', uid: 'u_sanjay', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Hardevi', password: 'nariani2', uid: 'u_hardevi', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Sunil', password: 'sahaetiya', uid: 'u_sunil', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Priya S', password: 'sahaetiya2', uid: 'u_priyas', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Nandu', password: 'gandhi', uid: 'u_nandu', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Jyoti', password: 'gandhi2', uid: 'u_jyoti', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Sanjay G', password: 'gehani', uid: 'u_sanjayg', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Lalit', password: 'dama', uid: 'u_lalit', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Sona', password: 'dama2', uid: 'u_sona', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
+  { name: 'Bipin', password: 'ratnani', uid: 'u_bipin', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
   { name: 'P1', password: 'p1', uid: 'u_p1', chips: 10000, role: 'player', pendingVariant: 'RANDOM' }
-];
-
-const SEEDED_ROOMS_DATA = [
-  { id: 'room_q1', name: 'Q1', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 },
-  { id: 'room_10', name: '$10 Arena', sb: 0.25, bb: 0.5, minBuy: 5, maxBuy: 10 },
-  { id: 'room_100', name: '$100 Arena', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 },
-  { id: 'room_500', name: '$500 Arena', sb: 2, bb: 5, minBuy: 200, maxBuy: 500 }
 ];
 
 let profiles = [...SEEDED_PLAYERS]; 
 let rooms = {};
+
+const SEEDED_ROOMS_DATA = [
+    { id: 'room_sindhi', name: 'Sindhi', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 },
+    { id: 'room_10', name: '$10 Buy-in', sb: 0.25, bb: 0.5, minBuy: 5, maxBuy: 10 },
+    { id: 'room_50', name: '$50 Buy-in', sb: 0.50, bb: 1, minBuy: 25, maxBuy: 50 },
+    { id: 'room_500', name: '$500 Buy-in', sb: 2, bb: 5, minBuy: 200, maxBuy: 500 }
+];
 
 SEEDED_ROOMS_DATA.forEach(data => {
   rooms[data.id] = { 
@@ -357,7 +372,7 @@ const runIgnition = (roomId) => {
   
   const dealerSeat = room.players[room.dealerIdx];
 
-  // --- v1.1.1 RANDOM Dealer Choice Logic ---
+  // --- RANDOM Dealer Choice Logic ---
   let variantId = dealerSeat.pendingVariant || 'RANDOM';
   if (variantId === 'RANDOM' || dealerSeat.isBot) {
       const vIds = Object.keys(variantNames);
