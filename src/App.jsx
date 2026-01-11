@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.22
+// VERSION: v1.1.25
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.22";
+const VERSION = "v1.1.25";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -52,15 +52,12 @@ const getContrastColor = (hex) => {
   return (yiq >= 128) ? 'black' : 'white';
 };
 
-const NEON_PALETTE = [
-  'text-[#39FF14]', 'text-[#FF00FF]', 'text-[#00FFFF]', 'text-[#FF5F1F]', 'text-[#FFFF00]', 'text-[#B026FF]',
-];
-
 const getNeonNameColor = (name) => {
   if (!name || name === "SYSTEM") return "text-white";
+  const palette = ['text-[#39FF14]', 'text-[#FF00FF]', 'text-[#00FFFF]', 'text-[#FF5F1F]', 'text-[#FFFF00]', 'text-[#B026FF]'];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return NEON_PALETTE[Math.abs(hash) % NEON_PALETTE.length];
+  return palette[Math.abs(hash) % palette.length];
 };
 
 const VARIANTS = { 
@@ -143,8 +140,6 @@ const Seat = ({
     if (!player || !displayPos) return null;
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
-    
-    // Cards reveal for everyone in the showdown unless it was a single-player muck win
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !player.isFolded && (!isMuckWin || player.isWinner));
     const cardZIndex = isHero ? 'z-[200]' : 'z-[80]';
 
@@ -160,9 +155,7 @@ const Seat = ({
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
-                        
                         const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.75 : 2.75);
-                        
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         const scaleBase = isHero ? visuals.heroCardScale : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
@@ -171,7 +164,7 @@ const Seat = ({
 
                         return (
                           <div 
-                            key={`seat-card-${player.uid || 'p'}-${c.id || ci}`} 
+                            key={`seat-card-${player.uid}-${c.id || ci}`} 
                             className={`w-[7.5vw] lg:w-[5.5vh] h-[10.5vw] lg:h-[8vh] rounded-lg flex flex-col items-start justify-start p-1 border absolute transition-all duration-300 shadow-2xl ${shouldRevealCards ? 'bg-white' : 'bg-red-700 border-2 border-white'} ${isHighlighted ? 'ring-4 ring-yellow-400' : ''}`} 
                             style={{ 
                               transform: `translateX(${offset * cardSpacing}${isMobile ? 'vw' : 'vh'}) rotate(${rotation}deg) scale(${isHighlighted ? scaleBase * 1.1 : scaleBase})`, 
@@ -188,16 +181,13 @@ const Seat = ({
                 </div>
             )}
 
-            {/* PLAYER HUD WRAPPER */}
             <div className="relative flex flex-col items-center">
                 <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-3xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/60'} ${(player.isWinner && phase === PHASES.SHOWDOWN) || isSpotlighted ? 'border-yellow-400 ring-4 ring-yellow-400/50' : ''}`}>
-                    
                     {isDealer && (
                         <div className="absolute top-2 right-2 z-[110] pointer-events-none">
                           <div className="w-2.5 h-2.5 bg-red-600 rounded-full border border-red-900 shadow-[0_0_8px_rgba(239,68,68,0.8),inset_0_0_2px_rgba(0,0,0,0.5)]" />
                         </div>
                     )}
-
                     <div className={`flex flex-col items-center w-full relative z-10 py-1 overflow-hidden transition-all duration-500 ${isFoldedBool ? 'opacity-40 grayscale' : 'opacity-100'}`}>
                         <div className="flex flex-col items-center gap-0.5 shrink-0 mb-1">
                           <div className="flex items-center gap-1 opacity-60">
@@ -210,9 +200,7 @@ const Seat = ({
                             </div>
                           )}
                         </div>
-
                         <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center overflow-hidden">
-                            {/* CHIP BALANCE / ALL-IN DISPLAY */}
                             <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${ghostAction ? 'opacity-0 -translate-y-4 scale-75 pointer-events-none' : 'opacity-100 translate-y-0 scale-100'}`}>
                                 {player.chips <= 0 && phase !== PHASES.IDLE && !player.waitingForNextHand ? (
                                     <span className="text-[14px] lg:text-[2.2vh] font-black italic uppercase text-red-500 leading-none tracking-tighter animate-pulse">
@@ -224,8 +212,6 @@ const Seat = ({
                                     </span>
                                 )}
                             </div>
-
-                            {/* DYNAMIC ACTION TEXT */}
                             {ghostAction && (
                                 <div key={`action-${ghostAction.text}`} className={`absolute inset-0 flex items-center justify-center transition-all duration-300 animate-action-status-in`}>
                                     <span className={`text-[14px] lg:text-[2.4vh] font-black italic uppercase tracking-tighter text-center drop-shadow-md whitespace-nowrap ${ghostAction.color}`}>
@@ -242,8 +228,22 @@ const Seat = ({
     );
 };
 
-const ShowdownLedger = ({ winners, formatRank, isMobile, isHiLo, revealCards }) => {
+const ShowdownLedger = ({ winners, formatRank, isHiLo, revealCards }) => {
+  const hiLoItems = useMemo(() => {
+    if (!isHiLo) return null;
+    const items = { low: null, high: null };
+    (winners || []).forEach(w => {
+      if (!w) return;
+      const r = String(w.rank).toUpperCase();
+      if (r.includes("LOW:")) items.low = w;
+      else if (r.includes("HIGH:")) items.high = w;
+      else if (r.includes("SCOOP:")) { items.low = w; items.high = w; }
+    });
+    return items;
+  }, [winners, isHiLo]);
+
   const aggregated = useMemo(() => {
+    if (isHiLo) return [];
     const map = {};
     (winners || []).forEach((w, i) => {
       if (!w) return;
@@ -251,57 +251,79 @@ const ShowdownLedger = ({ winners, formatRank, isMobile, isHiLo, revealCards }) 
       if (!map[key]) map[key] = { ...w, payouts: [] };
       map[key].payouts.push({ amount: w.amount, rank: w.rank, hand: w.hand });
     });
-    const res = Object.values(map);
-    if (isHiLo) {
-        res.sort((a, b) => {
-            const aHasLow = a.payouts.some(p => String(p.rank).includes("LOW:"));
-            const bHasLow = b.payouts.some(p => String(p.rank).includes("LOW:"));
-            return bHasLow - aHasLow;
-        });
-    }
-    return res;
+    return Object.values(map);
   }, [winners, isHiLo]);
+
+  const renderWinnerCard = (winner, label, themeColor) => {
+    if (!winner) return null;
+    return (
+      <div className={`bg-white/5 rounded-xl p-1.5 flex flex-col gap-1 animate-in fade-in slide-in-from-bottom-2 duration-500 border ${themeColor}`}>
+        <div className="flex justify-between items-center px-1">
+          <div className="flex flex-col">
+            <span className="text-[7px] text-white/40 uppercase font-black tracking-widest">{label}</span>
+            <span className={`text-[11px] font-black uppercase truncate ${getNeonNameColor(winner.name)}`}>{String(winner.name)}</span>
+          </div>
+          <span className="text-emerald-400 font-mono text-[10px] font-black">
+            +${(Number(winner.amount) || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+          </span>
+        </div>
+        <div className="text-[9px] uppercase font-bold leading-tight px-1 text-white/80">{formatRank(winner.rank)}</div>
+        <div className="flex gap-1 justify-center flex-wrap perspective-500">
+          {(winner.hand || []).map((c, ci) => (
+            <div key={`reveal-${label}-${ci}`} className="relative w-6 h-9">
+                <div className={`w-full h-full transition-all duration-700 preserve-3d ${revealCards ? 'rotate-y-180' : ''}`} style={{ transitionDelay: `${ci * 100}ms` }}>
+                   <div className="absolute inset-0 bg-red-800 rounded border border-white/20 backface-hidden shadow-sm" />
+                   <div className={`absolute inset-0 bg-white rounded border border-white/10 backface-hidden rotate-y-180 flex flex-col items-center justify-center p-0.5`}>
+                      <span className={`text-[8px] font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
+                      <span className={`text-[10px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
+                   </div>
+                </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="w-full max-w-[800px] bg-black/40 border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full">
       <div className="bg-white/5 px-4 py-1.5 border-b border-white/10 flex justify-between items-center shrink-0">
         <span className="text-[10px] tracking-[0.2em] font-black text-indigo-400 uppercase flex items-center gap-2"><Trophy size={12}/> Arena Distribution Ledger</span>
       </div>
-      <div className={`flex-1 overflow-y-auto scrollbar-hide p-2 ${isHiLo && aggregated.length >= 2 ? 'grid grid-cols-2 gap-2' : 'space-y-1.5'}`}>
-        {aggregated.map((player, idx) => (
-          <div key={`ledger-card-${player.uid || idx}`} style={{ animationDelay: `${idx * 150}ms` }} className={`bg-white/5 rounded-xl p-1.5 flex flex-col gap-1 animate-in fade-in slide-in-from-left-2 duration-300 ${isHiLo ? 'border border-indigo-500/20' : ''}`}>
-            <div className="flex justify-between items-center px-1">
-              <span className={`text-[11px] font-black uppercase truncate max-w-[60%] ${getNeonNameColor(player.name)}`}>{String(player.name)}</span>
-              <span className="text-emerald-400 font-mono text-[10px] font-black">
-                +${(Number(player.payouts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)) || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
-              </span>
-            </div>
-            
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-col gap-0.5 px-1">
-                {(player.payouts || []).map((p, pi) => (
-                  <div key={`payout-rank-${pi}`} className={`text-[9px] uppercase font-bold leading-tight ${String(p.rank).includes("LOW:") ? 'text-emerald-400' : 'text-white/60'}`}>
-                    {formatRank(p.rank)}
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-1 justify-center flex-wrap perspective-500">
-                {(player.payouts[0]?.hand || []).map((c, ci) => (
-                  <div key={`ledger-reveal-${ci}`} className="relative w-6 h-9">
-                      <div className={`w-full h-full transition-all duration-700 preserve-3d ${revealCards ? 'rotate-y-180' : ''}`} style={{ transitionDelay: `${ci * 100}ms` }}>
-                         <div className="absolute inset-0 bg-red-800 rounded border border-white/20 backface-hidden shadow-sm" />
-                         <div className={`absolute inset-0 bg-white rounded border border-white/10 backface-hidden rotate-y-180 flex flex-col items-center justify-center p-0.5`}>
-                            <span className={`text-[8px] font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
-                            <span className={`text-[10px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
-                         </div>
-                      </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+      <div className="flex-1 overflow-y-auto scrollbar-hide p-2">
+        {isHiLo && hiLoItems ? (
+          <div className="grid grid-cols-2 gap-2 h-full">
+            {renderWinnerCard(hiLoItems.low, "Low Side", "border-emerald-500/20")}
+            {renderWinnerCard(hiLoItems.high, "High Side", "border-indigo-500/20")}
           </div>
-        ))}
+        ) : (
+          <div className="space-y-1.5">
+            {aggregated.map((player, idx) => (
+              <div key={`ledger-row-${player.uid || idx}`} className="bg-white/5 rounded-xl p-1.5 flex flex-col gap-1">
+                <div className="flex justify-between items-center px-1">
+                    <span className={`text-[11px] font-black uppercase truncate max-w-[60%] ${getNeonNameColor(player.name)}`}>{String(player.name)}</span>
+                    <span className="text-emerald-400 font-mono text-[10px] font-black">+${(Number(player.payouts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)) || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                </div>
+                <div className="flex flex-col gap-0.5 px-1">
+                    {player.payouts.map((p, pi) => (<div key={pi} className="text-[9px] uppercase font-bold leading-tight text-white/60">{formatRank(p.rank)}</div>))}
+                </div>
+                <div className="flex gap-1 justify-center flex-wrap perspective-500">
+                    {(player.payouts[0]?.hand || []).map((c, ci) => (
+                        <div key={ci} className="relative w-6 h-9">
+                            <div className={`w-full h-full transition-all duration-700 preserve-3d ${revealCards ? 'rotate-y-180' : ''}`} style={{ transitionDelay: `${ci * 100}ms` }}>
+                                <div className="absolute inset-0 bg-red-800 rounded border border-white/20 backface-hidden shadow-sm" />
+                                <div className={`absolute inset-0 bg-white rounded border border-white/10 backface-hidden rotate-y-180 flex flex-col items-center justify-center p-0.5`}>
+                                    <span className={`text-[8px] font-black leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.value)}</span>
+                                    <span className={`text-[10px] leading-none ${c.suit === '♥' || c.suit === '♦' ? 'text-red-600' : 'text-slate-900'}`}>{String(c.suit)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -344,12 +366,12 @@ const App = () => {
   const [showRebuyModal, setShowRebuyModal] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [preAction, setPreAction] = useState(null);
+  const [noiseSeed, setNoiseSeed] = useState(1);
+  const [revealShowdownCards, setRevealShowdownCards] = useState(false);
   const [handAttention, setHandAttention] = useState(false);
   const [dealAttention, setDealAttention] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ name: '', chips: 1000, password: '' });
   const [newTable, setNewTable] = useState({ name: '', sb: 1, bb: 2, minBuy: 50, maxBuy: 100, pendingVariant: 'RANDOM' });
-  const [noiseSeed, setNoiseSeed] = useState(1);
-  const [revealShowdownCards, setRevealShowdownCards] = useState(false);
 
   const joinLock = useRef(false);
   const phaseRef = useRef(PHASES.IDLE); 
@@ -358,19 +380,9 @@ const App = () => {
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
   const [visuals, setVisuals] = useState({ 
-    heroCardScale: 2.0,
-    heroCardY: isMobile ? 0 : -54, 
-    heroCardSpread: 3.0, 
-    oppCardScale: 1.0, 
-    oppCardY: -10, 
-    commCardScale: 1.5, 
-    commCardY: 0, 
-    betScale: 1.5, 
-    betY: 0, 
-    badgeY: 0, 
-    footerHeight: 280, 
-    tableZoom: 0.9, 
-    holeCardFan: 35 
+    heroCardScale: 2.0, heroCardY: isMobile ? 0 : -54, heroCardSpread: 3.0, 
+    oppCardScale: 1.0, oppCardY: -10, commCardScale: 1.5, commCardY: 0, 
+    betScale: 1.5, betY: 0, badgeY: 0, footerHeight: 280, tableZoom: 0.9, holeCardFan: 35 
   });
 
   useEffect(() => {
@@ -449,11 +461,11 @@ const App = () => {
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
   const formatRank = (rank) => {
-    if (!rank || rank === "null" || rank === "undefined") return "";
+    if (!rank || rank === "null") return "";
     const rankStr = String(rank);
     const cleanRank = rankStr.replace(/^(high|low|scoop): /i, "");
-    const match = rankStr.match(/^(high|low|scoop): /i);
-    const prefix = match ? match[0].toUpperCase() : "";
+    const prefixMatch = rankStr.match(/^(high|low|scoop): /i);
+    const prefix = prefixMatch ? prefixMatch[0].toUpperCase() : "";
     return prefix + cleanRank.toUpperCase();
   };
 
@@ -484,18 +496,12 @@ const App = () => {
     let logTextExport = "--- DEALER'S CHOICE POKER ARENA LOG ---\n\n";
     handHistory.forEach(hand => {
       logTextExport += `[${hand.variant.toUpperCase()} HAND]\n`;
-      (hand.events || []).forEach(ev => { 
-        logTextExport += `[${new Date(ev.timestamp).toLocaleTimeString()}] ${ev.name}: ${ev.action}\n`; 
-      });
+      (hand.events || []).forEach(ev => { logTextExport += `[${new Date(ev.timestamp).toLocaleTimeString()}] ${ev.name}: ${ev.action}\n`; });
       if (hand.winner) logTextExport += `RESULT: ${hand.winner} WON $${hand.amount} with ${hand.rank}\n`;
       logTextExport += "---------------------------------------\n\n";
     });
-    const textArea = document.createElement("textarea"); 
-    textArea.value = logTextExport; 
-    document.body.appendChild(textArea); 
-    textArea.select();
-    try { document.execCommand('copy'); } catch (err) {} 
-    document.body.removeChild(textArea);
+    const textArea = document.createElement("textarea"); textArea.value = logTextExport; document.body.appendChild(textArea); textArea.select();
+    try { document.execCommand('copy'); } catch (err) {} document.body.removeChild(textArea);
   };
 
   const ActivityFeedContent = () => (
@@ -509,7 +515,7 @@ const App = () => {
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
             {handHistory.length > 0 ? handHistory.map((hand) => (
-                <div key={`hist-group-${hand.id}`} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
+                <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
                     <button onClick={() => { 
                       const n = new Set(expandedHands); 
                       if (n.has(hand.id)) n.delete(hand.id); 
@@ -517,20 +523,20 @@ const App = () => {
                       setExpandedHands(n); 
                     }} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
                         <div className="flex items-center justify-between w-full">
-                            <span className="text-[9px] text-indigo-400 font-bold tracking-widest">{String(hand.variant)} HAND</span>
+                            <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span>
                             <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
                         </div>
                         <div className="text-[11px] text-white/90 text-left">
                             {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic">IN PROGRESS...</span>)}
                         </div>
-                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left">{formatRank(hand.rank)}</div>)}
+                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(hand.rank)}</div>)}
                     </button>
                     {expandedHands.has(hand.id) && (
                       <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
                         {(hand.events || []).map((ev, i) => (
-                          <div key={`ev-${i}`} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-red-500/5'}`}>
-                            <span className="text-white/30 font-mono mr-2">[{new Date(ev.timestamp).toLocaleTimeString()}]</span> 
-                            <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90">{String(ev.action)}</span>
+                          <div key={i} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-red-500/5'}`}>
+                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString()}]</span> 
+                            <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
                           </div>
                         ))}
                       </div>
@@ -652,8 +658,8 @@ const App = () => {
                 <div className="flex flex-col gap-8">
                     <h3 className="text-xl border-l-4 border-[#fbbf24] pl-4 uppercase font-black tracking-widest">Registry</h3>
                     <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10">
-                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase"/>
-                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase"/>
+                        <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase outline-none text-white"/>
+                        <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase outline-none text-white"/>
                         <button onClick={() => { if (!newPlayer.name.trim()) return; socket.emit('adminCreatePlayer', { ...newPlayer, uid: 'p_' + Math.random().toString(36).slice(2, 7) }); setNewPlayer({ ...newPlayer, name: '', password: '' }); }} className="bg-[#fbbf24] text-black rounded-xl font-black">CREATE PLAYER</button>
                     </div>
                     <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
@@ -673,12 +679,12 @@ const App = () => {
                 <div className="flex flex-col gap-8">
                     <h3 className="text-xl border-l-4 border-emerald-500 pl-4 uppercase font-black tracking-widest">Arenas</h3>
                     <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border border-white/10">
-                        <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ARENA NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase"/>
+                        <input value={newTable.name} onChange={e=>setNewTable({...newTable, name: e.target.value})} placeholder="ARENA NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase text-white"/>
                         <div className="flex gap-2">
                           <input type="number" step="0.05" value={newTable.sb} onChange={e=>setNewTable({...newTable, sb: Number(e.target.value)})} placeholder="SB" className="bg-black/40 p-3 rounded-xl border border-white/10 text-white text-sm w-1/2 outline-none"/>
                           <input type="number" step="0.05" value={newTable.bb} onChange={e=>setNewTable({...newTable, bb: Number(e.target.value)})} placeholder="BB" className="bg-black/40 p-3 rounded-xl border border-white/10 text-white text-sm w-1/2 outline-none"/>
                         </div>
-                        <button onClick={() => { if (!newTable.name.trim()) return; socket.emit('adminCreateRoom', { ...newTable, id: 'room_' + Date.now().toString(36) }); setNewTable({ ...newTable, name: '' }); }} className="bg-emerald-600 text-white rounded-xl font-black">SPAWN ARENA</button>
+                        <button onClick={() => { if (!newTable.name.trim()) return; socket.emit('adminCreateRoom', { ...newTable, id: 'room_' + Date.now().toString(36), sb: Number(newTable.sb), bb: Number(newTable.bb) }); setNewTable({ ...newTable, name: '' }); }} className="bg-emerald-600 text-white rounded-xl font-black">SPAWN ARENA</button>
                     </div>
                     <div className="grid grid-cols-1 gap-4">
                         {activeTables.map(t => (
@@ -718,7 +724,7 @@ const App = () => {
         <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-gradient-to-b from-slate-900/20 to-black uppercase font-black">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
                 {activeTables.map((t) => (
-                    <div key={`lobby-table-${t.id}`} className="group bg-slate-900/40 border border-white/5 rounded-3xl flex flex-col p-8 shadow-2xl transition-all hover:border-emerald-500/30 font-black">
+                    <div key={`lobby-card-${t.id}`} className="group bg-slate-900/40 border border-white/5 rounded-3xl flex flex-col p-8 shadow-2xl transition-all hover:border-emerald-500/30 font-black">
                       <h3 className="text-2xl text-white font-black mb-4 truncate tracking-tight">{String(t.name)}</h3>
                       <div className="flex flex-col gap-4 mb-6">
                         <div className="flex justify-between items-end border-b border-white/5 pb-2 font-black">
@@ -726,7 +732,7 @@ const App = () => {
                             <div className="flex flex-col items-end"><span className="text-[8px] text-white/30 uppercase tracking-widest">Buy-in</span><span className="text-white/80 text-sm font-mono leading-none">${t.minBuy}-${t.maxBuy}</span></div>
                         </div>
                         <div className="flex flex-wrap gap-1.5 p-2 bg-black/40 rounded-xl min-h-[40px] border border-white/5">
-                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`seated-${p.uid || idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] flex items-center gap-1 font-black uppercase">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
+                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`seated-lobby-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] flex items-center gap-1 font-black uppercase">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
                         </div>
                       </div>
                       <button onClick={()=>{ setSelectedTableForJoin(t); setBuyInAmount(t.maxBuy); }} className="w-full py-4 bg-emerald-600 rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all font-black uppercase tracking-widest">JOIN ARENA</button>
@@ -769,7 +775,7 @@ const App = () => {
       )}
 
       {intelExpanded && (
-        <div className={`fixed bottom-[240px] left-4 w-[85vw] md:w-96 bg-black/20 border border-indigo-500/30 rounded-2xl backdrop-blur-3xl z-[150] shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col h-[50vh] max-h-[500px]`}>
+        <div className={`fixed bottom-[240px] left-4 w-[85vw] md:w-96 bg-black/20 border border-indigo-500/30 rounded-2xl backdrop-blur-3xl z-[150] shadow-2xl animate-in slide-in-from-left flex flex-col h-[50vh] max-h-[500px]`}>
             <ActivityFeedContent />
         </div>
       )}
@@ -795,7 +801,7 @@ const App = () => {
               </>
             )}
 
-            <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[16/9] flex items-center justify-center origin-center">
+            <div style={{ transform: isMobile ? `scale(${visuals.tableZoom})` : `scale(${Math.min(visuals.tableZoom, 1.2)})` }} className="relative w-full max-w-[1400px] aspect-[15/10] lg:aspect-[16/9] flex items-center justify-center origin-center">
                 <div className="absolute inset-[-20px] rounded-[50%] z-0">
                     <div className="absolute inset-0 rounded-[50%] blur-[20px] opacity-40 animate-pulse" style={{ background: activeVariant?.id === 'HILOW' ? `linear-gradient(to right, ${VARIANT_COLORS.HILOW}, #bfff00)` : (VARIANT_COLORS[activeVariant?.id] || '#22d3ee') }} />
                     <div className="absolute inset-0 rounded-[50%] border-[24px] border-[#0a0a0a] shadow-2xl" />
@@ -807,9 +813,8 @@ const App = () => {
                 <div className="absolute inset-0 pointer-events-none z-20">
                     {(players || []).map((p, i) => { 
                         if (!p) return null; 
-                        const rIdx = (i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS; 
                         const isThisPlayerWinningShowdown = phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners[currentShowdownIdx]?.uid === p.uid;
-                        return (<Seat key={`seat-${p.uid || i}`} player={p} displayPos={DISPLAY_POSITIONS[rIdx]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={rIdx} visuals={visuals} bigBlind={bigBlind} showdownWinners={showdownWinners} isCollectingBets={potTransferring} timeRemaining={timeRemaining} formatRank={formatRank} isSpotlighted={isThisPlayerWinningShowdown} />); 
+                        return (<Seat key={`seat-pos-${i}`} player={p} displayPos={DISPLAY_POSITIONS[(i - (heroIdx !== -1 ? heroIdx : 0) + TOTAL_SEATS) % TOTAL_SEATS]} phase={phase} winning5Ids={winning5Ids} isActiveTurn={activeIdx === i} isDealer={dealerIdx === i} isHero={i === heroIdx} relativeIdx={i} visuals={visuals} bigBlind={bigBlind} showdownWinners={showdownWinners} isCollectingBets={potTransferring} timeRemaining={timeRemaining} formatRank={formatRank} isSpotlighted={isThisPlayerWinningShowdown} />); 
                     })}
                 </div>
                 <div className="absolute top-[45%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-30 pointer-events-none w-full uppercase">
@@ -836,7 +841,6 @@ const App = () => {
                 {activeIdx === heroIdx && heroPlayerObj && phase !== PHASES.IDLE && (
                   <div className="absolute right-4 md:right-[20px] top-[15%] bottom-[15%] w-16 md:w-20 flex flex-col items-center justify-end z-[250] pointer-events-auto uppercase">
                     <div className="flex-1 w-full relative flex items-center justify-center py-4">
-                      {/* Betting Slider with Pot Markers and Snap Logic */}
                       <div className="relative h-full w-8 md:w-10">
                         {(() => {
                            const min = Math.min(minRaiseAmount || (highestBet + bigBlind), Number(effectiveMaxBet));
@@ -915,16 +919,16 @@ const App = () => {
           {phase === PHASES.SHOWDOWN && showdownWinners && showdownWinners.length > 0 ? (
             (() => {
                 if (showdownWinners.length > 1 || activeVariant?.id === 'HILOW') {
-                  return <ShowdownLedger winners={showdownWinners} formatRank={formatRank} isMobile={isMobile} isHiLo={activeVariant?.id === 'HILOW'} revealCards={revealShowdownCards} />;
+                  return <ShowdownLedger winners={showdownWinners} formatRank={formatRank} isHiLo={activeVariant?.id === 'HILOW'} revealCards={revealShowdownCards} />;
                 }
                 const winner = showdownWinners[0];
                 if (!winner) return null;
                 const isMuckWin = winner.rank === "!";
                 return (
                     <div key={`win-footer-${winner.uid || 'single'}`} className="flex flex-col items-center justify-start w-full gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full mt-2 uppercase font-black">
-                        <div className="flex items-center gap-3 bg-white/5 px-5 py-1 rounded-full border border-white/10 shadow-2xl uppercase">
+                        <div className="flex items-center gap-3 bg-white/5 px-5 py-1 rounded-full border border-white/10 shadow-2xl uppercase leading-none">
                             <Trophy size={14} className="text-yellow-400 animate-bounce" />
-                            <div className="text-sm md:text-xl font-black flex items-center gap-2 whitespace-nowrap uppercase leading-none">
+                            <div className="text-sm md:text-xl font-black flex items-center gap-2 whitespace-nowrap uppercase">
                               <span className={getNeonNameColor(winner.name)}>{String(winner.name || '').toUpperCase()}</span>
                               {isMuckWin ? <span className="text-white ml-2">SCOOPED THE POT</span> : <><span className="text-white/50 font-black">WON TOTAL</span><span className="text-emerald-400 font-mono ml-2">+${(Number(winner.amount) || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></>}
                             </div>
@@ -984,8 +988,8 @@ const App = () => {
               <div className="flex flex-col gap-4 pt-4 border-t border-white/10">
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Table Zoom <span>{Math.round((visuals.tableZoom || 0) * 100)}%</span></label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">HUD Height <span>{visuals.footerHeight || 280}px</span></label><input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Scale <span>{(Number(visuals.heroCardScale) || 2.0).toFixed(2)}</span></label><input type="range" min="1.0" max="15.0" step="0.01" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Y Offset <span>{visuals.heroCardY}px</span></label><input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
+                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Scale <span>{(Number(visuals.heroCardScale) || 2.0).toFixed(2)}</span></label><input type="range" min="1.0" max="5.0" step="0.1" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-emerald-400 cursor-pointer" /></div>
+                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Y <span>{visuals.heroCardY}px</span></label><input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Spread <span>{(Number(visuals.heroCardSpread) || 3.0).toFixed(1)}</span></label><input type="range" min="0.5" max="10.0" step="0.5" value={visuals.heroCardSpread} onChange={(e) => setVisuals({...visuals, heroCardSpread: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
               </div>
             </div>
