@@ -13,7 +13,7 @@ const io = new Server(server, {
   pingInterval: 25000  
 });
 
-const VERSION = "v1.1.2";
+const VERSION = "v1.1.3";
 const APP_NAME = "Dealers Choice";
 const TOTAL_SEATS = 10; 
 
@@ -236,12 +236,16 @@ const runIgnition = (roomId) => {
   if (seated.length < 2) { room.phase = PHASES.IDLE; room.gameInProgress = false; io.to(roomId).emit('roomUpdate', serializeRoom(room)); return; }
   
   room.gameInProgress = true; room.showdownWinners = null; 
-  if (room.dealerIdx === undefined || !room.players[room.dealerIdx]) room.dealerIdx = seated[0];
+  if (room.dealerIdx === undefined || room.dealerIdx === -1 || !room.players[room.dealerIdx]) {
+      room.dealerIdx = seated[0];
+  }
   
-  let variantId = room.players[room.dealerIdx].pendingVariant || 'RANDOM';
+  const dealerSeat = room.players[room.dealerIdx];
+  if (!dealerSeat) return;
+
+  let variantId = dealerSeat.pendingVariant || 'RANDOM';
   if (variantId === 'RANDOM') { const vIds = Object.keys(variantNames); variantId = vIds[Math.floor(Math.random() * vIds.length)]; }
   
-  // Initialize full object first to prevent log crashes
   const vName = variantNames[variantId] || "Poker";
   room.activeVariant = { id: variantId, name: vName, holeCards: holeCardsMap[variantId] };
   
@@ -254,7 +258,7 @@ const runIgnition = (roomId) => {
   room.players[sbIdx].chips -= room.sb; room.players[sbIdx].currentBet = room.sb; room.players[sbIdx].totalContribution = room.sb;
   room.players[bbIdx].chips -= room.bb; room.players[bbIdx].currentBet = room.bb; room.players[bbIdx].totalContribution = room.bb;
   
-  io.to(roomId).emit('log', { name: "SYSTEM", action: `${room.players[room.dealerIdx].name.toUpperCase()} DEALING ${vName.toUpperCase()}`, type: 'phase' });
+  io.to(roomId).emit('log', { name: "SYSTEM", action: `${dealerSeat.name.toUpperCase()} DEALING ${vName.toUpperCase()}`, type: 'phase' });
   
   updateRoomStrengths(roomId);
   room.activeIdx = seated[(seated.indexOf(bbIdx) + 1) % seated.length];
@@ -337,4 +341,4 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(10000, '0.0.0.0', () => console.log(`Dealers Choice Server v${VERSION}`));
+server.listen(10000, '0.0.0.0', () => console.log(`Dealers Choice Server Running`));
