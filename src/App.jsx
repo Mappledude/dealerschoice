@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.12
+// VERSION: v1.1.13
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.12";
+const VERSION = "v1.1.13";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -250,16 +250,21 @@ const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
       if (!map[w.uid]) map[w.uid] = { ...w, payouts: [] };
       map[w.uid].payouts.push({ amount: w.amount, rank: w.rank, hand: w.hand });
     });
-    return Object.values(map);
+    // Ensure "LOW" hand is visually first for consistent tabular orientation
+    return Object.values(map).map(player => ({
+        ...player,
+        payouts: [...player.payouts].sort((a, b) => {
+            const aLow = String(a.rank).toLowerCase().includes("low:");
+            const bLow = String(b.rank).toLowerCase().includes("low:");
+            if (aLow && !bLow) return -1;
+            if (!aLow && bLow) return 1;
+            return 0;
+        })
+    }));
   }, [winners]);
 
   return (
     <div className="w-full max-w-[600px] bg-black/40 border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
-      <div className="bg-white/5 px-4 py-2 border-b border-white/10 flex justify-between items-center shrink-0">
-        <span className="text-[10px] tracking-[0.2em] font-black text-indigo-400 uppercase flex items-center gap-2">
-            <Trophy size={14} className="animate-bounce" /> Arena Distribution Ledger
-        </span>
-      </div>
       <div className="flex-1 overflow-y-auto scrollbar-hide p-2 space-y-2">
         {aggregated.map((player, idx) => (
           <div key={`ledger-${player.uid}-${idx}`} style={{ animationDelay: `${idx * 150}ms` }} className="bg-white/5 border border-white/5 rounded-xl p-2 flex flex-col gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
@@ -274,8 +279,8 @@ const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
             </div>
             
             <div className="flex flex-col gap-2">
-              {/* Horizontal Split Ranks (Side-by-Side Pill Approach) */}
-              <div className="flex flex-wrap gap-1.5 px-1 items-center justify-center">
+              {/* Tabular Grid for Ranks (Low on Left, High on Right) */}
+              <div className={`grid ${player.payouts.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5 px-1 items-center`}>
                 {player.payouts.map((p, pi) => {
                     const label = String(p.rank).toUpperCase();
                     const isLow = label.includes("LOW:");
@@ -291,7 +296,7 @@ const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
                     else if (isScoop) { bgColor = "bg-amber-500/10"; textColor = "text-amber-400"; borderColor = "border-amber-500/30"; }
 
                     return (
-                        <div key={`payout-rank-${pi}`} className={`px-2 py-0.5 rounded-full border ${bgColor} ${textColor} text-[9px] font-black tracking-tighter flex items-center gap-1 uppercase whitespace-nowrap`}>
+                        <div key={`payout-rank-${pi}`} className={`px-2 py-1 rounded-lg border ${bgColor} ${textColor} text-[9px] font-black tracking-tighter flex items-center justify-center gap-1 uppercase whitespace-nowrap overflow-hidden text-center`}>
                             {isScoop && <Sparkles size={8}/>}
                             {formatRank(p.rank)}
                         </div>
@@ -642,7 +647,11 @@ const App = () => {
             const rawWinners = d.showdownWinners || []; 
             setShowdownWinners(rawWinners); 
             setWinning5Ids(rawWinners[0]?.winning5Ids || d.winning5Ids || []);
-            const dur = rawWinners.some(w => w.rank === "!") ? 2000 : 5000;
+            
+            // --- v1.1.13 CLIENT SHOWDOWN TIMING ---
+            // Muck wins remain 2s. All other ranked distributions total 8s.
+            const dur = rawWinners.some(w => w.rank === "!") ? 2000 : (8000 / Math.max(1, rawWinners.length));
+            
             if (rawWinners.length > 1) { 
                 for (let i = 1; i < rawWinners.length; i++) { 
                     setTimeout(() => { 
