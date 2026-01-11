@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.25
+// VERSION: v1.1.26
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.25";
+const VERSION = "v1.1.26";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -140,6 +140,8 @@ const Seat = ({
     if (!player || !displayPos) return null;
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
+    
+    // Cards reveal for everyone in the showdown unless it was a single-player muck win
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !player.isFolded && (!isMuckWin || player.isWinner));
     const cardZIndex = isHero ? 'z-[200]' : 'z-[80]';
 
@@ -155,7 +157,9 @@ const Seat = ({
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
+                        
                         const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.75 : 2.75);
+                        
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         const scaleBase = isHero ? visuals.heroCardScale : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
@@ -181,13 +185,16 @@ const Seat = ({
                 </div>
             )}
 
+            {/* PLAYER HUD WRAPPER */}
             <div className="relative flex flex-col items-center">
                 <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-3xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/60'} ${(player.isWinner && phase === PHASES.SHOWDOWN) || isSpotlighted ? 'border-yellow-400 ring-4 ring-yellow-400/50' : ''}`}>
+                    
                     {isDealer && (
                         <div className="absolute top-2 right-2 z-[110] pointer-events-none">
                           <div className="w-2.5 h-2.5 bg-red-600 rounded-full border border-red-900 shadow-[0_0_8px_rgba(239,68,68,0.8),inset_0_0_2px_rgba(0,0,0,0.5)]" />
                         </div>
                     )}
+
                     <div className={`flex flex-col items-center w-full relative z-10 py-1 overflow-hidden transition-all duration-500 ${isFoldedBool ? 'opacity-40 grayscale' : 'opacity-100'}`}>
                         <div className="flex flex-col items-center gap-0.5 shrink-0 mb-1">
                           <div className="flex items-center gap-1 opacity-60">
@@ -200,7 +207,9 @@ const Seat = ({
                             </div>
                           )}
                         </div>
+
                         <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center overflow-hidden">
+                            {/* CHIP BALANCE / ALL-IN DISPLAY */}
                             <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${ghostAction ? 'opacity-0 -translate-y-4 scale-75 pointer-events-none' : 'opacity-100 translate-y-0 scale-100'}`}>
                                 {player.chips <= 0 && phase !== PHASES.IDLE && !player.waitingForNextHand ? (
                                     <span className="text-[14px] lg:text-[2.2vh] font-black italic uppercase text-red-500 leading-none tracking-tighter animate-pulse">
@@ -212,6 +221,8 @@ const Seat = ({
                                     </span>
                                 )}
                             </div>
+
+                            {/* DYNAMIC ACTION TEXT */}
                             {ghostAction && (
                                 <div key={`action-${ghostAction.text}`} className={`absolute inset-0 flex items-center justify-center transition-all duration-300 animate-action-status-in`}>
                                     <span className={`text-[14px] lg:text-[2.4vh] font-black italic uppercase tracking-tighter text-center drop-shadow-md whitespace-nowrap ${ghostAction.color}`}>
@@ -328,6 +339,48 @@ const ShowdownLedger = ({ winners, formatRank, isMobile, isHiLo, revealCards }) 
     </div>
   );
 };
+
+const ActivityFeedContent = ({ handHistory, expandedHands, setExpandedHands, getNeonNameColor, formatRank, copyActivityToClipboard }) => (
+    <div className="flex-1 flex flex-col h-full overflow-hidden p-4 uppercase">
+        <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2 font-black tracking-[0.2em]">
+            <div className="flex items-center gap-2"><Terminal size={14}/> Activity Log</div>
+            <div className="flex items-center gap-2">
+                <button onClick={copyActivityToClipboard} className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/30 flex items-center gap-1 transition-all active:scale-95"><Copy size={10} /> Copy</button>
+            </div>
+        </div>
+        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
+            {handHistory.length > 0 ? handHistory.map((hand) => (
+                <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
+                    <button onClick={() => { 
+                      const n = new Set(expandedHands); 
+                      if (n.has(hand.id)) n.delete(hand.id); 
+                      else n.add(hand.id); 
+                      setExpandedHands(n); 
+                    }} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
+                        <div className="flex items-center justify-between w-full">
+                            <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span>
+                            <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
+                        </div>
+                        <div className="text-[11px] text-white/90 text-left">
+                            {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic">IN PROGRESS...</span>)}
+                        </div>
+                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(hand.rank)}</div>)}
+                    </button>
+                    {expandedHands.has(hand.id) && (
+                      <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
+                        {(hand.events || []).map((ev, i) => (
+                          <div key={i} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-red-500/5'}`}>
+                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString()}]</span> 
+                            <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                </div>
+            )) : (<div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3"><Activity size={32} className="animate-pulse" /><span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span></div>)}
+        </div>
+    </div>
+);
 
 const App = () => {
   const [currentView, setCurrentView] = useState(VIEWS.LOGIN);
@@ -461,7 +514,7 @@ const App = () => {
   }, [selectedTableForJoin, userProfile, pendingVariantId, buyInAmount]);
 
   const formatRank = (rank) => {
-    if (!rank || rank === "null" || rank === "undefined") return "";
+    if (!rank || rank === "null") return "";
     const rankStr = String(rank);
     const cleanRank = rankStr.replace(/^(high|low|scoop): /i, "");
     const prefixMatch = rankStr.match(/^(high|low|scoop): /i);
@@ -491,67 +544,6 @@ const App = () => {
     if (currentHand) hands.push(currentHand);
     return hands.reverse();
   }, [logs]);
-
-  const copyActivityToClipboard = () => {
-    let logTextExport = "--- DEALER'S CHOICE POKER ARENA LOG ---\n\n";
-    handHistory.forEach(hand => {
-      logTextExport += `[${hand.variant.toUpperCase()} HAND]\n`;
-      (hand.events || []).forEach(ev => { 
-        logTextExport += `[${new Date(ev.timestamp).toLocaleTimeString()}] ${ev.name}: ${ev.action}\n`; 
-      });
-      if (hand.winner) logTextExport += `RESULT: ${hand.winner} WON $${hand.amount} with ${hand.rank}\n`;
-      logTextExport += "---------------------------------------\n\n";
-    });
-    const textArea = document.createElement("textarea"); 
-    textArea.value = logTextExport; 
-    document.body.appendChild(textArea); 
-    textArea.select();
-    try { document.execCommand('copy'); } catch (err) {} 
-    document.body.removeChild(textArea);
-  };
-
-  const ActivityFeedContent = () => (
-    <div className="flex-1 flex flex-col h-full overflow-hidden p-4 uppercase">
-        <div className="flex items-center justify-between text-indigo-400 text-[10px] mb-4 border-b border-indigo-500/20 pb-2 font-black tracking-[0.2em]">
-            <div className="flex items-center gap-2"><Terminal size={14}/> Activity Log</div>
-            <div className="flex items-center gap-2">
-                <button onClick={copyActivityToClipboard} className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/30 flex items-center gap-1 transition-all active:scale-95"><Copy size={10} /> Copy</button>
-                <button onClick={() => setIntelExpanded(false)} className="text-white/30 hover:text-white"><X size={14}/></button>
-            </div>
-        </div>
-        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 pr-1 font-black">
-            {handHistory.length > 0 ? handHistory.map((hand) => (
-                <div key={hand.id} className="border border-white/5 rounded-xl overflow-hidden bg-white/5">
-                    <button onClick={() => { 
-                      const n = new Set(expandedHands); 
-                      if (n.has(hand.id)) n.delete(hand.id); 
-                      else n.add(hand.id); 
-                      setExpandedHands(n); 
-                    }} className="w-full p-3 flex flex-col items-start gap-1 transition-all hover:bg-white/5">
-                        <div className="flex items-center justify-between w-full">
-                            <span className="text-[9px] text-indigo-400 font-bold tracking-widest uppercase">{String(hand.variant)} HAND</span>
-                            <ChevronRightIcon size={12} className={`transition-transform text-white/40 ${expandedHands.has(hand.id) ? 'rotate-90' : ''}`} />
-                        </div>
-                        <div className="text-[11px] text-white/90 text-left">
-                            {hand.winner ? (<span className="flex items-center gap-2 text-emerald-400"><Trophy size={10} /> <span className={getNeonNameColor(hand.winner)}>{String(hand.winner)}</span> WON ${String(hand.amount)}</span>) : (<span className="text-white/40 italic">IN PROGRESS...</span>)}
-                        </div>
-                        {hand.winner && (<div className="text-[9px] text-white/40 font-bold truncate w-full text-left uppercase">{formatRank(hand.rank)}</div>)}
-                    </button>
-                    {expandedHands.has(hand.id) && (
-                      <div className="px-3 pb-3 border-t border-white/5 bg-black/40 space-y-1 pt-2">
-                        {(hand.events || []).map((ev, i) => (
-                          <div key={i} className={`text-[9px] md:text-[10px] leading-tight py-1 border-l-2 pl-2 ${ev.type === 'win' ? 'border-emerald-500 bg-emerald-500/5' : ev.type === 'fold' ? 'border-red-500 bg-red-500/5' : 'border-indigo-500 bg-red-500/5'}`}>
-                            <span className="text-white/30 font-mono mr-2 uppercase">[{new Date(ev.timestamp).toLocaleTimeString()}]</span> 
-                            <span className={getNeonNameColor(ev.name)}>{String(ev.name)}</span>: <span className="text-white/90 uppercase">{String(ev.action)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                </div>
-            )) : (<div className="flex flex-col items-center justify-center py-20 text-white/10 gap-3"><Activity size={32} className="animate-pulse" /><span className="text-[10px] tracking-widest font-black uppercase">Scanning for hand data...</span></div>)}
-        </div>
-    </div>
-  );
 
   useEffect(() => {
     const handleRoomUpdate = (d) => {
@@ -662,7 +654,7 @@ const App = () => {
         <main className="flex-1 p-5 overflow-y-auto uppercase font-black">
             {adminTab === ADMIN_TABS.PLAYERS ? (
                 <div className="flex flex-col gap-8">
-                    <h3 className="text-xl border-l-4 border-[#fbbf24] pl-4 font-black tracking-widest">Registry</h3>
+                    <h3 className="text-xl border-l-4 border-[#fbbf24] pl-4 uppercase font-black tracking-widest">Registry</h3>
                     <div className="bg-white/5 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-white/10">
                         <input value={newPlayer.name} onChange={e=>setNewPlayer({...newPlayer, name: e.target.value})} placeholder="NAME" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase outline-none text-white"/>
                         <input value={newPlayer.password} onChange={e=>setNewPlayer({...newPlayer, password: e.target.value})} placeholder="PASS" className="bg-black/40 p-3 rounded-xl border border-white/10 outline-none uppercase outline-none text-white"/>
@@ -670,7 +662,7 @@ const App = () => {
                     </div>
                     <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
                         {allProfiles.map(p => (
-                            <div key={`profile-admin-${p.uid}`} className="flex justify-between p-4 border-b border-white/5 items-center hover:bg-white/5">
+                            <div key={`profile-row-${p.uid}`} className="flex justify-between p-4 border-b border-white/5 items-center hover:bg-white/5">
                                 <span className="uppercase">{String(p.name)}</span>
                                 <div className="flex gap-4 items-center">
                                   <span className="text-emerald-400 font-mono text-lg">${(Number(p.chips) || 0).toLocaleString()}</span>
@@ -694,7 +686,7 @@ const App = () => {
                     </div>
                     <div className="grid grid-cols-1 gap-4">
                         {activeTables.map(t => (
-                            <div key={`table-entry-${t.id}`} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10">
+                            <div key={`table-admin-${t.id}`} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10">
                               <div className="uppercase"><h4 className="text-[#fbbf24] font-black">{String(t.name)}</h4><p className="text-[10px] text-white/40 font-black">${t.sb}/${t.bb}</p></div>
                               <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="text-red-500"><Trash2 size={16}/></button>
                             </div>
@@ -782,7 +774,14 @@ const App = () => {
 
       {intelExpanded && (
         <div className={`fixed bottom-[240px] left-4 w-[85vw] md:w-96 bg-black/20 border border-indigo-500/30 rounded-2xl backdrop-blur-3xl z-[150] shadow-2xl animate-in slide-in-from-left flex flex-col h-[50vh] max-h-[500px]`}>
-            <ActivityFeedContent />
+            <ActivityFeedContent 
+                handHistory={handHistory} 
+                expandedHands={expandedHands} 
+                setExpandedHands={setExpandedHands} 
+                getNeonNameColor={getNeonNameColor} 
+                formatRank={formatRank} 
+                copyActivityToClipboard={copyActivityToClipboard} 
+            />
         </div>
       )}
 
@@ -997,7 +996,7 @@ const App = () => {
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Table Zoom <span>{Math.round((visuals.tableZoom || 0) * 100)}%</span></label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">HUD Height <span>{visuals.footerHeight || 280}px</span></label><input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Scale <span>{(Number(visuals.heroCardScale) || 2.0).toFixed(2)}</span></label><input type="range" min="1.0" max="5.0" step="0.1" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-emerald-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Y <span>{visuals.heroCardY}px</span></label><input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
+                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Y Offset <span>{visuals.heroCardY}px</span></label><input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
                 <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Spread <span>{(Number(visuals.heroCardSpread) || 3.0).toFixed(1)}</span></label><input type="range" min="0.5" max="10.0" step="0.5" value={visuals.heroCardSpread} onChange={(e) => setVisuals({...visuals, heroCardSpread: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
               </div>
             </div>
@@ -1019,6 +1018,7 @@ const App = () => {
           .scrollbar-hide::-webkit-scrollbar { display: none; }
           .vertical-range { -webkit-appearance: slider-vertical; width: 32px; height: 100%; background: rgba(255, 255, 255, 0.1); outline: none; border-radius: 999px; }
           .vertical-range::-webkit-slider-thumb { -webkit-appearance: none; width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; cursor: pointer; }
+          .vertical-range::-moz-range-thumb { width: 32px; height: 32px; background: rgba(16, 185, 129, 0.5); border: 4px solid #10b981; border-radius: 50%; cursor: pointer; }
       `}</style>
     </div>
   );
