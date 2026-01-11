@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.26
+// VERSION: v1.1.27
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.26";
+const VERSION = "v1.1.27";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -140,8 +140,6 @@ const Seat = ({
     if (!player || !displayPos) return null;
 
     const isMuckWin = phase === PHASES.SHOWDOWN && showdownWinners?.some(w => w.rank === "!");
-    
-    // Cards reveal for everyone in the showdown unless it was a single-player muck win
     const shouldRevealCards = isHero || (phase === PHASES.SHOWDOWN && !player.isFolded && (!isMuckWin || player.isWinner));
     const cardZIndex = isHero ? 'z-[200]' : 'z-[80]';
 
@@ -149,7 +147,6 @@ const Seat = ({
         <div style={{ left: `${displayPos.x}%`, top: `${displayPos.y}%` }} className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-700 ${isHero ? 'z-[100]' : 'z-20'} ${player.waitingForNextHand ? 'opacity-50' : ''} ${isSpotlighted ? 'scale-[1.25] z-[400]' : ''}`}>
             {player.waitingForNextHand && (<div className="absolute top-[-35px] bg-slate-900 text-cyan-400 text-[8px] px-2 py-0.5 rounded-full border border-cyan-500/50 uppercase font-bold tracking-[0.2em] z-[150] backdrop-blur-md">WAITING</div>)}
             
-            {/* HOLE CARDS */}
             {player.hand && Array.isArray(player.hand) && !player.waitingForNextHand && (
                 <div 
                   className={`flex items-center justify-center w-[15vw] lg:w-[12vh] h-[8vw] lg:h-[8vh] pointer-events-none transition-all duration-500 ${cardZIndex} ${isHero ? 'absolute' : 'relative -mb-[5.25vw] lg:-mb-[4vh]'} ${isFoldedBool ? 'opacity-30 grayscale scale-90' : 'opacity-100'}`} 
@@ -157,9 +154,7 @@ const Seat = ({
                 >
                     {player.hand.map((c, ci) => {
                         const offset = ci - (player.hand.length - 1) / 2;
-                        
                         const cardSpacing = isHero ? visuals.heroCardSpread : (isMobile ? 3.75 : 2.75);
-                        
                         const rotation = isHero ? (offset * visuals.holeCardFan) : 0;
                         const scaleBase = isHero ? visuals.heroCardScale : 1.0;
                         const isRed = c.suit === '♥' || c.suit === '♦';
@@ -185,16 +180,13 @@ const Seat = ({
                 </div>
             )}
 
-            {/* PLAYER HUD WRAPPER */}
             <div className="relative flex flex-col items-center">
                 <div className={`relative z-[90] flex flex-col items-center p-2 lg:p-3 rounded-xl border transition-all duration-300 min-w-[120px] lg:min-w-[14vh] overflow-hidden backdrop-blur-3xl scale-[0.85] ${isActiveTurn ? 'border-white ring-4 ring-white/20 bg-slate-800 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : 'border-white/10 bg-black/60'} ${(player.isWinner && phase === PHASES.SHOWDOWN) || isSpotlighted ? 'border-yellow-400 ring-4 ring-yellow-400/50' : ''}`}>
-                    
                     {isDealer && (
                         <div className="absolute top-2 right-2 z-[110] pointer-events-none">
                           <div className="w-2.5 h-2.5 bg-red-600 rounded-full border border-red-900 shadow-[0_0_8px_rgba(239,68,68,0.8),inset_0_0_2px_rgba(0,0,0,0.5)]" />
                         </div>
                     )}
-
                     <div className={`flex flex-col items-center w-full relative z-10 py-1 overflow-hidden transition-all duration-500 ${isFoldedBool ? 'opacity-40 grayscale' : 'opacity-100'}`}>
                         <div className="flex flex-col items-center gap-0.5 shrink-0 mb-1">
                           <div className="flex items-center gap-1 opacity-60">
@@ -207,9 +199,7 @@ const Seat = ({
                             </div>
                           )}
                         </div>
-
                         <div className="w-full h-[24px] lg:h-[3.5vh] relative flex items-center justify-center overflow-hidden">
-                            {/* CHIP BALANCE / ALL-IN DISPLAY */}
                             <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${ghostAction ? 'opacity-0 -translate-y-4 scale-75 pointer-events-none' : 'opacity-100 translate-y-0 scale-100'}`}>
                                 {player.chips <= 0 && phase !== PHASES.IDLE && !player.waitingForNextHand ? (
                                     <span className="text-[14px] lg:text-[2.2vh] font-black italic uppercase text-red-500 leading-none tracking-tighter animate-pulse">
@@ -221,8 +211,6 @@ const Seat = ({
                                     </span>
                                 )}
                             </div>
-
-                            {/* DYNAMIC ACTION TEXT */}
                             {ghostAction && (
                                 <div key={`action-${ghostAction.text}`} className={`absolute inset-0 flex items-center justify-center transition-all duration-300 animate-action-status-in`}>
                                     <span className={`text-[14px] lg:text-[2.4vh] font-black italic uppercase tracking-tighter text-center drop-shadow-md whitespace-nowrap ${ghostAction.color}`}>
@@ -239,7 +227,7 @@ const Seat = ({
     );
 };
 
-const ShowdownLedger = ({ winners, formatRank, isMobile, isHiLo, revealCards }) => {
+const ShowdownLedger = ({ winners, formatRank, isHiLo, revealCards }) => {
   const hiLoItems = useMemo(() => {
     if (!isHiLo) return null;
     const items = { low: null, high: null };
@@ -433,9 +421,19 @@ const App = () => {
 
   const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
   const [visuals, setVisuals] = useState({ 
-    heroCardScale: 2.0, heroCardY: isMobile ? 0 : -54, heroCardSpread: 3.0, 
-    oppCardScale: 1.0, oppCardY: -10, commCardScale: 1.5, commCardY: 0, 
-    betScale: 1.5, betY: 0, badgeY: 0, footerHeight: 280, tableZoom: 0.9, holeCardFan: 35 
+    heroCardScale: 2.0,
+    heroCardY: isMobile ? 0 : -54, 
+    heroCardSpread: 3.0, 
+    oppCardScale: 1.0, 
+    oppCardY: -10, 
+    commCardScale: 1.5, 
+    commCardY: 0, 
+    betScale: 1.5, 
+    betY: 0, 
+    badgeY: 0, 
+    footerHeight: 280, 
+    tableZoom: 0.9, 
+    holeCardFan: 35 
   });
 
   useEffect(() => {
@@ -545,6 +543,20 @@ const App = () => {
     return hands.reverse();
   }, [logs]);
 
+  const copyActivityToClipboard = () => {
+    let logTextExport = "--- DEALER'S CHOICE POKER ARENA LOG ---\n\n";
+    handHistory.forEach(hand => {
+      logTextExport += `[${hand.variant.toUpperCase()} HAND]\n`;
+      (hand.events || []).forEach(ev => { 
+        logTextExport += `[${new Date(ev.timestamp).toLocaleTimeString()}] ${ev.name}: ${ev.action}\n`; 
+      });
+      if (hand.winner) logTextExport += `RESULT: ${hand.winner} WON $${hand.amount} with ${hand.rank}\n`;
+      logTextExport += "---------------------------------------\n\n";
+    });
+    const textArea = document.createElement("textarea"); textArea.value = logTextExport; document.body.appendChild(textArea); textArea.select();
+    try { document.execCommand('copy'); } catch (err) {} document.body.removeChild(textArea);
+  };
+
   useEffect(() => {
     const handleRoomUpdate = (d) => {
         if (!d) return;
@@ -636,7 +648,7 @@ const App = () => {
                     <span className="text-white/20 text-[10px] font-mono tracking-widest">{VERSION}</span>
                 </div>
             </div>
-            <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-center tracking-[0.5em] text-[#fbbf24] outline-none text-xl font-black focus:bg-white/10 transition-all"/>
+            <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-center tracking-[0.5em] text-[#fbbf24] outline-none text-xl font-black"/>
             <button onClick={handleLogin} className="w-full p-6 bg-[#fbbf24] text-black rounded-2xl font-black text-lg hover:scale-105 active:scale-95 transition-transform uppercase">SIT AT TABLE</button>
         </div>
     </div>
@@ -686,7 +698,7 @@ const App = () => {
                     </div>
                     <div className="grid grid-cols-1 gap-4">
                         {activeTables.map(t => (
-                            <div key={`table-admin-${t.id}`} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10">
+                            <div key={`table-entry-${t.id}`} className="bg-white/5 p-4 rounded-2xl flex justify-between items-center border border-white/10">
                               <div className="uppercase"><h4 className="text-[#fbbf24] font-black">{String(t.name)}</h4><p className="text-[10px] text-white/40 font-black">${t.sb}/${t.bb}</p></div>
                               <button onClick={()=>socket.emit('adminDeleteRoom', t.id)} className="text-red-500"><Trash2 size={16}/></button>
                             </div>
@@ -730,7 +742,7 @@ const App = () => {
                             <div className="flex flex-col items-end"><span className="text-[8px] text-white/30 uppercase tracking-widest">Buy-in</span><span className="text-white/80 text-sm font-mono leading-none">${t.minBuy}-${t.maxBuy}</span></div>
                         </div>
                         <div className="flex flex-wrap gap-1.5 p-2 bg-black/40 rounded-xl min-h-[40px] border border-white/5">
-                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`player-seated-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] flex items-center gap-1 font-black uppercase">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
+                            {(t.players || []).filter(p=>p).map((p, idx) => (<span key={`seated-lobby-${idx}`} className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-[8px] flex items-center gap-1 font-black uppercase">{p.isBot && <Bot size={8} className="text-indigo-400" />}{String(p.name).toUpperCase()}</span>))}
                         </div>
                       </div>
                       <button onClick={()=>{ setSelectedTableForJoin(t); setBuyInAmount(t.maxBuy); }} className="w-full py-4 bg-emerald-600 rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all font-black uppercase tracking-widest">JOIN ARENA</button>
@@ -985,25 +997,6 @@ const App = () => {
           )}
         </div>
       </footer>
-
-      {showVisualControls && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-3xl p-6" onClick={() => setShowVisualControls(false)}>
-          <div className="w-full max-w-[400px] bg-black/80 border border-white/20 rounded-3xl p-8 flex flex-col gap-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center border-b border-white/10 pb-4 font-black"><h3 className="text-lg text-cyan-400 uppercase flex items-center gap-2 tracking-widest"><Settings2 size={20}/> Configuration</h3><X size={24} className="cursor-pointer text-white/40 hover:text-white" onClick={() => setShowVisualControls(false)}/></div>
-            <div className="space-y-6 font-black uppercase">
-              <button onClick={() => { if (currentRoomId) socket.emit('adminAddBot', { roomId: currentRoomId }); }} className="w-full py-4 bg-white/10 border border-white/20 text-white rounded-xl uppercase flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-95 font-black"><Bot size={18}/> Add Arena Bot</button>
-              <div className="flex flex-col gap-4 pt-4 border-t border-white/10">
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Table Zoom <span>{Math.round((visuals.tableZoom || 0) * 100)}%</span></label><input type="range" min="0.3" max="1.5" step="0.05" value={visuals.tableZoom} onChange={(e) => setVisuals({...visuals, tableZoom: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">HUD Height <span>{visuals.footerHeight || 280}px</span></label><input type="range" min="150" max="350" step="10" value={visuals.footerHeight} onChange={(e) => setVisuals({...visuals, footerHeight: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Scale <span>{(Number(visuals.heroCardScale) || 2.0).toFixed(2)}</span></label><input type="range" min="1.0" max="5.0" step="0.1" value={visuals.heroCardScale} onChange={(e) => setVisuals({...visuals, heroCardScale: Number(e.target.value)})} className="accent-emerald-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Y Offset <span>{visuals.heroCardY}px</span></label><input type="range" min="-300" max="300" step="1" value={visuals.heroCardY} onChange={(e) => setVisuals({...visuals, heroCardY: Number(e.target.value)})} className="accent-indigo-400 cursor-pointer" /></div>
-                <div className="flex flex-col gap-2"><label className="text-[10px] text-white/70 uppercase flex justify-between tracking-widest font-black">Hero Card Spread <span>{(Number(visuals.heroCardSpread) || 3.0).toFixed(1)}</span></label><input type="range" min="0.5" max="10.0" step="0.5" value={visuals.heroCardSpread} onChange={(e) => setVisuals({...visuals, heroCardSpread: Number(e.target.value)})} className="accent-cyan-400 cursor-pointer" /></div>
-              </div>
-            </div>
-            <button onClick={() => setShowVisualControls(false)} className="w-full py-4 bg-cyan-600 text-black rounded-xl uppercase font-black shadow-lg hover:brightness-110 active:scale-95 tracking-widest">Save & Apply</button>
-          </div>
-        </div>
-      )}
 
       <style>{`
           @keyframes announcement-pop { 0% { transform: scale(0.5); opacity: 0; filter: blur(10px); } 30% { transform: scale(1.1); opacity: 1; filter: blur(0px); } 70% { transform: scale(1); opacity: 1; filter: blur(0px); } 100% { transform: scale(1.3); opacity: 0; filter: blur(20px); } }
