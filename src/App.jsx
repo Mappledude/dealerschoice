@@ -10,7 +10,7 @@ import {
 import io from 'socket.io-client';
 
 // --- CONSTANTS ---
-// VERSION: v1.1.13
+// VERSION: v1.1.14
 const RENDER_URL = "https://poker-server-3vin.onrender.com"; 
 const SOCKET_URL = window.location.hostname === 'localhost' ? "http://localhost:10000" : RENDER_URL;
 
@@ -20,7 +20,7 @@ const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000 
 });
 
-const VERSION = "v1.1.13";
+const VERSION = "v1.1.14";
 const TOTAL_SEATS = 10;
 const VIEWS = { LOGIN: 'LOGIN', LOBBY: 'LOBBY', GAME: 'GAME', ADMIN: 'ADMIN' };
 const ADMIN_TABS = { PLAYERS: 'PLAYERS', TABLES: 'TABLES' };
@@ -264,55 +264,52 @@ const ShowdownLedger = ({ winners, formatRank, isMobile }) => {
   }, [winners]);
 
   return (
-    <div className="w-full max-w-[600px] bg-black/40 border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
-      <div className="flex-1 overflow-y-auto scrollbar-hide p-2 space-y-2">
+    <div className="w-full max-w-[95vw] bg-black/40 border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+      <div className="flex-1 overflow-x-auto scrollbar-hide p-2 flex flex-row items-start justify-center gap-2 md:gap-4">
         {aggregated.map((player, idx) => (
-          <div key={`ledger-${player.uid}-${idx}`} style={{ animationDelay: `${idx * 150}ms` }} className="bg-white/5 border border-white/5 rounded-xl p-2 flex flex-col gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+          <div key={`ledger-${player.uid}-${idx}`} style={{ animationDelay: `${idx * 150}ms` }} className="min-w-[180px] md:min-w-[320px] flex-shrink-0 bg-white/5 border border-white/5 rounded-xl p-2 flex flex-col gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
             {/* Header: Name and Combined Win Amount */}
-            <div className="flex justify-between items-center px-1 border-b border-white/5 pb-1">
-              <span className={`text-[12px] font-black uppercase tracking-tight ${getNeonNameColor(player.name)}`}>{String(player.name)}</span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-emerald-400 font-mono text-[14px] font-black drop-shadow-[0_0_10px_rgba(52,211,153,0.4)]">
-                    +${player.payouts.reduce((sum, p) => sum + p.amount, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                </span>
-              </div>
+            <div className="flex justify-between items-center px-1 border-b border-white/5 pb-1 gap-2">
+              <span className={`text-[11px] md:text-sm font-black uppercase tracking-tight truncate ${getNeonNameColor(player.name)}`}>{String(player.name)}</span>
+              <span className="text-emerald-400 font-mono text-[12px] md:text-[16px] font-black whitespace-nowrap">
+                  +${player.payouts.reduce((sum, p) => sum + p.amount, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+              </span>
             </div>
             
-            <div className="flex flex-col gap-2">
-              {/* Tabular Grid for Ranks (Low on Left, High on Right) */}
-              <div className={`grid ${player.payouts.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5 px-1 items-center`}>
-                {player.payouts.map((p, pi) => {
-                    const label = String(p.rank).toUpperCase();
-                    const isLow = label.includes("LOW:");
-                    const isHigh = label.includes("HIGH:");
-                    const isScoop = label.includes("SCOOP:");
-                    
-                    let bgColor = "bg-white/5";
-                    let textColor = "text-white/60";
-                    let borderColor = "border-white/10";
-                    
-                    if (isLow) { bgColor = "bg-emerald-500/10"; textColor = "text-emerald-400"; borderColor = "border-emerald-500/30"; }
-                    else if (isHigh) { bgColor = "bg-indigo-500/10"; textColor = "text-indigo-400"; borderColor = "border-indigo-500/30"; }
-                    else if (isScoop) { bgColor = "bg-amber-500/10"; textColor = "text-amber-400"; borderColor = "border-amber-500/30"; }
+            {/* Tabular side-by-side for Scoop / Split hands */}
+            <div className={`grid ${player.payouts.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+              {player.payouts.map((p, pi) => {
+                  const label = String(p.rank).toUpperCase();
+                  const isLow = label.includes("LOW:");
+                  const isHigh = label.includes("HIGH:");
+                  const isScoop = label.includes("SCOOP:");
+                  
+                  let bgColor = "bg-white/5";
+                  let textColor = "text-white/60";
+                  
+                  if (isLow) { bgColor = "bg-emerald-500/10"; textColor = "text-emerald-400"; }
+                  else if (isHigh) { bgColor = "bg-indigo-500/10"; textColor = "text-indigo-400"; }
+                  else if (isScoop) { bgColor = "bg-amber-500/10"; textColor = "text-amber-400"; }
 
-                    return (
-                        <div key={`payout-rank-${pi}`} className={`px-2 py-1 rounded-lg border ${bgColor} ${textColor} text-[9px] font-black tracking-tighter flex items-center justify-center gap-1 uppercase whitespace-nowrap overflow-hidden text-center`}>
-                            {isScoop && <Sparkles size={8}/>}
-                            {formatRank(p.rank)}
-                        </div>
-                    );
-                })}
-              </div>
-
-              {/* Show cards only once per player entry in the ledger */}
-              <div className="flex gap-1 justify-center flex-wrap">
-                {(player.payouts[0].hand || []).map((c, ci) => (
-                  <div key={`micro-${ci}`} className={`text-[10px] w-8 h-10 rounded-sm flex flex-col items-center justify-center font-black border transition-all duration-300 ${c.suit === '♥' || c.suit === '♦' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-slate-900 border-slate-200'}`}>
-                    <span className="leading-none text-[10px]">{String(c.value)}</span>
-                    <span className="leading-none text-[12px]">{String(c.suit)}</span>
-                  </div>
-                ))}
-              </div>
+                  return (
+                      <div key={`payout-col-${pi}`} className="flex flex-col gap-1.5 items-center">
+                          {/* Rank Label Column */}
+                          <div className={`w-full px-1 py-1 rounded-lg border border-white/10 ${bgColor} ${textColor} text-[8px] md:text-[10px] font-black tracking-tighter flex items-center justify-center gap-1 uppercase text-center min-h-[28px]`}>
+                              {isScoop && <Sparkles size={8}/>}
+                              {formatRank(p.rank)}
+                          </div>
+                          {/* Specific Cards for this winning hand */}
+                          <div className="flex gap-0.5 justify-center flex-wrap">
+                            {(p.hand || []).map((c, ci) => (
+                              <div key={`micro-${pi}-${ci}`} className={`text-[9px] md:text-[10px] w-6 md:w-8 h-8 md:h-10 rounded-sm flex flex-col items-center justify-center font-black border ${c.suit === '♥' || c.suit === '♦' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-slate-900 border-slate-200'}`}>
+                                <span className="leading-none">{String(c.value)}</span>
+                                <span className="leading-none text-[10px] md:text-[12px]">{String(c.suit)}</span>
+                              </div>
+                            ))}
+                          </div>
+                      </div>
+                  );
+              })}
             </div>
           </div>
         ))}
