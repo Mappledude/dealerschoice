@@ -32,7 +32,7 @@ const variantNames = {
   MUFLIS: "Muflis", HILOW: "Hi-Low Split", REDSBLACKS: "Reds & Blacks"
 };
 
-const BOT_NAMES = ["Ram", "Bipin", "Brij", "Manoj", "Aneesh", "Priya", "Bunty", "Brij", "Nandu", "Hardevi", "Lalit", "Sona"];
+const BOT_NAMES = ["Ram", "Bipin", "Brij", "Manoj", "Aneesh", "Priya", "Jyoti", "Brij", "Nandu", "Hardevi", "Lalit", "Sona"];
 
 const SEEDED_PLAYERS = [
   { name: 'Vivek', password: 'sablani', uid: 'u_vivek', chips: 10000, role: 'player', pendingVariant: 'RANDOM' },
@@ -68,13 +68,24 @@ let rooms = {};
 
 const SEEDED_ROOMS_DATA = [
     { id: 'room_sindhi', name: 'Sindhi', sb: 1, bb: 2, minBuy: 50, maxBuy: 100 },
-    { id: 'room_10', name: '$10 Arena', sb: 0.25, bb: 0.5, minBuy: 5, maxBuy: 10 },
-    { id: 'room_50', name: '$50 Arena', sb: 0.50, bb: 1, minBuy: 25, maxBuy: 50 },
-    { id: 'room_500', name: '$500 Arena', sb: 2, bb: 5, minBuy: 200, maxBuy: 500 }
+    { id: 'room_10', name: '$10 Buy-in', sb: 0.25, bb: 0.5, minBuy: 5, maxBuy: 10 },
+    { id: 'room_50', name: '$50 Buy-in', sb: 0.50, bb: 1, minBuy: 25, maxBuy: 50 },
+    { id: 'room_500', name: '$500 Buy-in', sb: 2, bb: 5, minBuy: 200, maxBuy: 500 }
 ];
 
 SEEDED_ROOMS_DATA.forEach(data => {
-  rooms[data.id] = { ...data, players: Array(TOTAL_SEATS).fill(null), phase: PHASES.IDLE, community: [], potData: [{amount:0}], dealerIdx: 0, timeRemaining: 20, gameInProgress: false, highestBet: 0, lastRaiseIncrement: data.bb };
+  rooms[data.id] = { 
+    ...data, 
+    players: Array(TOTAL_SEATS).fill(null), 
+    phase: PHASES.IDLE, 
+    community: [], 
+    potData: [{amount:0}], 
+    dealerIdx: 0, 
+    timeRemaining: 20, 
+    gameInProgress: false, 
+    highestBet: 0, 
+    lastRaiseIncrement: data.bb 
+  };
 });
 
 const serializeRoom = (room) => {
@@ -315,7 +326,7 @@ const moveToNextPlayer = (roomId) => {
         startTurnTimer(roomId); triggerBotTurn(roomId);
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
     } else {
-        room.activeIdx = (room.dealerIdx + 1) % TOTAL_SEATS;
+        room.activeIdx = (room.activeIdx + 1) % TOTAL_SEATS;
         while (!room.players[room.activeIdx] || room.players[room.activeIdx].isFolded) room.activeIdx = (room.activeIdx + 1) % TOTAL_SEATS;
         startTurnTimer(roomId); triggerBotTurn(roomId);
         io.to(roomId).emit('roomUpdate', serializeRoom(room));
@@ -335,7 +346,7 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', ({ roomId, profile, buyIn }, cb) => {
     const room = rooms[roomId]; if (!room) return;
     
-    // Rule: One player, one seat, across ALL rooms
+    // Global seated check
     const alreadySeated = Object.values(rooms).some(r => r.players.some(p => p && p.uid === profile.uid));
     if (alreadySeated) {
         if (cb) cb({ status: 'error', message: 'ALREADY_SEATED' });
@@ -352,12 +363,13 @@ io.on('connection', (socket) => {
     const room = rooms[roomId], empty = room.players.findIndex(p => p === null); if (empty === -1) return;
     const name = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
     room.players[empty] = { uid: `bot_${Math.random()}`, name, isBot: true, chips: room.maxBuy, seatIdx: empty, currentBet: 0, totalContribution: 0, isFolded: false, waitingForNextHand: room.gameInProgress, pendingVariant: 'RANDOM' };
+    io.to(roomId).emit('log', { name: "SYSTEM", action: `${name} ENTERED`, type: 'phase' });
     io.to(roomId).emit('roomUpdate', serializeRoom(room));
     if (room.phase === PHASES.IDLE && room.players.filter(p => p && p.chips > 0).length >= 2) runIgnition(roomId);
   });
   socket.on('playerRebuy', ({ roomId, uid, amount }) => {
     const room = rooms[roomId], p = room.players.find(x => x && x.uid === uid), prof = profiles.find(x => x.uid === uid);
-    if (p && prof && prof.chips >= amount) { prof.chips -= amount; p.chips += amount; io.to(roomId).emit('roomUpdate', serializeRoom(room)); io.emit('profilesUpdate', profiles); }
+    if (p && prof && prof.chips >= amount) { prof.chips -= amount; p.chips += amount; io.to(roomId).emit('log', { name: p.name, action: `RE-BOUGHT $${amount}`, type: 'phase' }); io.to(roomId).emit('roomUpdate', serializeRoom(room)); io.emit('profilesUpdate', profiles); }
   });
   socket.on('playerAction', ({ roomId, type, amount }) => performAction(roomId, type, amount));
   socket.on('updatePlayerSettings', ({ uid, pendingVariant }) => {
@@ -366,4 +378,4 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(10000, '0.0.0.0', () => console.log(`Dealers Choice Server Running v${VERSION}`));
+server.listen(10000, '0.0.0.0', () => console.log(`Server v${VERSION} Running`));
